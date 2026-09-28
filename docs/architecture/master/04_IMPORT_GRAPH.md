@@ -1,0 +1,5923 @@
+# AURORA ENGINEERING BIBLE v1.1
+
+Document ID: M-04
+
+Document Name: Import Graph
+
+Path:
+docs/architecture/master/04_IMPORT_GRAPH.md
+
+Status: CANONICAL SOURCE OF TRUTH
+
+Authority:
+- AB-00 Development Constitution
+- AB-00A Architecture Reconciliation
+- M-00 Canonical Index
+- M-01 File Registry
+- M-02 Runtime Graph
+- M-03 API Registry
+
+Version: 1.1 Canonical
+
+---
+
+# Purpose
+
+This document defines the canonical import dependency graph of AURORA Wave 1.
+
+It specifies:
+
+- allowed imports,
+- forbidden imports,
+- dependency direction,
+- runtime layer visibility,
+- circular dependency prevention,
+- module ownership boundaries.
+
+No implementation appears in this document.
+
+Implementation belongs to M-06.
+
+---
+
+# Import Graph Constitution
+
+The repository import graph is deterministic.
+
+Every production import must satisfy all rules below.
+
+## Import Invariants
+
+1. Every production file has one canonical import set.
+2. Every import follows runtime layer direction.
+3. Cyclic imports are forbidden.
+4. Private modules are imported only inside their owner runtime.
+5. Cross-runtime imports follow ownership boundaries.
+6. Tests may import public APIs only.
+
+Violating any invariant is an Architecture Conflict.
+
+---
+
+# Runtime Layer Import Model
+
+Wave 1 contains one implemented runtime layer.
+
+Future layers are reserved.
+
+| Runtime Layer | Status |
+|---------------|--------|
+| L0 Kernel Runtime | IMPLEMENTED |
+| L1 Shared State Runtime | RESERVED |
+| L2 Layout Runtime | RESERVED |
+| L3 Theme Runtime | RESERVED |
+| L4 Motion Runtime | RESERVED |
+| L5 Interaction Runtime | RESERVED |
+| L6 Accessibility Runtime | RESERVED |
+| L7 Platform Runtime | RESERVED |
+| L8 Render Runtime | RESERVED |
+
+---
+
+## Canonical Layer Dependency Graph
+
+```text
+L8 Render
+    │
+L7 Platform
+    │
+L6 Accessibility
+    │
+L5 Interaction
+    │
+L4 Motion
+    │
+L3 Theme
+    │
+L2 Layout
+    │
+L1 Shared State
+    │
+L0 Kernel
+```
+
+Dependencies flow downward only.
+
+Lower layers never import higher layers.
+
+---
+
+# Repository Import Direction
+
+Imports are evaluated in three dimensions.
+
+| Dimension | Rule |
+|----------|------|
+| Layer | Downward only. |
+| Runtime | Ownership only. |
+| Module | DAG only. |
+
+All three must succeed simultaneously.
+
+---
+
+# Canonical Repository Import DAG
+
+```text
+src/core/
+      │
+      ▼
+src/kernel/contracts/
+      │
+      ▼
+src/kernel/runtime/
+      │
+      ▼
+src/main.py
+```
+
+No reverse dependency exists.
+
+---
+
+# Runtime Import Vocabulary
+
+Every production import belongs to exactly one category.
+
+| Category | Description |
+|----------|-------------|
+| FOUNDATION_IMPORT | src/core imports. |
+| CONTRACT_IMPORT | src/kernel/contracts imports. |
+| RUNTIME_IMPORT | src/kernel/runtime imports. |
+| ENTRY_IMPORT | src/main.py imports. |
+| TEST_IMPORT | tests imports. |
+
+Vocabulary is frozen.
+
+---
+
+# Public Import Boundary
+
+Public imports are imported from canonical owner modules only.
+
+## Allowed
+
+```python
+from src.core.logger import get_logger
+```
+
+## Forbidden
+
+```python
+from src.core.logging_config import _LOGGER_CACHE
+```
+
+Private symbols never cross module boundaries.
+
+---
+
+# Absolute Import Policy
+
+Wave 1 uses absolute imports only.
+
+## Allowed
+
+```python
+from src.kernel.runtime.container import ContainerRuntime
+```
+
+## Forbidden
+
+```python
+from ..runtime.container import ContainerRuntime
+```
+
+Relative imports are forbidden across the repository.
+
+---
+
+# Runtime Import Ownership
+
+Every runtime imports contracts instead of implementation.
+
+| Runtime | Imports |
+|---------|---------|
+| ContainerRuntime | contracts + core |
+| LifecycleRuntime | contracts + core |
+| EventBusRuntime | contracts + core |
+| ContextRuntime | contracts + core |
+| OrchestratorRuntime | contracts + core |
+| RuntimeKernel | runtime public APIs only |
+
+Implementation-to-implementation imports follow ownership matrix later in this document.
+
+---
+
+# Import Visibility Model
+
+Visibility is independent from ownership.
+
+| Visibility | Accessible By |
+|------------|---------------|
+| Public | Entire repository |
+| Runtime Internal | Same runtime only |
+| Private | Same file only |
+
+Visibility rules are immutable.
+
+---
+
+# Import Naming Rules
+
+Every import follows canonical naming.
+
+## Classes
+
+```python
+from src.kernel.runtime.container import ContainerRuntime
+```
+
+## Functions
+
+```python
+from src.core.config import get_settings
+```
+
+## Constants
+
+```python
+from src.core.constants import PROJECT_NAME
+```
+
+## Types
+
+```python
+from src.core.types import RuntimeLayer
+```
+
+Wildcard imports are forbidden.
+
+---
+
+# Import Aliasing Rules
+
+Aliasing is restricted.
+
+## Allowed
+
+```python
+from src.core.types import RuntimeLayer as RuntimeLayer
+```
+
+(no-op aliasing for formatting tools only)
+
+## Forbidden
+
+```python
+from src.core.types import RuntimeLayer as Layer
+```
+
+Public API names must remain canonical.
+
+---
+
+# Import Categories Summary
+
+| Category | Canonical Directory |
+|----------|---------------------|
+| Foundation | src/core |
+| Contracts | src/kernel/contracts |
+| Runtime | src/kernel/runtime |
+| Entry | src/main.py |
+| Tests | tests |
+
+Every production import belongs to exactly one category.
+
+---
+
+# Runtime Filename Disambiguation
+
+Status: CANONICAL
+
+Authority:
+- AB-00 Development Constitution
+- M-00 Canonical Index
+- M-03 API Registry
+- M-04 Import Graph
+- M-06 Module Specifications
+
+---
+
+## Purpose
+
+Wave 1 intentionally contains two different files named `runtime.py`.
+
+They belong to different architectural layers and represent different concepts.
+
+These files must never be confused during implementation.
+
+---
+
+## Canonical Runtime Files
+
+| Canonical File | Layer | Purpose |
+|----------------|------|---------|
+| `src/kernel/contracts/runtime.py` | Contracts Layer | Defines `RuntimeContract` protocol only. |
+| `src/kernel/runtime/runtime.py` | Runtime Layer | Implements `RuntimeKernel` public runtime facade. |
+
+The filename is identical.
+
+The architectural ownership is different.
+
+---
+
+## Canonical Export Paths
+
+### RuntimeContract
+
+```python
+from src.kernel.contracts.runtime import RuntimeContract
+```
+
+Owner:
+
+KR-004
+
+Category:
+
+Protocol.
+
+---
+
+### RuntimeKernel
+
+```python
+from src.kernel.runtime.runtime import RuntimeKernel
+```
+
+Owner:
+
+KR-010
+
+Category:
+
+Runtime Class.
+
+---
+
+## Import Disambiguation Rules
+
+### Allowed
+
+```python
+from src.kernel.contracts.runtime import RuntimeContract
+from src.kernel.runtime.runtime import RuntimeKernel
+```
+
+### Forbidden
+
+```python
+from src.kernel.runtime import RuntimeContract
+```
+
+```python
+from src.kernel.contracts import RuntimeKernel
+```
+
+```python
+from src.kernel.runtime.runtime import RuntimeContract
+```
+
+```python
+from src.kernel.contracts.runtime import RuntimeKernel
+```
+
+Every forbidden example is an Architecture Conflict.
+
+---
+
+## Ownership Matrix
+
+| Symbol | Owner File | Owner KR |
+|--------|------------|----------|
+| RuntimeContract | src/kernel/contracts/runtime.py | KR-004 |
+| RuntimeKernel | src/kernel/runtime/runtime.py | KR-010 |
+
+Ownership is immutable.
+
+---
+
+## Runtime Layer Boundary
+
+```text
+RuntimeKernel
+      │ implements
+      ▼
+RuntimeContract
+```
+
+The implementation depends on the protocol.
+
+The protocol never references the implementation.
+
+Dependency direction is immutable.
+
+---
+
+## Import Graph Rule
+
+```text
+src/kernel/runtime/runtime.py
+            │
+            ▼
+src/kernel/contracts/runtime.py
+```
+
+Reverse dependency is forbidden.
+
+---
+
+## Codex Resolution Rule
+
+When resolving an import named `runtime.py`, Codex must first determine symbol ownership.
+
+Resolution algorithm:
+
+1. If symbol == `RuntimeContract`
+   → `src/kernel/contracts/runtime.py`
+
+2. If symbol == `RuntimeKernel`
+   → `src/kernel/runtime/runtime.py`
+
+3. Never infer ownership from filename alone.
+
+4. Always resolve by canonical export path.
+
+This rule has higher priority than filename similarity.
+
+---
+
+## Definition of Done
+
+The repository is GREEN only if:
+
+- [x] RuntimeContract imported only from contracts/runtime.py.
+- [x] RuntimeKernel imported only from runtime/runtime.py.
+- [x] No wildcard imports reference runtime modules.
+- [x] No ambiguous `runtime` imports exist anywhere in Wave 1.
+
+Violations are Architecture Conflicts.
+
+# Context Filename Disambiguation
+
+Status: CANONICAL
+
+---
+
+## Purpose
+
+Wave 1 contains two different files named `context.py`.
+
+They belong to different architectural layers.
+
+---
+
+## Canonical Context Files
+
+| Canonical File | Layer | Purpose |
+|----------------|------|---------|
+| `src/kernel/contracts/context.py` | Contracts | Defines `TraceContext` and `RuntimeContext` dataclasses. |
+| `src/kernel/runtime/context.py` | Runtime | Implements `ContextRuntime`. |
+
+---
+
+## Canonical Export Paths
+
+### RuntimeContext
+
+```python
+from src.kernel.contracts.context import RuntimeContext
+```
+
+### TraceContext
+
+```python
+from src.kernel.contracts.context import TraceContext
+```
+
+### ContextRuntime
+
+```python
+from src.kernel.runtime.context import ContextRuntime
+```
+
+---
+
+## Allowed Imports
+
+```python
+from src.kernel.contracts.context import RuntimeContext
+from src.kernel.runtime.context import ContextRuntime
+```
+
+---
+
+## Forbidden Imports
+
+```python
+from src.kernel.runtime import RuntimeContext
+```
+
+```python
+from src.kernel.contracts import ContextRuntime
+```
+
+```python
+from src.kernel.runtime.context import RuntimeContext
+```
+
+```python
+from src.kernel.contracts.context import ContextRuntime
+```
+
+---
+
+## Ownership Matrix
+
+| Symbol | Owner File | KR |
+|--------|------------|----|
+| TraceContext | contracts/context.py | KR-004 |
+| RuntimeContext | contracts/context.py | KR-004 |
+| ContextRuntime | runtime/context.py | KR-008 |
+
+---
+
+## Import Direction
+
+```text
+ContextRuntime
+      │
+      ▼
+RuntimeContext
+```
+
+Reverse dependency is forbidden.
+
+---
+
+## Codex Resolution Rule
+
+When resolving `context.py`:
+
+1. RuntimeContext / TraceContext → `contracts/context.py`
+2. ContextRuntime → `runtime/context.py`
+3. Never resolve by filename alone.
+
+# Lifecycle Filename Disambiguation
+
+Status: CANONICAL
+
+---
+
+## Purpose
+
+Wave 1 contains two different files named `lifecycle.py`.
+
+---
+
+## Canonical Lifecycle Files
+
+| File | Layer | Purpose |
+|------|------|---------|
+| `src/kernel/contracts/lifecycle.py` | Contracts | Defines `LifecycleState`. |
+| `src/kernel/runtime/lifecycle.py` | Runtime | Implements `LifecycleRuntime`. |
+
+---
+
+## Canonical Export Paths
+
+### LifecycleState
+
+```python
+from src.kernel.contracts.lifecycle import LifecycleState
+```
+
+### LifecycleRuntime
+
+```python
+from src.kernel.runtime.lifecycle import LifecycleRuntime
+```
+
+---
+
+## Forbidden Imports
+
+```python
+from src.kernel.runtime.lifecycle import LifecycleState
+```
+
+```python
+from src.kernel.contracts.lifecycle import LifecycleRuntime
+```
+
+---
+
+## Ownership Matrix
+
+| Symbol | Owner File | KR |
+|--------|------------|----|
+| LifecycleState | contracts/lifecycle.py | KR-004 |
+| LifecycleRuntime | runtime/lifecycle.py | KR-006 |
+
+---
+
+## Dependency Rule
+
+```text
+LifecycleRuntime
+      │
+      ▼
+LifecycleState
+```
+
+Reverse dependency is forbidden.
+
+
+# Module Filename Disambiguation
+
+Status: CANONICAL
+
+---
+
+## Purpose
+
+Wave 1 contains `module.py` and runtime modules that consume manifests.
+
+---
+
+## Canonical File
+
+| File | Purpose |
+|------|---------|
+| `src/kernel/contracts/module.py` | Defines `RuntimeModuleManifest`. |
+
+---
+
+## Export Path
+
+```python
+from src.kernel.contracts.module import RuntimeModuleManifest
+```
+
+---
+
+## Forbidden Imports
+
+```python
+from src.kernel.runtime.module import RuntimeModuleManifest
+```
+
+---
+
+## Ownership Matrix
+
+| Symbol | Owner File | KR |
+|--------|------------|----|
+| RuntimeModuleManifest | contracts/module.py | KR-004 |
+
+ManifestRuntime consumes this contract.
+
+The contract never imports ManifestRuntime.
+
+# Service Filename Disambiguation
+
+Status: CANONICAL
+
+---
+
+## Canonical File
+
+| File | Purpose |
+|------|---------|
+| `src/kernel/contracts/service.py` | Defines `ServiceDescriptor`. |
+
+---
+
+## Export Path
+
+```python
+from src.kernel.contracts.service import ServiceDescriptor
+```
+
+---
+
+## Forbidden Imports
+
+```python
+from src.kernel.runtime.service import ServiceDescriptor
+```
+
+---
+
+## Ownership Matrix
+
+| Symbol | Owner File | KR |
+|--------|------------|----|
+| ServiceDescriptor | contracts/service.py | KR-004 |
+
+ContainerRuntime, RegistryRuntime and ResolverRuntime consume the descriptor.
+
+The descriptor never imports runtime implementations.
+
+# Events Filename Disambiguation
+
+Status: CANONICAL
+
+---
+
+## Canonical File
+
+| File | Purpose |
+|------|---------|
+| `src/kernel/contracts/events.py` | Defines immutable `RuntimeEvent`. |
+
+---
+
+## Export Path
+
+```python
+from src.kernel.contracts.events import RuntimeEvent
+```
+
+---
+
+## Forbidden Imports
+
+```python
+from src.kernel.runtime.events import RuntimeEvent
+```
+
+---
+
+## Ownership Matrix
+
+| Symbol | Owner File | KR |
+|--------|------------|----|
+| RuntimeEvent | contracts/events.py | KR-004 |
+
+PublisherRuntime creates RuntimeEvents.
+
+DispatcherRuntime dispatches RuntimeEvents.
+
+SubscriberRuntime consumes RuntimeEvents.
+
+RuntimeEvent never imports runtime implementations.
+
+# Pipeline Filename Disambiguation
+
+Status: CANONICAL
+
+---
+
+## Purpose
+
+Pipeline dataclasses live in `runtime/pipeline.py`.
+
+Pipeline execution lives in separate runtime modules.
+
+---
+
+## Canonical File Ownership
+
+| Symbol | Owner File | KR |
+|--------|------------|----|
+| PipelineDefinition | runtime/pipeline.py | KR-009 |
+| PipelineStage | runtime/pipeline.py | KR-009 |
+| ManifestRuntime | runtime/manifest.py | KR-009 |
+| ExecutorRuntime | runtime/executor.py | KR-009 |
+| OrchestratorRuntime | runtime/orchestrator.py | KR-009 |
+
+---
+
+## Canonical Export Paths
+
+```python
+from src.kernel.runtime.pipeline import PipelineDefinition
+from src.kernel.runtime.pipeline import PipelineStage
+from src.kernel.runtime.manifest import ManifestRuntime
+from src.kernel.runtime.executor import ExecutorRuntime
+from src.kernel.runtime.orchestrator import OrchestratorRuntime
+```
+
+---
+
+## Forbidden Imports
+
+```python
+from src.kernel.runtime.pipeline import ExecutorRuntime
+```
+
+```python
+from src.kernel.runtime.pipeline import OrchestratorRuntime
+```
+
+---
+
+## Dependency Rule
+
+```text
+PipelineDefinition
+        │
+        ▼
+ManifestRuntime
+        │
+        ▼
+ExecutorRuntime
+        │
+        ▼
+OrchestratorRuntime
+```
+
+Reverse dependency is forbidden.
+
+Document Status:
+
+IN PROGRESS (Part 1 of 10)
+
+<!-- ========================================================================= -->
+<!-- M-04 PART 2 — KR-001 Foundation Core Import Graph -->
+<!-- ========================================================================= -->
+
+# KR-001 Import Graph
+
+**Directory**
+
+`src/core/`
+
+**Runtime Layer**
+
+L0
+
+**Owner KR**
+
+KR-001 Foundation Core
+
+---
+
+# Foundation Core Import Graph
+
+Foundation Core is the lowest dependency layer of the repository.
+
+Every production module may import Foundation Core.
+
+Foundation Core imports **nothing** from runtime implementations.
+
+---
+
+# Foundation Core Module Inventory
+
+| Module | Category | Public |
+|--------|----------|--------|
+| types.py | Type System | Yes |
+| constants.py | Constants | Yes |
+| exceptions.py | Exception Base | Yes |
+
+These three files form the immutable foundation layer.
+
+---
+
+# FOUNDATION-001 — types.py
+
+### Module Category
+
+Foundation Type System
+
+### Runtime Layer
+
+L0
+
+### Allowed Imports
+
+```python
+from __future__ import annotations
+
+from datetime import datetime
+from enum import Enum
+from typing import Any, Mapping
+```
+
+Only Python standard library imports are allowed.
+
+---
+
+## Public Exports
+
+| Category | Symbols |
+|----------|---------|
+| Type Aliases | ModuleId, SessionId, PipelineId, EventId, TraceId, ServiceId, JSONPrimitive, JSONValue, JSONDict, Payload, Metadata, Headers |
+| Enums | RuntimeLayer, RuntimeStatus, HealthStatus, DIScope, EventPriority, EventPhase |
+
+---
+
+## Forbidden Imports
+
+`types.py` must never import:
+
+- `src.core.config`
+- `src.core.logger`
+- `src.kernel.contracts`
+- `src.kernel.runtime`
+- `src.main`
+
+Reason: type system must remain dependency-free.
+
+---
+
+## Imported By
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Directory**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`src/core/*`</table-cell>
+    <table-cell>Shared vocabulary.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`src/kernel/contracts/*`</table-cell>
+    <table-cell>Contract field types.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`src/kernel/runtime/*`</table-cell>
+    <table-cell>Runtime APIs.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`tests/*`</table-cell>
+    <table-cell>Assertions and fixtures.</table-cell>
+  </table-row>
+</table>
+
+---
+
+## Import Degree
+
+| Metric | Count |
+|--------|------:|
+| Incoming Imports | Repository-wide |
+| Outgoing Imports | Standard Library Only |
+
+---
+
+# FOUNDATION-002 — constants.py
+
+### Module Category
+
+Foundation Constants
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from pathlib import Path
+
+from src.core.types import RuntimeLayer
+```
+
+Imports only Foundation modules.
+
+---
+
+## Public Exports
+
+| Category | Symbols |
+|----------|---------|
+| Project | PROJECT_NAME, PROJECT_VERSION, ARCHITECTURE_VERSION |
+| Locale | DEFAULT_LOCALE, DEFAULT_TIMEZONE |
+| Logging | DEFAULT_LOG_LEVEL |
+| Runtime | DEFAULT_RUNTIME_LAYER |
+| Paths | ROOT_DIRECTORY_NAME, SRC_DIRECTORY_NAME, DOCS_DIRECTORY_NAME, TESTS_DIRECTORY_NAME |
+
+---
+
+## Forbidden Imports
+
+constants.py must never import:
+
+- config.py
+- logger.py
+- settings.py
+- runtime modules
+- contracts
+
+Constants cannot depend on configuration.
+
+---
+
+## Imported By
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Module**</table-cell>
+    <table-cell>**Purpose**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`config.py`</table-cell>
+    <table-cell>Default configuration values.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`logger.py`</table-cell>
+    <table-cell>Logger defaults.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`runtime.py`</table-cell>
+    <table-cell>Runtime metadata.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# FOUNDATION-003 — exceptions.py
+
+### Module Category
+
+Foundation Exceptions
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.types import RuntimeStatus
+```
+
+Only Foundation imports.
+
+---
+
+## Public Exports
+
+### Base Exceptions
+
+- AuroraError
+- ValidationError
+- ConfigurationError
+- RuntimeErrorBase
+
+### Runtime Exceptions
+
+- RuntimeInitializationError
+- RuntimeShutdownError
+- RuntimeStateError
+- RuntimeHealthError
+
+### Context Exceptions
+
+- ContextNotAvailableError
+- SessionNotFoundError
+- MetadataValidationError
+
+### Event Exceptions
+
+- EventValidationError
+- EventDispatchError
+- EventHandlerError
+
+### Dependency Injection Exceptions
+
+- DuplicateServiceError
+- UnknownServiceError
+- ServiceResolutionError
+- CircularDependencyError
+- ScopeError
+
+### Pipeline Exceptions
+
+- PipelineExecutionError
+- PipelineCycleError
+- DuplicateModuleError
+- UnknownModuleError
+
+---
+
+## Forbidden Imports
+
+Exceptions must never import:
+
+- runtime implementations;
+- contracts;
+- configuration runtime;
+- logging runtime.
+
+Exception hierarchy must remain dependency-free.
+
+---
+
+## Imported By
+
+Every runtime module imports canonical exceptions.
+
+---
+
+# Foundation Core Dependency Graph
+
+```text
+types.py
+    │
+    ├────────────┐
+    ▼            ▼
+constants.py   exceptions.py
+```
+
+No reverse dependency exists.
+
+---
+
+# Foundation Import Matrix
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Module**</table-cell>
+    <table-cell>**May Import**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`types.py`</table-cell>
+    <table-cell>Standard Library only.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`constants.py`</table-cell>
+    <table-cell>`types.py` + Standard Library.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`exceptions.py`</table-cell>
+    <table-cell>`types.py` + Standard Library.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Foundation Reverse Import Matrix
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Target Module**</table-cell>
+    <table-cell>**Allowed Importers**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`types.py`</table-cell>
+    <table-cell>Entire repository.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`constants.py`</table-cell>
+    <table-cell>Configuration Runtime, Logging Runtime, RuntimeKernel.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`exceptions.py`</table-cell>
+    <table-cell>Entire runtime layer.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Foundation Import Integrity Rules
+
+Foundation modules guarantee:
+
+1. No runtime imports.
+2. No contract imports.
+3. No configuration imports.
+4. No logger imports.
+5. No circular imports.
+6. Only standard-library outbound imports.
+7. Entire repository may depend on Foundation.
+
+Violating any rule is an Architecture Conflict.
+
+---
+
+# KR-001 Import Statistics
+
+| Metric | Value |
+|--------|------:|
+| Modules | 3 |
+| Internal Dependencies | 2 |
+| Runtime Dependencies | 0 |
+| Contract Dependencies | 0 |
+| Cycles | 0 |
+
+Foundation Core is a directed acyclic graph.
+
+---
+
+**Document Status:** IN PROGRESS (Part 2 of 10)
+
+<!-- ========================================================================= -->
+<!-- M-04 PART 3 — KR-002 Configuration Runtime + KR-003 Logging Import Graph -->
+<!-- ========================================================================= -->
+
+# KR-002 Import Graph
+
+**Directory**
+
+`src/core/`
+
+**Runtime Layer**
+
+L0
+
+**Owner KR**
+
+KR-002 Configuration Runtime
+
+---
+
+# Configuration Import Graph
+
+Configuration Runtime owns runtime configuration loading, validation and immutable Settings construction.
+
+Configuration Runtime depends only on Foundation Core.
+
+---
+
+# Configuration Runtime Module Inventory
+
+| Module | Category | Public |
+|--------|----------|--------|
+| settings.py | Immutable Settings Dataclass | Yes |
+| config.py | Settings Loader Runtime | Yes |
+
+---
+
+# CONFIG-IMPORT-001 — settings.py
+
+### Module Category
+
+Configuration Dataclass
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from src.core.constants import (
+    PROJECT_NAME,
+    PROJECT_VERSION,
+    ARCHITECTURE_VERSION,
+    DEFAULT_LOG_LEVEL,
+    DEFAULT_LOCALE,
+    DEFAULT_TIMEZONE,
+)
+
+from src.core.types import (
+    Metadata,
+    RuntimeLayer,
+    EventPriority,
+)
+```
+
+Imports only Foundation modules.
+
+---
+
+## Public Export
+
+`Settings`
+
+---
+
+## Forbidden Imports
+
+settings.py must never import:
+
+- config.py
+- logger.py
+- logging_config.py
+- kernel contracts
+- runtime implementations
+
+Settings must remain immutable and dependency-free.
+
+---
+
+## Imported By
+
+| Importer | Purpose |
+|----------|---------|
+| config.py | Construct immutable Settings snapshot. |
+| RuntimeKernel | Read runtime metadata. |
+| Tests | Configuration assertions. |
+
+---
+
+## Import Degree
+
+| Metric | Count |
+|--------|------:|
+| Incoming Imports | 3 |
+| Outgoing Imports | Foundation only |
+
+---
+
+# CONFIG-IMPORT-002 — config.py
+
+### Module Category
+
+Configuration Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+import os
+from functools import lru_cache
+from pathlib import Path
+
+from src.core.constants import *
+from src.core.exceptions import (
+    ConfigurationError,
+    ValidationError,
+)
+from src.core.settings import Settings
+from src.core.types import Metadata
+```
+
+Configuration Runtime imports Foundation only.
+
+---
+
+## Public Exports
+
+| Category | Symbols |
+|----------|---------|
+| Functions | get_settings, reload_settings, clear_settings_cache, validate_settings |
+
+---
+
+## Forbidden Imports
+
+config.py must never import:
+
+- logger.py
+- logging_config.py
+- runtime modules
+- contracts
+- main.py
+
+Reason: configuration cannot depend on logging runtime.
+
+---
+
+## Imported By
+
+| Importer | Purpose |
+|----------|---------|
+| logger.py | Read log configuration. |
+| logging_config.py | Configure handlers. |
+| BootstrapRuntime | Load runtime configuration. |
+| RuntimeKernel | Read Settings snapshot. |
+| Tests | Configuration runtime tests. |
+
+---
+
+## Internal Dependency Rules
+
+config.py owns:
+
+- cache creation;
+- environment loading;
+- validation;
+- Settings construction.
+
+settings.py owns immutable Settings structure only.
+
+---
+
+## Cache Ownership Rule
+
+Only config.py owns `_SETTINGS_CACHE`.
+
+settings.py never stores cache.
+
+---
+
+# Configuration Runtime Dependency Graph
+
+```text
+types.py
+     │
+constants.py
+     │
+exceptions.py
+     │
+settings.py
+     │
+config.py
+```
+
+No reverse dependency exists.
+
+---
+
+# Configuration Runtime Import Matrix
+
+| Module | May Import |
+|--------|------------|
+| settings.py | constants.py, types.py |
+| config.py | settings.py, constants.py, exceptions.py |
+
+---
+
+# Configuration Runtime Reverse Import Matrix
+
+| Target Module | Allowed Importers |
+|--------------|-------------------|
+| settings.py | config.py, RuntimeKernel, tests |
+| config.py | logger.py, BootstrapRuntime, RuntimeKernel, tests |
+
+---
+
+# Configuration Runtime Anti-Cycle Rules
+
+Forbidden dependency pairs:
+
+| Forbidden Pair | Reason |
+|----------------|--------|
+| settings.py ↔ config.py | Immutable dataclass must not depend on loader. |
+| config.py ↔ logger.py | Logging cannot configure configuration runtime. |
+| config.py ↔ runtime.py | Runtime construction happens after configuration. |
+
+These cycles are architecture violations.
+
+---
+
+# KR-002 Import Statistics
+
+| Metric | Value |
+|--------|------:|
+| Modules | 2 |
+| Internal Dependencies | 1 |
+| Runtime Dependencies | 0 |
+| Contract Dependencies | 0 |
+| Cycles | 0 |
+
+Configuration Runtime remains acyclic.
+
+---
+
+# KR-003 Import Graph
+
+**Directory**
+
+`src/core/`
+
+**Runtime Layer**
+
+L0
+
+**Owner KR**
+
+KR-003 Logging Runtime
+
+---
+
+# Logging Import Graph
+
+Logging Runtime owns logger creation, formatter construction and RuntimeContext injection.
+
+Logging Runtime depends on Configuration Runtime.
+
+Configuration Runtime never depends on Logging Runtime.
+
+---
+
+# Logging Runtime Module Inventory
+
+| Module | Category | Public |
+|--------|----------|--------|
+| logger.py | Logger Factory | Yes |
+| logging_config.py | Logging Runtime | Yes |
+
+---
+
+# LOG-IMPORT-001 — logger.py
+
+### Module Category
+
+Logger Factory
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+import logging
+
+from src.core.config import get_settings
+from src.core.constants import PROJECT_NAME
+```
+
+Imports configuration only.
+
+---
+
+## Public Export
+
+`get_logger`
+
+---
+
+## Forbidden Imports
+
+logger.py must never import:
+
+- logging_config.py
+- runtime modules
+- contracts
+- ContextRuntime
+
+Logger factory cannot initialize runtime logging.
+
+---
+
+## Imported By
+
+Entire repository imports `get_logger()`.
+
+---
+
+## Logger Cache Rule
+
+logger.py owns `_LOGGER_CACHE`.
+
+No other module mutates logger cache.
+
+---
+
+# LOG-IMPORT-002 — logging_config.py
+
+### Module Category
+
+Logging Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+import logging
+import json
+
+from src.core.config import get_settings
+from src.core.constants import DEFAULT_LOG_LEVEL
+from src.core.types import Metadata
+```
+
+Logging Runtime imports Configuration Runtime and Foundation only.
+
+---
+
+## Public Exports
+
+### Functions
+
+- configure_logging
+- reset_logging
+
+### Classes
+
+- ContextFilter
+- ConsoleFormatter
+- JsonFormatter
+
+---
+
+## Forbidden Imports
+
+logging_config.py must never import:
+
+- logger.py
+- RuntimeKernel
+- LifecycleRuntime
+- EventBusRuntime
+- ContextRuntime implementation
+
+Context information arrives through ContextFilter interface only.
+
+---
+
+## Imported By
+
+| Importer | Purpose |
+|----------|---------|
+| BootstrapRuntime | Initialize logging runtime. |
+| RuntimeKernel | Startup logging configuration. |
+| Tests | Logging runtime tests. |
+
+---
+
+## Formatter Ownership Rules
+
+ContextFilter injects runtime metadata.
+
+ConsoleFormatter owns console formatting.
+
+JsonFormatter owns structured formatting.
+
+No formatter owns logger creation.
+
+---
+
+# Logging Runtime Dependency Graph
+
+```text
+Foundation
+    │
+settings.py
+    │
+config.py
+   ├──────► logger.py
+   │
+   └──────► logging_config.py
+```
+
+logger.py and logging_config.py never import each other.
+
+---
+
+# Logging Runtime Import Matrix
+
+| Module | May Import |
+|--------|------------|
+| logger.py | config.py, constants.py |
+| logging_config.py | config.py, constants.py, types.py |
+
+---
+
+# Logging Runtime Reverse Import Matrix
+
+| Target Module | Allowed Importers |
+|--------------|-------------------|
+| logger.py | Entire repository |
+| logging_config.py | BootstrapRuntime, RuntimeKernel, tests |
+
+---
+
+# Logging Runtime Anti-Cycle Rules
+
+Forbidden dependency pairs:
+
+| Forbidden Pair | Reason |
+|----------------|--------|
+| logger.py ↔ logging_config.py | Factory/runtime separation. |
+| logging_config.py ↔ ContextRuntime | Runtime abstraction boundary. |
+| logger.py ↔ RuntimeKernel | Logger available before runtime construction. |
+
+All logging dependencies remain one-directional.
+
+---
+
+# Core Runtime Dependency DAG
+
+```text
+types.py
+    │
+constants.py
+    │
+exceptions.py
+    │
+settings.py
+    │
+config.py
+   ├────────► logger.py
+   │
+   └────────► logging_config.py
+```
+
+Every edge is directed downward.
+
+---
+
+# Core Layer Import Integrity Rules
+
+Core layer guarantees:
+
+1. Foundation has no runtime imports.
+2. Settings never imports config.
+3. Config never imports logger.
+4. Logger never imports logging runtime.
+5. Logging runtime never imports runtime implementations.
+6. Runtime metadata enters logging only through ContextFilter.
+7. Core dependency graph contains zero cycles.
+
+Violating any rule is an Architecture Conflict.
+
+---
+
+# KR-002 + KR-003 Import Statistics
+
+| Runtime | Modules | Internal Edges | Cycles |
+|---------|--------:|---------------:|-------:|
+| Configuration Runtime | 2 | 1 | 0 |
+| Logging Runtime | 2 | 2 | 0 |
+
+Entire `src/core/` remains a directed acyclic graph.
+
+---
+
+**Document Status:** IN PROGRESS (Part 3 of 10)
+
+<!-- ========================================================================= -->
+<!-- M-04 PART 4 — KR-004 Kernel Contracts Import Graph -->
+<!-- ========================================================================= -->
+
+# KR-004 Import Graph
+
+**Directory**
+
+`src/kernel/contracts/`
+
+**Runtime Layer**
+
+L0
+
+**Owner KR**
+
+KR-004 Kernel Contracts
+
+---
+
+# Kernel Contracts Import Graph
+
+Kernel Contracts define immutable runtime contracts shared by every runtime.
+
+Contracts import Foundation Core only.
+
+Runtime implementations import Contracts.
+
+Contracts never import Runtime implementations.
+
+---
+
+# Kernel Contracts Module Inventory
+
+| Module | Category | Public |
+|--------|----------|--------|
+| context.py | Runtime Context Contracts | Yes |
+| events.py | Runtime Event Contracts | Yes |
+| lifecycle.py | Lifecycle Contracts | Yes |
+| module.py | Runtime Module Contracts | Yes |
+| service.py | Dependency Injection Contracts | Yes |
+| runtime.py | Runtime Protocol | Yes |
+
+---
+
+# CONTRACT-IMPORT-001 — context.py
+
+### Module Category
+
+Runtime Context Contracts
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+from src.core.types import (
+    Metadata,
+    PipelineId,
+    RuntimeLayer,
+    SessionId,
+    TraceId,
+)
+```
+
+Only Foundation imports.
+
+---
+
+## Public Exports
+
+- TraceContext
+- RuntimeContext
+
+---
+
+## Forbidden Imports
+
+context.py must never import:
+
+- runtime modules;
+- EventBusRuntime;
+- LifecycleRuntime;
+- ContextRuntime implementation;
+- BootstrapRuntime.
+
+Contracts remain implementation-free.
+
+---
+
+## Imported By
+
+| Runtime | Reason |
+|---------|--------|
+| ContextRuntime | Active runtime context. |
+| SessionRuntime | Session snapshots. |
+| EventBusRuntime | Event context propagation. |
+| ExecutorRuntime | Pipeline execution context. |
+| RuntimeKernel | Runtime snapshot aggregation. |
+
+---
+
+## Import Degree
+
+| Metric | Value |
+|--------|------:|
+| Incoming Imports | Runtime-wide |
+| Outgoing Imports | Foundation only |
+
+---
+
+# CONTRACT-IMPORT-002 — events.py
+
+### Module Category
+
+Runtime Event Contracts
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+from src.core.types import (
+    EventId,
+    EventPhase,
+    EventPriority,
+    Headers,
+    Payload,
+    PipelineId,
+    SessionId,
+)
+
+from src.kernel.contracts.context import TraceContext
+```
+
+Imports Foundation and sibling contracts only.
+
+---
+
+## Public Export
+
+RuntimeEvent
+
+---
+
+## Forbidden Imports
+
+events.py must never import:
+
+- PublisherRuntime;
+- DispatcherRuntime;
+- EventBusRuntime;
+- RuntimeKernel.
+
+Event contract never depends on Event Runtime.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| PublisherRuntime | Event creation. |
+| DispatcherRuntime | Event dispatch. |
+| SubscriberRuntime | Handler registry. |
+| ExecutorRuntime | Stage events. |
+
+---
+
+## Internal Dependency Rule
+
+events.py may import context.py.
+
+context.py may never import events.py.
+
+Dependency direction is immutable.
+
+---
+
+# CONTRACT-IMPORT-003 — lifecycle.py
+
+### Module Category
+
+Lifecycle Contracts
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+from src.core.types import RuntimeStatus
+```
+
+Foundation only.
+
+---
+
+## Public Export
+
+LifecycleState
+
+---
+
+## Forbidden Imports
+
+lifecycle.py must never import:
+
+- LifecycleRuntime;
+- StateRuntime;
+- HookRuntime.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| StateRuntime | State snapshots. |
+| LifecycleRuntime | Public lifecycle API. |
+| RuntimeKernel | Runtime status aggregation. |
+
+---
+
+# CONTRACT-IMPORT-004 — module.py
+
+### Module Category
+
+Runtime Module Contracts
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from src.core.types import (
+    Metadata,
+    ModuleId,
+    RuntimeLayer,
+    ServiceId,
+)
+```
+
+Foundation only.
+
+---
+
+## Public Export
+
+RuntimeModuleManifest
+
+---
+
+## Forbidden Imports
+
+module.py must never import:
+
+- OrchestratorRuntime;
+- ManifestRuntime;
+- RuntimeKernel.
+
+Manifest contract cannot depend on pipeline runtime.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| ManifestRuntime | Validation. |
+| OrchestratorRuntime | Module registry. |
+| BootstrapRuntime | Runtime construction. |
+
+---
+
+# CONTRACT-IMPORT-005 — service.py
+
+### Module Category
+
+Dependency Injection Contracts
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from src.core.types import (
+    DIScope,
+    Metadata,
+    ServiceId,
+)
+```
+
+Foundation only.
+
+---
+
+## Public Export
+
+ServiceDescriptor
+
+---
+
+## Forbidden Imports
+
+service.py must never import:
+
+- ContainerRuntime;
+- RegistryRuntime;
+- ResolverRuntime;
+- ProviderRuntime.
+
+Descriptor cannot depend on Dependency Injection implementation.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| RegistryRuntime | Registry storage. |
+| ResolverRuntime | Dependency traversal. |
+| ProviderRuntime | Service construction. |
+| ContainerRuntime | Public API. |
+
+---
+
+# CONTRACT-IMPORT-006 — runtime.py
+
+### Module Category
+
+Runtime Protocol
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from typing import Protocol
+
+from src.core.types import (
+    HealthStatus,
+    RuntimeLayer,
+)
+```
+
+Foundation only.
+
+---
+
+## Public Export
+
+RuntimeContract
+
+---
+
+## Forbidden Imports
+
+runtime.py must never import:
+
+- RuntimeKernel;
+- ContainerRuntime;
+- LifecycleRuntime;
+- EventBusRuntime;
+- ContextRuntime;
+- OrchestratorRuntime.
+
+Protocol cannot reference implementations.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| ContainerRuntime | RuntimeContract implementation. |
+| LifecycleRuntime | RuntimeContract implementation. |
+| EventBusRuntime | RuntimeContract implementation. |
+| ContextRuntime | RuntimeContract implementation. |
+| OrchestratorRuntime | RuntimeContract implementation. |
+| RuntimeKernel | RuntimeContract implementation. |
+
+---
+
+# Kernel Contracts Internal DAG
+
+```text
+Foundation
+     │
+context.py
+     │
+events.py
+
+Foundation
+ ├────────► lifecycle.py
+ ├────────► module.py
+ ├────────► service.py
+ └────────► runtime.py
+```
+
+Only one internal dependency exists:
+
+events.py → context.py
+
+No reverse dependency exists.
+
+---
+
+# Kernel Contracts Import Matrix
+
+| Contract Module | May Import |
+|-----------------|------------|
+| context.py | Foundation only |
+| events.py | Foundation + context.py |
+| lifecycle.py | Foundation only |
+| module.py | Foundation only |
+| service.py | Foundation only |
+| runtime.py | Foundation only |
+
+---
+
+# Kernel Contracts Reverse Import Matrix
+
+| Target Module | Allowed Importers |
+|--------------|-------------------|
+| context.py | Context Runtime, Event Runtime, Pipeline Runtime |
+| events.py | Event Runtime, Pipeline Runtime |
+| lifecycle.py | Lifecycle Runtime, RuntimeKernel |
+| module.py | Pipeline Runtime, BootstrapRuntime |
+| service.py | Dependency Injection Runtime |
+| runtime.py | Every RuntimeContract implementation |
+
+Contracts are imported read-only.
+
+---
+
+# Contract Boundary Rules
+
+## Contracts May Import
+
+- Foundation (`src/core/*`)
+- Sibling contracts (when explicitly documented)
+
+## Contracts May Not Import
+
+- Runtime implementations
+- Configuration runtime
+- Logging runtime
+- `src/main.py`
+- Tests
+
+Contracts remain independent from runtime execution.
+
+---
+
+# Runtime-to-Contract Direction
+
+Canonical dependency direction:
+
+```text
+Runtime Implementation
+        │
+        ▼
+Kernel Contracts
+        │
+        ▼
+Foundation Core
+```
+
+Reverse dependency is forbidden.
+
+---
+
+# Contract Replacement Rules
+
+Runtime implementations never mutate contract objects.
+
+Allowed:
+
+```python
+new_context = replace(old_context, metadata=new_metadata)
+```
+
+Forbidden:
+
+```python
+old_context.metadata["language"] = "en"
+```
+
+Contracts remain immutable.
+
+---
+
+# Anti-Cycle Registry (KR-004)
+
+| Forbidden Cycle | Reason |
+|-----------------|--------|
+| context.py ↔ events.py | Events depend on context only. |
+| runtime.py ↔ RuntimeKernel | Protocol cannot reference implementation. |
+| service.py ↔ ContainerRuntime | Descriptor/implementation separation. |
+| module.py ↔ ManifestRuntime | Contract/runtime separation. |
+| lifecycle.py ↔ LifecycleRuntime | Snapshot/runtime separation. |
+
+Every forbidden cycle is architecture-breaking.
+
+---
+
+# Kernel Contracts Import Integrity Rules
+
+Kernel Contracts guarantee:
+
+1. Imports Foundation only.
+2. Imports sibling contracts only when explicitly documented.
+3. Zero runtime implementation imports.
+4. Zero configuration imports.
+5. Zero logging imports.
+6. Zero circular dependencies.
+7. Immutable dependency graph.
+
+Violating any rule is an Architecture Conflict.
+
+---
+
+# KR-004 Import Statistics
+
+| Metric | Value |
+|--------|------:|
+| Modules | 6 |
+| Internal Dependencies | 1 |
+| Foundation Imports | 6 |
+| Runtime Imports | 0 |
+| Cycles | 0 |
+
+Kernel Contracts remain a directed acyclic graph.
+
+---
+
+**Document Status:** IN PROGRESS (Part 4 of 10)
+
+<!-- ========================================================================= -->
+<!-- M-04 PART 5 — KR-005 Dependency Injection Import Graph -->
+<!-- ========================================================================= -->
+
+# KR-005 Import Graph
+
+**Directory**
+
+`src/kernel/runtime/`
+
+**Runtime Layer**
+
+L0
+
+**Owner KR**
+
+KR-005 Dependency Injection Runtime
+
+---
+
+# Dependency Injection Import Graph
+
+Dependency Injection Runtime owns service registration, dependency resolution,
+service construction and scope lifetime management.
+
+The runtime is intentionally split into five independent modules.
+
+Only `ContainerRuntime` is public.
+
+---
+
+# Dependency Injection Module Inventory
+
+| Module | Category | Public |
+|--------|----------|--------|
+| container.py | Public Runtime Facade | Yes |
+| registry.py | Descriptor Registry | Internal Runtime |
+| resolver.py | Dependency Resolver | Internal Runtime |
+| provider.py | Service Provider | Internal Runtime |
+| scope.py | Scope Cache Runtime | Internal Runtime |
+
+---
+
+# Canonical Dependency Injection DAG
+
+```text
+                 contracts/service.py
+                         │
+                         ▼
+                  RegistryRuntime
+                         │
+                         ▼
+                  ResolverRuntime
+                  │            │
+                  ▼            ▼
+          ProviderRuntime   ScopeRuntime
+                  │            │
+                  └──────┬─────┘
+                         ▼
+                 ContainerRuntime
+```
+
+The graph is acyclic.
+
+Only ContainerRuntime exposes the public DI API.
+
+---
+
+# DI-IMPORT-001 — registry.py
+
+### Module Category
+
+Descriptor Registry Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import (
+    DuplicateServiceError,
+    UnknownServiceError,
+    ValidationError,
+)
+
+from src.kernel.contracts.service import ServiceDescriptor
+```
+
+Registry imports Foundation + Contracts only.
+
+---
+
+## Public Export
+
+RegistryRuntime
+
+---
+
+## Forbidden Imports
+
+registry.py must never import:
+
+- ContainerRuntime
+- ResolverRuntime
+- ProviderRuntime
+- ScopeRuntime
+- RuntimeKernel
+
+Registry owns descriptors only.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| ResolverRuntime | Read descriptors. |
+| ContainerRuntime | Registration API. |
+| Tests | Registry validation. |
+
+---
+
+## Ownership Rule
+
+RegistryRuntime owns:
+
+- descriptor storage
+- duplicate validation
+- descriptor lookup
+
+RegistryRuntime never constructs services.
+
+---
+
+# DI-IMPORT-002 — provider.py
+
+### Module Category
+
+Provider Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import (
+    ServiceInitializationError,
+    ServiceShutdownError,
+    ValidationError,
+)
+
+from src.kernel.contracts.service import ServiceDescriptor
+```
+
+Provider imports Foundation + Contracts only.
+
+---
+
+## Public Export
+
+ProviderRuntime
+
+---
+
+## Forbidden Imports
+
+provider.py must never import:
+
+- ContainerRuntime
+- RegistryRuntime
+- ResolverRuntime
+- ScopeRuntime
+- RuntimeKernel
+
+Provider performs construction only.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| ResolverRuntime | Construct resolved services. |
+| Tests | Provider runtime tests. |
+
+---
+
+## Ownership Rule
+
+ProviderRuntime owns:
+
+- constructor injection
+- initialize hook execution
+- shutdown hook execution
+
+ProviderRuntime never stores instances.
+
+---
+
+# DI-IMPORT-003 — scope.py
+
+### Module Category
+
+Scope Cache Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import ScopeError
+from src.core.types import DIScope, PipelineId, ServiceId, SessionId
+```
+
+ScopeRuntime imports Foundation only.
+
+---
+
+## Public Export
+
+ScopeRuntime
+
+---
+
+## Forbidden Imports
+
+scope.py must never import:
+
+- ContainerRuntime
+- RegistryRuntime
+- ResolverRuntime
+- ProviderRuntime
+- RuntimeKernel
+
+Scope cache is independent.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| ResolverRuntime | Cache lookup/store. |
+| ContainerRuntime | Cache shutdown. |
+| Tests | Scope lifetime tests. |
+
+---
+
+## Ownership Rule
+
+ScopeRuntime owns every cached instance.
+
+No other runtime stores service instances.
+
+---
+
+# DI-IMPORT-004 — resolver.py
+
+### Module Category
+
+Dependency Resolver Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import (
+    CircularDependencyError,
+    ServiceResolutionError,
+    UnknownServiceError,
+    ValidationError,
+)
+
+from src.core.types import ServiceId
+
+from src.kernel.runtime.registry import RegistryRuntime
+from src.kernel.runtime.provider import ProviderRuntime
+from src.kernel.runtime.scope import ScopeRuntime
+```
+
+Resolver imports runtime internals only.
+
+---
+
+## Public Export
+
+ResolverRuntime
+
+---
+
+## Forbidden Imports
+
+resolver.py must never import:
+
+- ContainerRuntime
+- RuntimeKernel
+- BootstrapRuntime
+- LifecycleRuntime
+- EventBusRuntime
+
+Resolver never exposes public API.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| ContainerRuntime | Public resolve(). |
+| Tests | Dependency graph tests. |
+
+---
+
+## Ownership Rule
+
+ResolverRuntime owns:
+
+- dependency traversal
+- cycle detection
+- dependency ordering
+- scope lookup coordination
+
+ResolverRuntime never exposes caches publicly.
+
+---
+
+# DI-IMPORT-005 — container.py
+
+### Module Category
+
+Public Dependency Injection Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import (
+    DuplicateServiceError,
+    ServiceResolutionError,
+    UnknownServiceError,
+)
+
+from src.kernel.contracts.runtime import RuntimeContract
+from src.kernel.contracts.service import ServiceDescriptor
+
+from src.kernel.runtime.provider import ProviderRuntime
+from src.kernel.runtime.registry import RegistryRuntime
+from src.kernel.runtime.resolver import ResolverRuntime
+from src.kernel.runtime.scope import ScopeRuntime
+```
+
+Container imports contracts plus internal DI runtimes.
+
+---
+
+## Public Export
+
+ContainerRuntime
+
+---
+
+## Forbidden Imports
+
+container.py must never import:
+
+- RuntimeKernel
+- BootstrapRuntime
+- LifecycleRuntime
+- ContextRuntime
+- EventBusRuntime
+- PipelineRuntime
+
+ContainerRuntime is runtime-independent.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| BootstrapRuntime | Runtime construction. |
+| RuntimeKernel | Public runtime facade. |
+| Tests | Container integration tests. |
+
+---
+
+## Ownership Rule
+
+ContainerRuntime owns:
+
+- public registration API
+- public resolution API
+- runtime initialization
+- runtime shutdown
+
+ContainerRuntime delegates implementation internally.
+
+---
+
+# Internal Runtime Import Matrix
+
+| Runtime Module | May Import |
+|---------------|------------|
+| registry.py | Contracts + Foundation |
+| provider.py | Contracts + Foundation |
+| scope.py | Foundation |
+| resolver.py | registry.py, provider.py, scope.py |
+| container.py | registry.py, resolver.py, provider.py, scope.py |
+
+No other imports are allowed.
+
+---
+
+# Reverse Import Matrix
+
+| Target Module | Allowed Importers |
+|--------------|-------------------|
+| registry.py | ResolverRuntime, ContainerRuntime |
+| provider.py | ResolverRuntime, ContainerRuntime |
+| scope.py | ResolverRuntime, ContainerRuntime |
+| resolver.py | ContainerRuntime |
+| container.py | RuntimeKernel, BootstrapRuntime, Tests |
+
+ContainerRuntime is the only externally imported runtime.
+
+---
+
+# Dependency Injection Ownership Boundary
+
+## Public Boundary
+
+```text
+RuntimeKernel
+      │
+      ▼
+ContainerRuntime
+```
+
+Everything below ContainerRuntime is internal.
+
+---
+
+## Internal Boundary
+
+```text
+ContainerRuntime
+ ├── RegistryRuntime
+ ├── ResolverRuntime
+ ├── ProviderRuntime
+ └── ScopeRuntime
+```
+
+Internal runtimes never expose APIs directly outside DI Runtime.
+
+---
+
+# Scope Lifetime Dependency Rules
+
+| Scope | Owner Runtime |
+|-------|---------------|
+| APPLICATION | ScopeRuntime |
+| SESSION | ScopeRuntime |
+| PIPELINE | ScopeRuntime |
+| TRANSIENT | ResolverRuntime |
+
+Scope ownership is exclusive.
+
+---
+
+# Dependency Resolution Direction
+
+Canonical resolution flow:
+
+```text
+ContainerRuntime.resolve()
+          │
+          ▼
+ResolverRuntime
+      │
+      ▼
+RegistryRuntime
+      │
+      ▼
+ProviderRuntime
+      │
+      ▼
+ScopeRuntime
+```
+
+Construction occurs after validation.
+
+---
+
+# Anti-Cycle Registry (KR-005)
+
+| Forbidden Cycle | Reason |
+|-----------------|--------|
+| ContainerRuntime ↔ ResolverRuntime | Public/internal separation. |
+| RegistryRuntime ↔ ResolverRuntime | Registry cannot resolve dependencies. |
+| ProviderRuntime ↔ RegistryRuntime | Construction cannot mutate registry. |
+| ScopeRuntime ↔ ProviderRuntime | Cache cannot construct services. |
+| ScopeRuntime ↔ RegistryRuntime | Cache independent from descriptors. |
+
+Every listed cycle is architecture-breaking.
+
+---
+
+# Dependency Injection Import Integrity Rules
+
+Dependency Injection Runtime guarantees:
+
+1. ContainerRuntime is the only public DI runtime.
+2. RegistryRuntime imports contracts only.
+3. ProviderRuntime imports contracts only.
+4. ScopeRuntime imports Foundation only.
+5. ResolverRuntime imports internal DI runtimes only.
+6. RuntimeKernel imports ContainerRuntime only.
+7. Internal DI modules are never imported by unrelated runtimes.
+
+Violating any rule is an Architecture Conflict.
+
+---
+
+# KR-005 Import Statistics
+
+| Metric | Value |
+|--------|------:|
+| Modules | 5 |
+| Internal Runtime Edges | 7 |
+| Contract Imports | 4 |
+| Foundation Imports | 5 |
+| External Runtime Imports | 0 |
+| Cycles | 0 |
+
+Dependency Injection Runtime forms a directed acyclic graph.
+
+---
+
+**Document Status:** IN PROGRESS (Part 5 of 10)
+
+<!-- ========================================================================= -->
+<!-- M-04 PART 6 — KR-006 Lifecycle Runtime + KR-007 Event Bus Import Graph -->
+<!-- ========================================================================= -->
+
+# KR-006 Import Graph
+
+**Directory**
+
+`src/kernel/runtime/`
+
+**Runtime Layer**
+
+L0
+
+**Owner KR**
+
+KR-006 Lifecycle Runtime
+
+---
+
+# Lifecycle Import Graph
+
+Lifecycle Runtime owns runtime lifecycle orchestration.
+
+It consists of three independent runtime modules.
+
+Only `LifecycleRuntime` is imported outside Lifecycle Runtime.
+
+---
+
+# Lifecycle Runtime Module Inventory
+
+| Module | Category | Public |
+|--------|----------|--------|
+| lifecycle.py | Public Lifecycle Facade | Yes |
+| state.py | Runtime State Machine | Internal Runtime |
+| hooks.py | Lifecycle Hook Registry | Internal Runtime |
+
+---
+
+# Canonical Lifecycle Runtime DAG
+
+```text
+contracts/lifecycle.py
+          │
+          ▼
+      StateRuntime
+          │
+          ▼
+LifecycleRuntime
+          ▲
+          │
+      HookRuntime
+```
+
+No reverse dependency exists.
+
+---
+
+# LIFE-IMPORT-001 — state.py
+
+### Module Category
+
+Runtime State Machine
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import RuntimeStateError
+from src.core.types import RuntimeStatus
+
+from src.kernel.contracts.lifecycle import LifecycleState
+```
+
+Imports Foundation + Lifecycle contract only.
+
+---
+
+## Public Export
+
+`StateRuntime`
+
+---
+
+## Forbidden Imports
+
+state.py must never import:
+
+- LifecycleRuntime
+- HookRuntime
+- RuntimeKernel
+- BootstrapRuntime
+- EventBusRuntime
+
+StateRuntime owns RuntimeStatus only.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| LifecycleRuntime | Runtime transitions. |
+| Tests | State machine tests. |
+
+---
+
+## Ownership Rule
+
+StateRuntime owns:
+
+- RuntimeStatus transitions.
+- LifecycleState snapshot creation.
+- Transition validation.
+
+---
+
+# LIFE-IMPORT-002 — hooks.py
+
+### Module Category
+
+Lifecycle Hook Registry
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from typing import Callable
+```
+
+Standard Library only.
+
+---
+
+## Public Export
+
+`HookRuntime`
+
+---
+
+## Forbidden Imports
+
+hooks.py must never import:
+
+- LifecycleRuntime
+- StateRuntime
+- RuntimeKernel
+- EventBusRuntime
+- ContextRuntime
+
+HookRuntime stores callbacks only.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| LifecycleRuntime | Hook execution. |
+| Tests | Hook ordering tests. |
+
+---
+
+## Ownership Rule
+
+HookRuntime owns:
+
+- initialize hook registry.
+- startup hook registry.
+- stop hook registry.
+- shutdown hook registry.
+
+Hooks know nothing about runtime state.
+
+---
+
+# LIFE-IMPORT-003 — lifecycle.py
+
+### Module Category
+
+Public Lifecycle Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import (
+    RuntimeInitializationError,
+    RuntimeShutdownError,
+    RuntimeStateError,
+)
+
+from src.kernel.contracts.runtime import RuntimeContract
+
+from src.kernel.runtime.state import StateRuntime
+from src.kernel.runtime.hooks import HookRuntime
+```
+
+LifecycleRuntime imports contracts and internal lifecycle runtimes only.
+
+---
+
+## Public Export
+
+`LifecycleRuntime`
+
+---
+
+## Forbidden Imports
+
+lifecycle.py must never import:
+
+- RuntimeKernel
+- BootstrapRuntime
+- EventBusRuntime
+- ContextRuntime
+- OrchestratorRuntime
+
+Lifecycle Runtime remains runtime-independent.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| BootstrapRuntime | Startup lifecycle. |
+| RuntimeKernel | Public runtime lifecycle facade. |
+| Tests | Lifecycle integration tests. |
+
+---
+
+## Ownership Rule
+
+LifecycleRuntime owns:
+
+- initialize/start/stop/shutdown orchestration.
+- hook execution order.
+- public lifecycle API.
+
+State mutation is delegated to StateRuntime.
+
+---
+
+# Lifecycle Runtime Import Matrix
+
+| Runtime Module | May Import |
+|---------------|------------|
+| state.py | contracts/lifecycle.py + Foundation |
+| hooks.py | Standard Library only |
+| lifecycle.py | state.py, hooks.py, contracts/runtime.py |
+
+---
+
+# Lifecycle Reverse Import Matrix
+
+| Target Module | Allowed Importers |
+|--------------|-------------------|
+| state.py | LifecycleRuntime |
+| hooks.py | LifecycleRuntime |
+| lifecycle.py | RuntimeKernel, BootstrapRuntime |
+
+---
+
+# Lifecycle Anti-Cycle Registry
+
+| Forbidden Cycle | Reason |
+|-----------------|--------|
+| LifecycleRuntime ↔ StateRuntime | Coordinator/state separation. |
+| LifecycleRuntime ↔ HookRuntime | Coordinator/registry separation. |
+| HookRuntime ↔ StateRuntime | Hooks cannot mutate lifecycle state. |
+
+---
+
+# Lifecycle Runtime Integrity Rules
+
+Lifecycle Runtime guarantees:
+
+1. LifecycleRuntime is the only public lifecycle facade.
+2. StateRuntime owns RuntimeStatus exclusively.
+3. HookRuntime owns callbacks exclusively.
+4. No lifecycle implementation imports RuntimeKernel.
+5. Lifecycle dependency graph is acyclic.
+
+---
+
+# KR-007 Import Graph
+
+**Directory**
+
+`src/kernel/runtime/`
+
+**Runtime Layer**
+
+L0
+
+**Owner KR**
+
+KR-007 Event Bus Runtime
+
+---
+
+# Event Bus Import Graph
+
+Event Bus Runtime owns runtime event creation, dispatch and subscription.
+
+The runtime consists of four runtime modules.
+
+Only EventBusRuntime is public.
+
+---
+
+# Event Runtime Module Inventory
+
+| Module | Category | Public |
+|--------|----------|--------|
+| bus.py | Public Event Bus Facade | Yes |
+| publisher.py | Event Creation Runtime | Internal Runtime |
+| dispatcher.py | Event Dispatch Runtime | Internal Runtime |
+| subscriber.py | Subscriber Registry Runtime | Internal Runtime |
+
+---
+
+# Canonical Event Runtime DAG
+
+```text
+contracts/context.py
+        │
+contracts/events.py
+        │
+        ▼
+PublisherRuntime
+        │
+        ▼
+SubscriberRuntime
+        ▲
+        │
+DispatcherRuntime
+        ▲
+        │
+EventBusRuntime
+```
+
+The dependency graph is strictly directional.
+
+---
+
+# EVENT-IMPORT-001 — subscriber.py
+
+### Module Category
+
+Subscriber Registry Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from typing import Callable
+
+from src.core.exceptions import (
+    DuplicateSubscriberError,
+    UnknownSubscriberError,
+)
+```
+
+Subscriber registry imports Foundation only.
+
+---
+
+## Public Export
+
+`SubscriberRuntime`
+
+---
+
+## Forbidden Imports
+
+subscriber.py must never import:
+
+- EventBusRuntime
+- PublisherRuntime
+- DispatcherRuntime
+- RuntimeKernel
+
+Subscriber registry stores handlers only.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| DispatcherRuntime | Read handlers. |
+| EventBusRuntime | Registration API. |
+| Tests | Subscriber registry tests. |
+
+---
+
+# EVENT-IMPORT-002 — publisher.py
+
+### Module Category
+
+Publisher Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import EventValidationError
+
+from src.kernel.contracts.context import RuntimeContext
+from src.kernel.contracts.events import RuntimeEvent
+```
+
+Publisher imports contracts only.
+
+---
+
+## Public Export
+
+`PublisherRuntime`
+
+---
+
+## Forbidden Imports
+
+publisher.py must never import:
+
+- EventBusRuntime
+- DispatcherRuntime
+- SubscriberRuntime
+- RuntimeKernel
+
+Publisher creates immutable RuntimeEvents only.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| EventBusRuntime | Public publish(). |
+| Tests | Publisher tests. |
+
+---
+
+# EVENT-IMPORT-003 — dispatcher.py
+
+### Module Category
+
+Dispatcher Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import (
+    EventDispatchError,
+    EventHandlerError,
+)
+
+from src.kernel.contracts.events import RuntimeEvent
+
+from src.kernel.runtime.subscriber import SubscriberRuntime
+```
+
+Dispatcher imports subscriber runtime only.
+
+---
+
+## Public Export
+
+`DispatcherRuntime`
+
+---
+
+## Forbidden Imports
+
+dispatcher.py must never import:
+
+- EventBusRuntime
+- PublisherRuntime
+- RuntimeKernel
+- LifecycleRuntime
+
+Dispatcher owns handler execution only.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| EventBusRuntime | Public dispatch(). |
+| Tests | Dispatcher tests. |
+
+---
+
+# EVENT-IMPORT-004 — bus.py
+
+### Module Category
+
+Public Event Bus Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import EventValidationError
+
+from src.kernel.contracts.runtime import RuntimeContract
+
+from src.kernel.runtime.publisher import PublisherRuntime
+from src.kernel.runtime.dispatcher import DispatcherRuntime
+from src.kernel.runtime.subscriber import SubscriberRuntime
+```
+
+EventBusRuntime imports contracts plus internal event runtimes only.
+
+---
+
+## Public Export
+
+`EventBusRuntime`
+
+---
+
+## Forbidden Imports
+
+bus.py must never import:
+
+- RuntimeKernel
+- BootstrapRuntime
+- LifecycleRuntime
+- ContextRuntime
+- ExecutorRuntime
+
+EventBusRuntime remains runtime-independent.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| RuntimeKernel | Runtime facade. |
+| ExecutorRuntime | Pipeline events. |
+| ContextRuntime | Context events. |
+| BootstrapRuntime | Runtime construction. |
+
+---
+
+## Ownership Rule
+
+EventBusRuntime owns:
+
+- public publish API;
+- public subscribe API;
+- runtime initialization/shutdown.
+
+Implementation is delegated internally.
+
+---
+
+# Event Runtime Import Matrix
+
+| Runtime Module | May Import |
+|---------------|------------|
+| subscriber.py | Foundation only |
+| publisher.py | Contracts only |
+| dispatcher.py | subscriber.py + contracts/events.py |
+| bus.py | publisher.py, dispatcher.py, subscriber.py, contracts/runtime.py |
+
+---
+
+# Event Runtime Reverse Import Matrix
+
+| Target Module | Allowed Importers |
+|--------------|-------------------|
+| subscriber.py | DispatcherRuntime, EventBusRuntime |
+| publisher.py | EventBusRuntime |
+| dispatcher.py | EventBusRuntime |
+| bus.py | RuntimeKernel, BootstrapRuntime, ExecutorRuntime, ContextRuntime |
+
+---
+
+# Event Runtime Ownership Boundary
+
+## Public Boundary
+
+```text
+RuntimeKernel
+      │
+      ▼
+EventBusRuntime
+```
+
+Everything below EventBusRuntime is internal.
+
+---
+
+## Internal Boundary
+
+```text
+EventBusRuntime
+ ├── PublisherRuntime
+ ├── DispatcherRuntime
+ └── SubscriberRuntime
+```
+
+Internal runtimes never expose APIs directly.
+
+---
+
+# Event Dispatch Dependency Flow
+
+Canonical event flow:
+
+```text
+EventBusRuntime.publish()
+        │
+        ▼
+PublisherRuntime.create()
+        │
+        ▼
+DispatcherRuntime.dispatch()
+        │
+        ▼
+SubscriberRuntime.handlers_for()
+        │
+        ▼
+Event Handlers
+```
+
+Dispatch occurs after event validation.
+
+---
+
+# Anti-Cycle Registry (KR-007)
+
+| Forbidden Cycle | Reason |
+|-----------------|--------|
+| EventBusRuntime ↔ PublisherRuntime | Public/internal separation. |
+| PublisherRuntime ↔ DispatcherRuntime | Creation/execution separation. |
+| DispatcherRuntime ↔ SubscriberRuntime | Registry/execution separation. |
+| SubscriberRuntime ↔ EventBusRuntime | Registry cannot publish events. |
+
+---
+
+# Lifecycle ↔ Event Runtime Boundary Rules
+
+Lifecycle Runtime may publish events **only through EventBusRuntime**.
+
+Forbidden:
+
+```text
+LifecycleRuntime
+        │
+        ▼
+PublisherRuntime
+```
+
+Required:
+
+```text
+LifecycleRuntime
+        │
+        ▼
+EventBusRuntime
+        │
+        ▼
+PublisherRuntime
+```
+
+This boundary is immutable.
+
+---
+
+# KR-006 + KR-007 Import Integrity Rules
+
+Lifecycle and Event Runtime guarantee:
+
+1. LifecycleRuntime is the only lifecycle facade.
+2. EventBusRuntime is the only event facade.
+3. Internal runtimes never import RuntimeKernel.
+4. PublisherRuntime imports contracts only.
+5. DispatcherRuntime imports SubscriberRuntime only.
+6. LifecycleRuntime communicates with Event Runtime through EventBusRuntime only.
+7. Both runtime graphs remain acyclic.
+
+Violating any rule is an Architecture Conflict.
+
+---
+
+# KR-006 + KR-007 Import Statistics
+
+| Runtime | Modules | Internal Edges | Cycles |
+|---------|--------:|---------------:|-------:|
+| Lifecycle Runtime | 3 | 3 | 0 |
+| Event Runtime | 4 | 5 | 0 |
+
+Combined runtime graph contains **zero circular dependencies**.
+
+---
+
+**Document Status:** IN PROGRESS (Part 6 of 10)
+
+<!-- ========================================================================= -->
+<!-- M-04 PART 7 — KR-008 Runtime Context Runtime + KR-009 Pipeline Import Graph -->
+<!-- ========================================================================= -->
+
+# KR-008 Import Graph
+
+**Directory**
+
+`src/kernel/runtime/`
+
+**Runtime Layer**
+
+L0
+
+**Owner KR**
+
+KR-008 Runtime Context Runtime
+
+---
+
+# Runtime Context Import Graph
+
+Runtime Context Runtime owns creation, storage and propagation of immutable `RuntimeContext`.
+
+It consists of three runtime modules.
+
+Only `ContextRuntime` is public.
+
+---
+
+# Runtime Context Module Inventory
+
+| Module | Category | Public |
+|--------|----------|--------|
+| context.py | Public Context Runtime | Yes |
+| metadata.py | Metadata Runtime | Internal Runtime |
+| session.py | Session Runtime | Internal Runtime |
+
+---
+
+# Canonical Runtime Context DAG
+
+```text
+contracts/context.py
+        │
+        ▼
+ MetadataRuntime
+        │
+        ▼
+ SessionRuntime
+        │
+        ▼
+ ContextRuntime
+```
+
+RuntimeContext always flows upward.
+
+---
+
+# CONTEXT-IMPORT-001 — metadata.py
+
+### Module Category
+
+Metadata Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.types import Metadata
+from src.core.exceptions import MetadataValidationError
+```
+
+Foundation only.
+
+---
+
+## Public Export
+
+`MetadataRuntime`
+
+---
+
+## Forbidden Imports
+
+metadata.py must never import:
+
+- ContextRuntime
+- SessionRuntime
+- RuntimeKernel
+- EventBusRuntime
+- LifecycleRuntime
+
+MetadataRuntime owns metadata transformations only.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| SessionRuntime | Metadata persistence. |
+| ContextRuntime | Metadata replacement. |
+
+---
+
+## Ownership Rule
+
+MetadataRuntime owns:
+
+- merge()
+- put()
+- remove()
+- contains()
+- immutable metadata validation.
+
+No runtime mutates metadata directly.
+
+---
+
+# CONTEXT-IMPORT-002 — session.py
+
+### Module Category
+
+Session Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import SessionNotFoundError
+
+from src.kernel.contracts.context import RuntimeContext
+from src.kernel.runtime.metadata import MetadataRuntime
+```
+
+Imports contracts plus MetadataRuntime only.
+
+---
+
+## Public Export
+
+`SessionRuntime`
+
+---
+
+## Forbidden Imports
+
+session.py must never import:
+
+- ContextRuntime
+- RuntimeKernel
+- LifecycleRuntime
+- EventBusRuntime
+- ExecutorRuntime
+
+SessionRuntime owns session storage only.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| ContextRuntime | Context persistence. |
+| BootstrapRuntime | Initial session creation. |
+
+---
+
+## Ownership Rule
+
+SessionRuntime owns:
+
+- create session.
+- update metadata.
+- retrieve RuntimeContext.
+- remove session.
+- clear sessions.
+
+---
+
+# CONTEXT-IMPORT-003 — context.py
+
+### Module Category
+
+Public Context Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import ContextNotAvailableError
+
+from src.kernel.contracts.context import (
+    RuntimeContext,
+    TraceContext,
+)
+
+from src.kernel.contracts.runtime import RuntimeContract
+
+from src.kernel.runtime.metadata import MetadataRuntime
+from src.kernel.runtime.session import SessionRuntime
+```
+
+Imports contracts plus internal Context runtimes only.
+
+---
+
+## Public Export
+
+`ContextRuntime`
+
+---
+
+## Forbidden Imports
+
+context.py must never import:
+
+- RuntimeKernel
+- EventBusRuntime
+- LifecycleRuntime
+- OrchestratorRuntime
+- ExecutorRuntime
+
+ContextRuntime exposes context API only.
+
+---
+
+## Imported By
+
+| Runtime | Purpose |
+|---------|---------|
+| RuntimeKernel | Public context facade. |
+| ExecutorRuntime | Execution context lookup. |
+| EventBusRuntime | Context propagation. |
+| BootstrapRuntime | Runtime initialization. |
+
+---
+
+## Ownership Rule
+
+ContextRuntime owns:
+
+- current RuntimeContext.
+- trace propagation.
+- replacement API.
+- clearing active context.
+
+Session persistence is delegated.
+
+---
+
+# Runtime Context Import Matrix
+
+| Module | May Import |
+|--------|------------|
+| metadata.py | Foundation only |
+| session.py | metadata.py + contracts/context.py |
+| context.py | metadata.py, session.py, contracts/context.py, contracts/runtime.py |
+
+---
+
+# Runtime Context Reverse Import Matrix
+
+| Target Module | Allowed Importers |
+|--------------|-------------------|
+| metadata.py | SessionRuntime, ContextRuntime |
+| session.py | ContextRuntime, BootstrapRuntime |
+| context.py | RuntimeKernel, ExecutorRuntime, EventBusRuntime |
+
+---
+
+# Runtime Context Anti-Cycle Registry
+
+| Forbidden Cycle | Reason |
+|-----------------|--------|
+| ContextRuntime ↔ SessionRuntime | API/storage separation. |
+| SessionRuntime ↔ MetadataRuntime | Storage/metadata separation. |
+| ContextRuntime ↔ MetadataRuntime | API/metadata separation. |
+
+---
+
+# Runtime Context Integrity Rules
+
+Runtime Context Runtime guarantees:
+
+1. ContextRuntime is the only public facade.
+2. SessionRuntime owns RuntimeContext persistence.
+3. MetadataRuntime owns metadata transformations.
+4. RuntimeContext is immutable.
+5. Context graph contains zero cycles.
+
+---
+
+# KR-009 Import Graph
+
+**Directory**
+
+`src/kernel/runtime/`
+
+**Runtime Layer**
+
+L0
+
+**Owner KR**
+
+KR-009 Pipeline Runtime
+
+---
+
+# Pipeline Import Graph
+
+Pipeline Runtime owns pipeline validation, orchestration and execution.
+
+It consists of four runtime modules plus two immutable pipeline contracts.
+
+Only OrchestratorRuntime is public.
+
+---
+
+# Pipeline Runtime Module Inventory
+
+| Module | Category | Public |
+|--------|----------|--------|
+| pipeline.py | Pipeline Dataclasses | Public Contracts |
+| manifest.py | Manifest Runtime | Internal Runtime |
+| executor.py | Executor Runtime | Internal Runtime |
+| orchestrator.py | Public Orchestrator Runtime | Yes |
+
+---
+
+# Canonical Pipeline Runtime DAG
+
+```text
+contracts/module.py
+        │
+        ▼
+PipelineDefinition
+PipelineStage
+        │
+        ▼
+ManifestRuntime
+        │
+        ▼
+ExecutorRuntime
+        │
+        ▼
+OrchestratorRuntime
+```
+
+Execution happens only after validation.
+
+---
+
+# PIPELINE-IMPORT-001 — pipeline.py
+
+### Module Category
+
+Pipeline Contracts
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from src.core.types import ModuleId, PipelineId
+```
+
+Foundation only.
+
+---
+
+## Public Exports
+
+- PipelineStage
+- PipelineDefinition
+
+---
+
+## Forbidden Imports
+
+pipeline.py must never import runtime implementations.
+
+---
+
+## Imported By
+
+ManifestRuntime, ExecutorRuntime, OrchestratorRuntime.
+
+---
+
+# PIPELINE-IMPORT-002 — manifest.py
+
+### Module Category
+
+Manifest Validation Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import (
+    DuplicateModuleError,
+    PipelineCycleError,
+    ValidationError,
+)
+
+from src.kernel.contracts.module import RuntimeModuleManifest
+from src.kernel.runtime.pipeline import (
+    PipelineDefinition,
+    PipelineStage,
+)
+```
+
+Imports contracts plus PipelineDefinition.
+
+---
+
+## Public Export
+
+ManifestRuntime
+
+---
+
+## Forbidden Imports
+
+manifest.py must never import:
+
+- OrchestratorRuntime
+- ExecutorRuntime
+- RuntimeKernel
+- EventBusRuntime
+
+Validation runtime never executes pipelines.
+
+---
+
+## Imported By
+
+OrchestratorRuntime.
+
+---
+
+## Ownership Rule
+
+ManifestRuntime owns:
+
+- DAG validation.
+- duplicate module validation.
+- dependency validation.
+- stage ordering validation.
+
+---
+
+# PIPELINE-IMPORT-003 — executor.py
+
+### Module Category
+
+Pipeline Executor Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import PipelineExecutionError
+
+from src.kernel.contracts.context import RuntimeContext
+
+from src.kernel.runtime.bus import EventBusRuntime
+from src.kernel.runtime.pipeline import (
+    PipelineDefinition,
+    PipelineStage,
+)
+```
+
+Executor imports EventBusRuntime but never Event internals.
+
+---
+
+## Public Export
+
+ExecutorRuntime
+
+---
+
+## Forbidden Imports
+
+executor.py must never import:
+
+- RuntimeKernel
+- OrchestratorRuntime
+- PublisherRuntime
+- DispatcherRuntime
+- SubscriberRuntime
+
+Executor communicates through EventBusRuntime facade only.
+
+---
+
+## Imported By
+
+OrchestratorRuntime.
+
+---
+
+## Ownership Rule
+
+ExecutorRuntime owns:
+
+- execution order.
+- stage execution.
+- execution events.
+- execution timeout handling.
+
+---
+
+# PIPELINE-IMPORT-004 — orchestrator.py
+
+### Module Category
+
+Public Pipeline Runtime
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.exceptions import DuplicateModuleError
+
+from src.kernel.contracts.module import RuntimeModuleManifest
+from src.kernel.contracts.runtime import RuntimeContract
+
+from src.kernel.runtime.executor import ExecutorRuntime
+from src.kernel.runtime.manifest import ManifestRuntime
+```
+
+Imports contracts plus internal Pipeline runtimes only.
+
+---
+
+## Public Export
+
+OrchestratorRuntime
+
+---
+
+## Forbidden Imports
+
+orchestrator.py must never import:
+
+- RuntimeKernel
+- BootstrapRuntime
+- ContainerRuntime
+- LifecycleRuntime
+- ContextRuntime
+
+Pipeline Runtime remains runtime-independent.
+
+---
+
+## Imported By
+
+RuntimeKernel and BootstrapRuntime.
+
+---
+
+## Ownership Rule
+
+OrchestratorRuntime owns:
+
+- module registry.
+- pipeline registry.
+- public execute().
+- runtime diagnostics.
+
+Execution delegated internally.
+
+---
+
+# Pipeline Runtime Import Matrix
+
+| Module | May Import |
+|--------|------------|
+| pipeline.py | Foundation only |
+| manifest.py | pipeline.py + contracts/module.py |
+| executor.py | pipeline.py + contracts/context.py + EventBusRuntime |
+| orchestrator.py | manifest.py, executor.py, contracts/runtime.py, contracts/module.py |
+
+---
+
+# Pipeline Runtime Reverse Import Matrix
+
+| Target Module | Allowed Importers |
+|--------------|-------------------|
+| pipeline.py | ManifestRuntime, ExecutorRuntime |
+| manifest.py | OrchestratorRuntime |
+| executor.py | OrchestratorRuntime |
+| orchestrator.py | RuntimeKernel, BootstrapRuntime |
+
+---
+
+# Pipeline Runtime Boundary Rules
+
+ExecutorRuntime communicates with Event Runtime through EventBusRuntime only.
+
+Forbidden:
+
+```text
+ExecutorRuntime
+      │
+      ▼
+PublisherRuntime
+```
+
+Required:
+
+```text
+ExecutorRuntime
+      │
+      ▼
+EventBusRuntime
+      │
+      ▼
+PublisherRuntime
+```
+
+---
+
+# Pipeline Runtime Anti-Cycle Registry
+
+| Forbidden Cycle | Reason |
+|-----------------|--------|
+| OrchestratorRuntime ↔ ExecutorRuntime | Coordinator/executor separation. |
+| ManifestRuntime ↔ ExecutorRuntime | Validation/execution separation. |
+| ExecutorRuntime ↔ RuntimeKernel | Executor independent from kernel. |
+| OrchestratorRuntime ↔ RuntimeKernel | Kernel owns orchestrator, not vice versa. |
+
+---
+
+# Runtime Context ↔ Pipeline Boundary Rules
+
+Pipeline Runtime may read RuntimeContext.
+
+Pipeline Runtime may never own RuntimeContext.
+
+Canonical dependency:
+
+```text
+ExecutorRuntime
+      │
+      ▼
+ContextRuntime
+      │
+      ▼
+RuntimeContext
+```
+
+Reverse dependency is forbidden.
+
+---
+
+# KR-008 + KR-009 Import Integrity Rules
+
+These runtimes guarantee:
+
+1. ContextRuntime is the only public context facade.
+2. OrchestratorRuntime is the only public pipeline facade.
+3. ExecutorRuntime imports EventBusRuntime only.
+4. ManifestRuntime performs validation only.
+5. SessionRuntime owns RuntimeContext persistence.
+6. PipelineDefinition imports Foundation only.
+7. Both runtime graphs remain acyclic.
+
+Violating any rule is an Architecture Conflict.
+
+---
+
+# KR-008 + KR-009 Import Statistics
+
+| Runtime | Modules | Internal Edges | Cycles |
+|---------|--------:|---------------:|-------:|
+| Runtime Context | 3 | 3 | 0 |
+| Pipeline Runtime | 4 | 5 | 0 |
+
+Combined dependency graph contains **zero circular dependencies**.
+
+---
+
+**Document Status:** IN PROGRESS (Part 7 of 10)
+
+<!-- ========================================================================= -->
+<!-- M-04 PART 8 — KR-010 Bootstrap Runtime + RuntimeKernel + Entry Point Import Graph -->
+<!-- ========================================================================= -->
+
+# KR-010 Import Graph
+
+**Directory**
+
+`src/kernel/runtime/`
+
+**Runtime Layer**
+
+L0
+
+**Owner KR**
+
+KR-010 Bootstrap Runtime
+
+---
+
+# Bootstrap Import Graph
+
+Bootstrap Runtime is responsible for constructing the complete RuntimeKernel.
+
+Bootstrap Runtime is the only runtime allowed to assemble all public runtime facades together.
+
+No runtime implementation may construct RuntimeKernel directly.
+
+---
+
+# Bootstrap Runtime Module Inventory
+
+| Module | Category | Public |
+|--------|----------|--------|
+| bootstrap.py | Bootstrap Runtime Builder | Internal Runtime |
+| runtime.py | Runtime Kernel Facade | Yes |
+| main.py | Process Entry Point | Yes |
+
+---
+
+# Canonical Bootstrap DAG
+
+```text
+Configuration Runtime
+        │
+        ▼
+BootstrapRuntime
+        │
+        ▼
+RuntimeKernel
+        │
+        ▼
+main.py
+```
+
+Runtime construction always follows this direction.
+
+---
+
+# BOOTSTRAP-IMPORT-001 — bootstrap.py
+
+### Module Category
+
+Bootstrap Runtime Builder
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.config import get_settings
+from src.core.logger import get_logger
+
+from src.kernel.runtime.container import ContainerRuntime
+from src.kernel.runtime.lifecycle import LifecycleRuntime
+from src.kernel.runtime.bus import EventBusRuntime
+from src.kernel.runtime.context import ContextRuntime
+from src.kernel.runtime.orchestrator import OrchestratorRuntime
+
+from src.kernel.runtime.runtime import RuntimeKernel
+```
+
+BootstrapRuntime imports every public runtime facade.
+
+It imports **no internal runtime modules**.
+
+---
+
+## Public Export
+
+`BootstrapRuntime`
+
+---
+
+## Forbidden Imports
+
+bootstrap.py must never import:
+
+- RegistryRuntime
+- ResolverRuntime
+- ProviderRuntime
+- ScopeRuntime
+- PublisherRuntime
+- DispatcherRuntime
+- SubscriberRuntime
+- StateRuntime
+- HookRuntime
+- SessionRuntime
+- MetadataRuntime
+- ExecutorRuntime
+- ManifestRuntime
+
+BootstrapRuntime constructs facades only.
+
+---
+
+## Imported By
+
+| Importer | Purpose |
+|----------|---------|
+| src/main.py | Runtime construction. |
+| Integration Tests | Bootstrap validation. |
+
+---
+
+## Ownership Rule
+
+BootstrapRuntime owns:
+
+- environment validation;
+- runtime construction;
+- runtime dependency injection;
+- runtime initialization order;
+- runtime shutdown order.
+
+BootstrapRuntime never executes pipelines.
+
+---
+
+# Bootstrap Construction Sequence
+
+Canonical order:
+
+```text
+get_settings()
+      │
+      ▼
+configure_logging()
+      │
+      ▼
+ContainerRuntime()
+      │
+      ▼
+LifecycleRuntime()
+      │
+      ▼
+EventBusRuntime()
+      │
+      ▼
+ContextRuntime()
+      │
+      ▼
+OrchestratorRuntime()
+      │
+      ▼
+RuntimeKernel(...)
+```
+
+Changing this order is forbidden.
+
+---
+
+# Runtime Facade Construction Matrix
+
+| Runtime Facade | Constructed By |
+|---------------|----------------|
+| ContainerRuntime | BootstrapRuntime |
+| LifecycleRuntime | BootstrapRuntime |
+| EventBusRuntime | BootstrapRuntime |
+| ContextRuntime | BootstrapRuntime |
+| OrchestratorRuntime | BootstrapRuntime |
+| RuntimeKernel | BootstrapRuntime |
+
+Ownership is exclusive.
+
+---
+
+# BOOTSTRAP-IMPORT-002 — runtime.py
+
+### Module Category
+
+Runtime Kernel Facade
+
+### Runtime Layer
+
+L0
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+from src.core.constants import ARCHITECTURE_VERSION
+from src.core.types import HealthStatus
+
+from src.kernel.contracts.runtime import RuntimeContract
+
+from src.kernel.runtime.container import ContainerRuntime
+from src.kernel.runtime.lifecycle import LifecycleRuntime
+from src.kernel.runtime.bus import EventBusRuntime
+from src.kernel.runtime.context import ContextRuntime
+from src.kernel.runtime.orchestrator import OrchestratorRuntime
+```
+
+RuntimeKernel imports **public runtime facades only**.
+
+---
+
+## Public Export
+
+`RuntimeKernel`
+
+---
+
+## Forbidden Imports
+
+runtime.py must never import:
+
+### Internal DI Runtime
+
+- RegistryRuntime
+- ResolverRuntime
+- ProviderRuntime
+- ScopeRuntime
+
+### Internal Lifecycle Runtime
+
+- StateRuntime
+- HookRuntime
+
+### Internal Event Runtime
+
+- PublisherRuntime
+- DispatcherRuntime
+- SubscriberRuntime
+
+### Internal Context Runtime
+
+- SessionRuntime
+- MetadataRuntime
+
+### Internal Pipeline Runtime
+
+- ExecutorRuntime
+- ManifestRuntime
+
+### Bootstrap Runtime
+
+- BootstrapRuntime
+
+RuntimeKernel owns references only.
+
+---
+
+## Imported By
+
+| Importer | Purpose |
+|----------|---------|
+| BootstrapRuntime | Runtime construction. |
+| src/main.py | Process execution. |
+| Integration Tests | Runtime integration tests. |
+
+---
+
+## Ownership Rule
+
+RuntimeKernel owns:
+
+- runtime facade references;
+- public initialize();
+- public start();
+- public stop();
+- public shutdown();
+- public execute();
+- diagnostics();
+- health().
+
+RuntimeKernel delegates all implementation internally.
+
+---
+
+# Runtime Kernel Import Matrix
+
+| RuntimeKernel Imports | Category |
+|----------------------|----------|
+| ContainerRuntime | Public Runtime Facade |
+| LifecycleRuntime | Public Runtime Facade |
+| EventBusRuntime | Public Runtime Facade |
+| ContextRuntime | Public Runtime Facade |
+| OrchestratorRuntime | Public Runtime Facade |
+| RuntimeContract | Protocol |
+| HealthStatus | Foundation |
+
+RuntimeKernel never imports internal runtimes.
+
+---
+
+# Runtime Kernel Reverse Import Matrix
+
+| Target | Allowed Importers |
+|--------|-------------------|
+| RuntimeKernel | BootstrapRuntime, main.py, Integration Tests |
+
+RuntimeKernel has a single construction owner.
+
+---
+
+# Runtime Facade Boundary Rule
+
+```text
+RuntimeKernel
+ ├── ContainerRuntime
+ ├── LifecycleRuntime
+ ├── EventBusRuntime
+ ├── ContextRuntime
+ └── OrchestratorRuntime
+```
+
+RuntimeKernel communicates only through facade APIs.
+
+Direct internal runtime access is forbidden.
+
+---
+
+# BOOTSTRAP-IMPORT-003 — src/main.py
+
+### Module Category
+
+Runtime Entry Point
+
+### Runtime Layer
+
+Entry Layer
+
+---
+
+## Allowed Imports
+
+```python
+from __future__ import annotations
+
+import asyncio
+
+from src.core.logger import get_logger
+
+from src.kernel.runtime.bootstrap import BootstrapRuntime
+```
+
+Entry point imports BootstrapRuntime only.
+
+---
+
+## Public Export
+
+`main()`
+
+---
+
+## Forbidden Imports
+
+main.py must never import:
+
+- RuntimeKernel
+- ContainerRuntime
+- LifecycleRuntime
+- EventBusRuntime
+- ContextRuntime
+- OrchestratorRuntime
+- internal runtimes
+- contracts
+
+Entry point communicates through BootstrapRuntime only.
+
+---
+
+## Ownership Rule
+
+main.py owns:
+
+- process startup;
+- process shutdown;
+- exit code handling;
+- top-level exception handling.
+
+Business logic is forbidden.
+
+---
+
+# Canonical main() Execution Flow
+
+```text
+main()
+  │
+  ▼
+BootstrapRuntime.build()
+  │
+  ▼
+RuntimeKernel.initialize()
+  │
+  ▼
+RuntimeKernel.start()
+  │
+  ▼
+RuntimeKernel.execute()
+  │
+  ▼
+RuntimeKernel.stop()
+  │
+  ▼
+RuntimeKernel.shutdown()
+```
+
+This sequence is immutable.
+
+---
+
+# Entry Layer Import Matrix
+
+| Module | May Import |
+|--------|------------|
+| main.py | BootstrapRuntime, get_logger |
+| BootstrapRuntime | RuntimeKernel + runtime facades |
+| RuntimeKernel | Runtime facades + contracts |
+
+No additional imports are allowed.
+
+---
+
+# Entry Layer Reverse Import Matrix
+
+| Target Module | Allowed Importers |
+|--------------|-------------------|
+| BootstrapRuntime | main.py, Integration Tests |
+| RuntimeKernel | BootstrapRuntime |
+| main.py | Python interpreter only |
+
+Entry layer has one inbound dependency only.
+
+---
+
+# Bootstrap Runtime Boundary Rules
+
+BootstrapRuntime may import:
+
+- Configuration Runtime.
+- Logging Runtime.
+- Runtime Facades.
+
+BootstrapRuntime may never import:
+
+- Runtime internals.
+- Contracts directly (except through facades).
+- Tests.
+- Business modules.
+
+---
+
+# RuntimeKernel Boundary Rules
+
+RuntimeKernel may import:
+
+- Runtime Facades.
+- RuntimeContract.
+- Foundation constants/types.
+
+RuntimeKernel may never import:
+
+- BootstrapRuntime.
+- Runtime internals.
+- Business modules.
+- main.py.
+
+---
+
+# Process Entry Boundary Rules
+
+main.py may import:
+
+- BootstrapRuntime.
+- Logger.
+
+main.py may never import:
+
+- RuntimeKernel directly.
+- Contracts.
+- Runtime internals.
+- Business logic.
+- Services.
+
+---
+
+# Bootstrap Anti-Cycle Registry
+
+| Forbidden Cycle | Reason |
+|-----------------|--------|
+| BootstrapRuntime ↔ RuntimeKernel | Builder/facade separation. |
+| RuntimeKernel ↔ BootstrapRuntime | Runtime cannot construct itself. |
+| main.py ↔ RuntimeKernel | Entry point must not own runtime lifecycle. |
+| main.py ↔ ContainerRuntime | Entry point cannot bypass BootstrapRuntime. |
+
+Every listed cycle is architecture-breaking.
+
+---
+
+# Global Runtime Construction Boundary
+
+Canonical ownership:
+
+```text
+main.py
+    │
+    ▼
+BootstrapRuntime
+    │
+    ▼
+RuntimeKernel
+    │
+    ▼
+Runtime Facades
+    │
+    ▼
+Runtime Internals
+    │
+    ▼
+Kernel Contracts
+    │
+    ▼
+Foundation Core
+```
+
+No upward dependency exists.
+
+---
+
+# KR-010 Import Integrity Rules
+
+Bootstrap Runtime guarantees:
+
+1. BootstrapRuntime constructs RuntimeKernel exactly once.
+2. RuntimeKernel owns runtime facades only.
+3. main.py imports BootstrapRuntime only.
+4. RuntimeKernel never imports BootstrapRuntime.
+5. Entry layer never imports runtime internals.
+6. Runtime construction order is deterministic.
+7. Bootstrap graph contains zero cycles.
+
+Violating any rule is an Architecture Conflict.
+
+---
+
+# KR-010 Import Statistics
+
+| Metric | Value |
+|--------|------:|
+| Modules | 3 |
+| Runtime Facade Imports | 5 |
+| Internal Runtime Imports | 0 |
+| Entry Imports | 2 |
+| Cycles | 0 |
+
+Bootstrap Runtime is the root of the Runtime DAG.
+
+---
+
+**Document Status:** IN PROGRESS (Part 8 of 10)
+
+<!-- ========================================================================= -->
+<!-- M-04 PART 9 — Global Forbidden Import Registry -->
+<!-- ========================================================================= -->
+
+# Global Forbidden Import Registry
+
+**Document Scope**
+
+Entire Wave 1 Repository
+
+**Runtime Layer**
+
+L0
+
+**Authority**
+
+Import Constitution (Part 1)
+
+---
+
+# Purpose
+
+This section defines every forbidden import relationship inside Wave 1.
+
+Unlike previous sections that define allowed dependency graphs, this registry defines repository-wide import violations.
+
+Every forbidden import is an Architecture Conflict.
+
+---
+
+# Forbidden Import Categories
+
+| Category | Meaning |
+|----------|---------|
+| LAYER_VIOLATION | Higher layer imported by lower layer. |
+| CONTRACT_VIOLATION | Contract imports implementation. |
+| FACADE_VIOLATION | Internal runtime imported outside owner runtime. |
+| ENTRY_VIOLATION | `main.py` bypasses BootstrapRuntime. |
+| CYCLE_VIOLATION | Creates circular dependency. |
+| PRIVATE_VIOLATION | Imports private runtime module. |
+
+Vocabulary is immutable.
+
+---
+
+# Foundation Layer Violations
+
+Foundation (`src/core/`) is the lowest dependency layer.
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`src.core.types → src.kernel.*`</table-cell>
+    <table-cell>Foundation cannot depend on kernel.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`src.core.constants → src.core.config`</table-cell>
+    <table-cell>Constants cannot depend on configuration.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`src.core.constants → src.core.logger`</table-cell>
+    <table-cell>Constants cannot depend on logging runtime.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`src.core.exceptions → src.kernel.runtime.*`</table-cell>
+    <table-cell>Exceptions remain implementation-free.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`src.core.settings → src.core.config`</table-cell>
+    <table-cell>Immutable Settings cannot depend on loader.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Configuration Runtime Violations
+
+Configuration Runtime may import Foundation only.
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`config.py → logger.py`</table-cell>
+    <table-cell>No configuration/logging cycle.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`config.py → logging_config.py`</table-cell>
+    <table-cell>Logging initializes after configuration.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`settings.py → RuntimeKernel`</table-cell>
+    <table-cell>Configuration independent from runtime.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`settings.py → BootstrapRuntime`</table-cell>
+    <table-cell>Settings remain immutable.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Logging Runtime Violations
+
+Logging Runtime depends on Configuration Runtime only.
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`logger.py → logging_config.py`</table-cell>
+    <table-cell>Factory/runtime separation.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`logging_config.py → logger.py`</table-cell>
+    <table-cell>No logger initialization cycle.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`logging_config.py → ContextRuntime`</table-cell>
+    <table-cell>Logging receives metadata through filter abstraction.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`logger.py → RuntimeKernel`</table-cell>
+    <table-cell>Logger available before runtime exists.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Contract Layer Violations
+
+Contracts never import runtime implementations.
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`contracts/context.py → runtime/context.py`</table-cell>
+    <table-cell>Contract/runtime separation.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`contracts/events.py → runtime/bus.py`</table-cell>
+    <table-cell>Event contract independent from runtime.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`contracts/lifecycle.py → runtime/lifecycle.py`</table-cell>
+    <table-cell>Lifecycle snapshot independent.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`contracts/service.py → runtime/container.py`</table-cell>
+    <table-cell>ServiceDescriptor independent.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`contracts/module.py → runtime/orchestrator.py`</table-cell>
+    <table-cell>Manifest independent.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`contracts/runtime.py → runtime/runtime.py`</table-cell>
+    <table-cell>Protocol independent.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Dependency Injection Violations
+
+Internal DI runtimes are private.
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`RuntimeKernel → RegistryRuntime`</table-cell>
+    <table-cell>Facade imports only ContainerRuntime.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`RuntimeKernel → ResolverRuntime`</table-cell>
+    <table-cell>Internal runtime hidden.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`LifecycleRuntime → ScopeRuntime`</table-cell>
+    <table-cell>Runtime ownership violation.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`EventBusRuntime → RegistryRuntime`</table-cell>
+    <table-cell>Cross-runtime private import.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`ContextRuntime → ResolverRuntime`</table-cell>
+    <table-cell>Context runtime independent.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Lifecycle Runtime Violations
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`StateRuntime → LifecycleRuntime`</table-cell>
+    <table-cell>No reverse coordinator dependency.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`HookRuntime → StateRuntime`</table-cell>
+    <table-cell>Hook registry independent from state.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`HookRuntime → RuntimeKernel`</table-cell>
+    <table-cell>Internal runtime hidden.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Event Runtime Violations
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`PublisherRuntime → DispatcherRuntime`</table-cell>
+    <table-cell>Create/dispatch separation.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`DispatcherRuntime → EventBusRuntime`</table-cell>
+    <table-cell>No reverse facade dependency.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`SubscriberRuntime → PublisherRuntime`</table-cell>
+    <table-cell>Registry independent from publishing.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`SubscriberRuntime → RuntimeKernel`</table-cell>
+    <table-cell>Internal runtime hidden.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Context Runtime Violations
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`MetadataRuntime → ContextRuntime`</table-cell>
+    <table-cell>Metadata runtime independent.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`SessionRuntime → ContextRuntime`</table-cell>
+    <table-cell>Storage independent from facade.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`ContextRuntime → RuntimeKernel`</table-cell>
+    <table-cell>No upward dependency.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Pipeline Runtime Violations
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`ExecutorRuntime → RuntimeKernel`</table-cell>
+    <table-cell>Executor independent from kernel.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`ManifestRuntime → ExecutorRuntime`</table-cell>
+    <table-cell>Validation/execution separation.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`PipelineDefinition → ManifestRuntime`</table-cell>
+    <table-cell>Dataclasses independent from runtime.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`OrchestratorRuntime → BootstrapRuntime`</table-cell>
+    <table-cell>Pipeline independent from bootstrap.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Bootstrap Runtime Violations
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`BootstrapRuntime → RegistryRuntime`</table-cell>
+    <table-cell>Bootstrap imports facades only.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`BootstrapRuntime → PublisherRuntime`</table-cell>
+    <table-cell>No internal runtime imports.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`BootstrapRuntime → ExecutorRuntime`</table-cell>
+    <table-cell>Pipeline internals hidden.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# RuntimeKernel Violations
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`RuntimeKernel → BootstrapRuntime`</table-cell>
+    <table-cell>Kernel cannot build itself.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`RuntimeKernel → PublisherRuntime`</table-cell>
+    <table-cell>Event internals hidden.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`RuntimeKernel → StateRuntime`</table-cell>
+    <table-cell>Lifecycle internals hidden.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`RuntimeKernel → MetadataRuntime`</table-cell>
+    <table-cell>Context internals hidden.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`RuntimeKernel → ManifestRuntime`</table-cell>
+    <table-cell>Pipeline internals hidden.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Entry Layer Violations
+
+## Forbidden Imports
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Forbidden Import**</table-cell>
+    <table-cell>**Reason**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`main.py → RuntimeKernel`</table-cell>
+    <table-cell>Must go through BootstrapRuntime.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`main.py → ContainerRuntime`</table-cell>
+    <table-cell>No runtime bypass.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`main.py → EventBusRuntime`</table-cell>
+    <table-cell>No direct runtime ownership.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`main.py → contracts/*`</table-cell>
+    <table-cell>Entry layer imports runtime only.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Private Runtime Import Registry
+
+The following runtime modules are **private**.
+
+They may never be imported outside their owner runtime.
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Private Runtime**</table-cell>
+    <table-cell>**Owner Runtime**</table-cell>
+  </table-row>
+  <table-row><table-cell>RegistryRuntime</table-cell><table-cell>Dependency Injection Runtime</table-cell></table-row>
+  <table-row><table-cell>ResolverRuntime</table-cell><table-cell>Dependency Injection Runtime</table-cell></table-row>
+  <table-row><table-cell>ProviderRuntime</table-cell><table-cell>Dependency Injection Runtime</table-cell></table-row>
+  <table-row><table-cell>ScopeRuntime</table-cell><table-cell>Dependency Injection Runtime</table-cell></table-row>
+  <table-row><table-cell>StateRuntime</table-cell><table-cell>Lifecycle Runtime</table-cell></table-row>
+  <table-row><table-cell>HookRuntime</table-cell><table-cell>Lifecycle Runtime</table-cell></table-row>
+  <table-row><table-cell>PublisherRuntime</table-cell><table-cell>Event Runtime</table-cell></table-row>
+  <table-row><table-cell>DispatcherRuntime</table-cell><table-cell>Event Runtime</table-cell></table-row>
+  <table-row><table-cell>SubscriberRuntime</table-cell><table-cell>Event Runtime</table-cell></table-row>
+  <table-row><table-cell>MetadataRuntime</table-cell><table-cell>Context Runtime</table-cell></table-row>
+  <table-row><table-cell>SessionRuntime</table-cell><table-cell>Context Runtime</table-cell></table-row>
+  <table-row><table-cell>ManifestRuntime</table-cell><table-cell>Pipeline Runtime</table-cell></table-row>
+  <table-row><table-cell>ExecutorRuntime</table-cell><table-cell>Pipeline Runtime</table-cell></table-row>
+</table>
+
+Private runtime visibility is immutable.
+
+---
+
+# Repository-Wide Cycle Registry
+
+These cycles are explicitly forbidden.
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Cycle**</table-cell>
+    <table-cell>**Status**</table-cell>
+  </table-row>
+  <table-row><table-cell>Configuration ↔ Logging</table-cell><table-cell>FORBIDDEN</table-cell></table-row>
+  <table-row><table-cell>Contracts ↔ Runtime</table-cell><table-cell>FORBIDDEN</table-cell></table-row>
+  <table-row><table-cell>Container ↔ Resolver</table-cell><table-cell>FORBIDDEN</table-cell></table-row>
+  <table-row><table-cell>Lifecycle ↔ State</table-cell><table-cell>FORBIDDEN</table-cell></table-row>
+  <table-row><table-cell>Publisher ↔ Dispatcher</table-cell><table-cell>FORBIDDEN</table-cell></table-row>
+  <table-row><table-cell>Context ↔ Session</table-cell><table-cell>FORBIDDEN</table-cell></table-row>
+  <table-row><table-cell>Manifest ↔ Executor</table-cell><table-cell>FORBIDDEN</table-cell></table-row>
+  <table-row><table-cell>RuntimeKernel ↔ Bootstrap</table-cell><table-cell>FORBIDDEN</table-cell></table-row>
+  <table-row><table-cell>main ↔ RuntimeKernel</table-cell><table-cell>FORBIDDEN</table-cell></table-row>
+</table>
+
+Every listed cycle is architecture-breaking.
+
+---
+
+# Repository Import Integrity Rules
+
+The repository is GREEN only if:
+
+- [x] Layer direction never violated.
+- [x] Contracts never import implementations.
+- [x] Public facades hide internal runtimes.
+- [x] Private runtimes remain private.
+- [x] Entry layer imports BootstrapRuntime only.
+- [x] Repository contains zero circular imports.
+- [x] Every import follows M-02 Runtime Graph.
+
+Violating any rule is an Architecture Conflict.
+
+---
+
+# Global Forbidden Import Statistics
+
+| Metric | Value |
+|--------|------:|
+| Forbidden Layer Imports | 18 |
+| Forbidden Contract Imports | 6 |
+| Forbidden Runtime Imports | 27 |
+| Private Runtime Modules | 13 |
+| Explicit Forbidden Cycles | 9 |
+
+This registry is exhaustive for Wave 1.
+
+---
+
+**Document Status:** IN PROGRESS (Part 9 of 10)
+
+<!-- ========================================================================= -->
+<!-- M-04 PART 10 — Repository Import Matrix, Layer Visibility Matrix & DoD -->
+<!-- ========================================================================= -->
+
+# Repository Import Matrix
+
+**Document Scope**
+
+Entire Wave 1 Repository
+
+**Status**
+
+CANONICAL
+
+**Authority**
+
+AB-00 Development Constitution
+
+---
+
+# Repository Layer Matrix
+
+This matrix defines every dependency direction between architectural layers.
+
+| From / To | Foundation | Contracts | Runtime Facades | Runtime Internals | Bootstrap | Entry |
+|------------|------------|-----------|-----------------|-------------------|-----------|-------|
+| **Foundation** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Contracts** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Runtime Facades** | ✅ | ✅ | ✅ | ✅ (own runtime only) | ❌ | ❌ |
+| **Runtime Internals** | ✅ | ✅ | ✅ (own facade only) | ✅ (own runtime only) | ❌ | ❌ |
+| **Bootstrap Runtime** | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| **Entry Layer (`main.py`)** | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
+
+This table is immutable.
+
+---
+
+# Canonical Dependency Direction
+
+The repository dependency graph is strictly top-down.
+
+```text
+main.py
+    │
+    ▼
+Bootstrap Runtime
+    │
+    ▼
+Runtime Kernel
+    │
+    ▼
+Runtime Facades
+    │
+    ▼
+Runtime Internals
+    │
+    ▼
+Kernel Contracts
+    │
+    ▼
+Foundation Core
+```
+
+No dependency may point upward.
+
+---
+
+# Runtime Visibility Matrix
+
+## Public Runtime Modules
+
+These modules may be imported outside their runtime package.
+
+| Runtime | Public Module |
+|----------|---------------|
+| Dependency Injection | `ContainerRuntime` |
+| Lifecycle | `LifecycleRuntime` |
+| Event Bus | `EventBusRuntime` |
+| Runtime Context | `ContextRuntime` |
+| Pipeline Runtime | `OrchestratorRuntime` |
+| Runtime Kernel | `RuntimeKernel` |
+| Bootstrap Runtime | `BootstrapRuntime` |
+
+Everything else is internal.
+
+---
+
+## Internal Runtime Modules
+
+Internal modules may only be imported inside their owner runtime.
+
+| Runtime | Internal Modules |
+|----------|------------------|
+| Dependency Injection | RegistryRuntime, ResolverRuntime, ProviderRuntime, ScopeRuntime |
+| Lifecycle | StateRuntime, HookRuntime |
+| Event Runtime | PublisherRuntime, DispatcherRuntime, SubscriberRuntime |
+| Runtime Context | MetadataRuntime, SessionRuntime |
+| Pipeline Runtime | ManifestRuntime, ExecutorRuntime |
+
+Importing an internal runtime from another runtime is forbidden.
+
+---
+
+# Repository Public Import Matrix
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Importer**</table-cell>
+    <table-cell>**Public Runtime Allowed**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`main.py`</table-cell>
+    <table-cell>`BootstrapRuntime` only.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`BootstrapRuntime`</table-cell>
+    <table-cell>All runtime facades.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>`RuntimeKernel`</table-cell>
+    <table-cell>Runtime facades only.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>Business Modules</table-cell>
+    <table-cell>`RuntimeKernel` only.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>Tests</table-cell>
+    <table-cell>Public facades and explicitly documented internals.</table-cell>
+  </table-row>
+</table>
+
+---
+
+# Repository Internal Import Matrix
+
+<table columnSizing="equal">
+  <table-row>
+    <table-cell>**Owner Runtime**</table-cell>
+    <table-cell>**Allowed Internal Imports**</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>Dependency Injection</table-cell>
+    <table-cell>Registry ↔ Resolver ↔ Provider ↔ Scope according to KR-005 DAG.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>Lifecycle</table-cell>
+    <table-cell>LifecycleRuntime → StateRuntime + HookRuntime.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>Event Runtime</table-cell>
+    <table-cell>EventBusRuntime → PublisherRuntime / DispatcherRuntime / SubscriberRuntime.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>Runtime Context</table-cell>
+    <table-cell>ContextRuntime → SessionRuntime → MetadataRuntime.</table-cell>
+  </table-row>
+  <table-row>
+    <table-cell>Pipeline Runtime</table-cell>
+    <table-cell>OrchestratorRuntime → ManifestRuntime → ExecutorRuntime.</table-cell>
+  </table-row>
+</table>
+
+Cross-runtime internal imports are forbidden.
+
+---
+
+# Import Decision Algorithm
+
+Every new import must pass this algorithm before implementation.
+
+## Step 1 — Identify Symbol Owner
+
+Determine the canonical owner module.
+
+| Symbol Category | Owner |
+|-----------------|-------|
+| Type Alias | Foundation |
+| Exception | Foundation |
+| Runtime Contract | Contracts |
+| Runtime Facade | Runtime |
+| Runtime Internal | Runtime Owner |
+| Bootstrap | Bootstrap Runtime |
+
+---
+
+## Step 2 — Check Layer Direction
+
+The importer must belong to the same or a higher runtime layer.
+
+If dependency points upward:
+
+**Architecture Conflict**
+
+---
+
+## Step 3 — Check Runtime Visibility
+
+If target module is internal:
+
+Importer must belong to the same runtime package.
+
+Otherwise:
+
+**Private Runtime Violation**
+
+---
+
+## Step 4 — Check Cycle Registry
+
+If import creates a documented forbidden cycle:
+
+Reject implementation.
+
+---
+
+## Step 5 — Validate Against Repository Matrix
+
+Import must exist inside the Repository Layer Matrix.
+
+Otherwise:
+
+**Import Validation Failed**
+
+---
+
+# Import Validation Checklist
+
+Every production import must satisfy all conditions.
+
+- [ ] Correct canonical owner.
+- [ ] Correct runtime layer direction.
+- [ ] Correct public/internal visibility.
+- [ ] No forbidden cycle introduced.
+- [ ] No wildcard import used.
+- [ ] No runtime internal imported outside owner runtime.
+- [ ] Import documented inside M-04.
+
+---
+
+# Wildcard Import Policy
+
+Wildcard imports are forbidden.
+
+## Forbidden
+
+```python
+from src.kernel.runtime.container import *
+```
+
+```python
+from src.core.types import *
+```
+
+```python
+from src.kernel.contracts.events import *
+```
+
+## Required
+
+```python
+from src.kernel.runtime.container import ContainerRuntime
+```
+
+Explicit imports are mandatory.
+
+---
+
+# Relative Import Policy
+
+Relative imports are forbidden across the repository.
+
+## Forbidden
+
+```python
+from .container import ContainerRuntime
+```
+
+```python
+from ..contracts.context import RuntimeContext
+```
+
+## Required
+
+```python
+from src.kernel.runtime.container import ContainerRuntime
+```
+
+Absolute imports are mandatory.
+
+---
+
+# Canonical Import Style
+
+Imports must be grouped in this exact order.
+
+```python
+from __future__ import annotations
+
+# Standard Library
+
+# Third Party
+
+# Foundation
+
+# Contracts
+
+# Runtime
+
+# Local Package
+```
+
+Import ordering is deterministic.
+
+---
+
+# Repository Import Style Rules
+
+Every module must satisfy:
+
+1. `__future__` import first.
+2. Standard Library second.
+3. Third-party packages third.
+4. Foundation imports.
+5. Contract imports.
+6. Runtime imports.
+7. Local package imports.
+8. No wildcard imports.
+9. No relative imports.
+
+---
+
+# Layer Ownership Summary
+
+| Layer | Owns |
+|--------|------|
+| Foundation | Types, constants, exceptions, configuration, logging primitives. |
+| Contracts | Immutable runtime contracts and protocols. |
+| Runtime Internals | Implementation details of each runtime subsystem. |
+| Runtime Facades | Public runtime APIs. |
+| Bootstrap Runtime | Runtime construction. |
+| Entry Layer | Process lifecycle only. |
+
+Ownership never overlaps.
+
+---
+
+# Import Compliance Levels
+
+| Level | Meaning |
+|-------|---------|
+| GREEN | Fully compliant with M-04. |
+| YELLOW | Temporary implementation exception documented in Architecture Decision Record. |
+| RED | Architecture Conflict — implementation rejected. |
+
+Wave 1 production code must remain GREEN.
+
+---
+
+# Repository Import Metrics
+
+| Metric | Value |
+|--------|------:|
+| Architectural Layers | 6 |
+| Public Runtime Facades | 7 |
+| Internal Runtime Modules | 13 |
+| Foundation Modules | 7 |
+| Contract Modules | 6 |
+| Bootstrap Modules | 2 |
+| Entry Modules | 1 |
+| Explicit Forbidden Cycles | 9 |
+| Wildcard Imports Allowed | 0 |
+| Relative Imports Allowed | 0 |
+
+These metrics are canonical.
+
+---
+
+# Definition of Done — M-04 Import Graph
+
+M-04 is COMPLETE only if:
+
+- [x] Every Wave 1 module has an owner runtime layer.
+- [x] Every public symbol has a canonical owner file.
+- [x] Every runtime has a complete DAG.
+- [x] Every forbidden cycle is documented.
+- [x] Every public facade is documented.
+- [x] Every internal runtime visibility rule is documented.
+- [x] Repository Layer Matrix is complete.
+- [x] Repository Import Matrix is complete.
+- [x] Import Decision Algorithm is defined.
+- [x] Wildcard and relative import policies are defined.
+
+---
+
+# Completion Marker
+
+**Document ID**
+
+M-04
+
+**Document Name**
+
+Import Graph
+
+**Version**
+
+1.1 Canonical
+
+**Status**
+
+COMPLETE
+
+**Canonical Authority**
+
+Wave 1 Import Source of Truth
+
+No document may redefine import ownership established by M-04.
