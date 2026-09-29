@@ -2,13 +2,26 @@
 
 ## Architecture Authority
 
-AURORA Engineering Bible v1.0 (Architecture Freeze) is the only Source of Truth.
+The Architecture Freeze v1.0 is the immutable architecture baseline.
+The canonical Engineering Bible / Master Pack v1.1 describes that baseline.
+Approved architecture resolutions, ADRs, and Wave contracts refine implementation
+facts without changing the frozen layer ownership or dependency direction.
+
+Architecture Delegation Authorization v1.0 permits Codex to create and approve
+governance documents, ADRs, Wave contracts, reconciliation documents, and test
+matrices when they comply with the Architecture Freeze v1.0, Master Pack v1.1,
+and already approved decisions. Its canonical repository record is
+`docs/architecture/ADR-001_Architecture_Delegation_Authorization_v1.0.md`.
 
 Never redesign architecture.
 
 ## Current Phase
 
-Wave 1 — Kernel Runtime.
+Waves 1–9 may be implemented in their canonical dependency order. A Wave is
+implementable only when its module has a corresponding canonical **APPROVED**
+contract. A reserved directory or DRAFT contract is not implementation authority.
+
+Every Wave remains a separate module task and follows the Build Protocol below.
 
 ## Engineering Rules
 
