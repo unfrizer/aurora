@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from ctypes import wintypes
 from typing import Final, Literal, NoReturn, cast
 
@@ -15,6 +15,12 @@ _TARGET_PREFIX: Final[str] = "AURORA:"
 _CRED_TYPE_GENERIC: Final[int] = 1
 _CRED_PERSIST_LOCAL_MACHINE: Final[int] = 2
 _ERROR_NOT_FOUND: Final[int] = 1168
+_WINDLL_LOADER: Final[str] = "WinDLL"
+_GET_LAST_ERROR: Final[str] = "get_last_error"
+_CRED_WRITE: Final[str] = "CredWriteW"
+_CRED_READ: Final[str] = "CredReadW"
+_CRED_DELETE: Final[str] = "CredDeleteW"
+_CRED_FREE: Final[str] = "CredFree"
 
 
 class CredentialStoreError(RuntimeError):
@@ -44,15 +50,21 @@ _CredentialPointer = ctypes.POINTER(_Credential)
 class _WindowsCredentialApi:
     """The private, typed wrapper around Advapi32 credential functions."""
 
+    _cred_write: _NativeFunction
+    _cred_read: _NativeFunction
+    _cred_delete: _NativeFunction
+    _cred_free: _NativeFunction
+
     def __init__(self) -> None:
         if sys.platform != "win32":
             raise CredentialStoreError("Windows Credential Manager is available only on Windows.")
 
-        library = ctypes.WinDLL("Advapi32.dll", use_last_error=True)
-        self._cred_write = cast(_NativeFunction, library.CredWriteW)
-        self._cred_read = cast(_NativeFunction, library.CredReadW)
-        self._cred_delete = cast(_NativeFunction, library.CredDeleteW)
-        self._cred_free = cast(_NativeFunction, library.CredFree)
+        native_loader = cast(Callable[..., object], getattr(ctypes, _WINDLL_LOADER))
+        library = native_loader("Advapi32.dll", use_last_error=True)
+        self._cred_write = cast(_NativeFunction, getattr(library, _CRED_WRITE))
+        self._cred_read = cast(_NativeFunction, getattr(library, _CRED_READ))
+        self._cred_delete = cast(_NativeFunction, getattr(library, _CRED_DELETE))
+        self._cred_free = cast(_NativeFunction, getattr(library, _CRED_FREE))
 
         for function, argument_types, result_type in (
             (self._cred_write, [ctypes.POINTER(_Credential), wintypes.DWORD], wintypes.BOOL),
@@ -95,7 +107,7 @@ class _WindowsCredentialApi:
     def read(self, target: str) -> str | None:
         credential_pointer = _CredentialPointer()
         if not self._cred_read(target, _CRED_TYPE_GENERIC, 0, ctypes.byref(credential_pointer)):
-            if ctypes.get_last_error() == _ERROR_NOT_FOUND:
+            if _last_error() == _ERROR_NOT_FOUND:
                 return None
             self._raise_native_error("read")
 
@@ -111,13 +123,13 @@ class _WindowsCredentialApi:
     def delete(self, target: str) -> bool:
         if self._cred_delete(target, _CRED_TYPE_GENERIC, 0):
             return True
-        if ctypes.get_last_error() == _ERROR_NOT_FOUND:
+        if _last_error() == _ERROR_NOT_FOUND:
             return False
         self._raise_native_error("delete")
 
     @staticmethod
     def _raise_native_error(operation: str) -> NoReturn:
-        error_code = ctypes.get_last_error()
+        error_code = _last_error()
         raise CredentialStoreError(
             "Windows Credential Manager could not "
             f"{operation} the requested credential (error {error_code})."
@@ -129,6 +141,11 @@ class _NativeFunction:
     restype: object
 
     def __call__(self, *arguments: object) -> int: ...
+
+
+def _last_error() -> int:
+    native_last_error = cast(Callable[[], int], getattr(ctypes, _GET_LAST_ERROR))
+    return native_last_error()
 
 
 class WindowsCredentialStore:
