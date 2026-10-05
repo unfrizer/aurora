@@ -1273,7 +1273,7 @@ Immutable DI descriptor.
 | lifecycle.py | RuntimeLifecycleContract, LifecycleState |
 | module.py | RuntimeModuleManifest |
 | runtime.py | RuntimeContract |
-| service.py | ServiceContract, ServiceFactory, ServiceDescriptor |
+| service.py | ServiceContract, ServiceDescriptor |
 
 Every export appears in M-03.
 
