@@ -206,6 +206,15 @@ Coverage target:
 
 # KR-005 Tests
 
+ADR-004 explicitly authorizes `tests/kernel/test_container.py` adjustments while
+its owner remains KR-011. APPROVED `../wave1/KR-005_DI.md` supplies the reconciled
+acceptance matrix: async readiness/injection, complete graph preflight, all 16
+scope edges, identities, rollback/retry, transient descendant release, consumer
+guards, reverse cleanup and multiple errors, cancellation/resumable ownership,
+same-ID replacement, and re-entrancy rejection. Legacy sync-only examples below
+are superseded for KR-005. Do not create or modify other test files in this task.
+
+
 ## tests/kernel/test_registry.py
 
 ### Registry Cases

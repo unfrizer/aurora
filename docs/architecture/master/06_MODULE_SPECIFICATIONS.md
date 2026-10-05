@@ -2372,6 +2372,18 @@ KR-004 is GREEN only if:
 
 # KR-005 — Dependency Injection Runtime
 
+## Approved ADR-004 implementation reconciliation
+
+Apply exact APPROVED `../wave1/KR-005_DI.md` instead of the obsolete sync methods,
+public properties, descriptor/context Scope API and bare implementation typing
+in this section. Five production files and one canonical test file are authorized.
+Private iterative graph/build working records and a typed construction callback
+track partial initialization before awaiting hooks; they introduce no public
+contract, cache owner, Runtime or dependency direction. Ready cached instances
+belong only to Scope; transient/pending acquisition records belong to Resolver.
+ADR-004 P-01/P-02/P-05 define lifecycle, rollback, removal and cancellation behavior.
+
+
 **Runtime Layer:** L0 Kernel
 
 Dependency Injection Runtime owns service registration, dependency resolution and scope lifetimes.

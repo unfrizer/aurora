@@ -2360,6 +2360,18 @@ Kernel Contracts remain a directed acyclic graph.
 
 # KR-005 Import Graph
 
+## Approved ADR-004 import reconciliation
+
+`../wave1/KR-005_DI.md` is the current APPROVED implementation contract.
+Container composes Registry/Resolver/Provider/Scope; Resolver imports the latter
+three plus Foundation/Contracts. Registry and Provider import Foundation/Contracts
+only. Scope imports Foundation and standard-library types only: its async disposal
+callback replaces the forbidden Scope-to-Provider edge. A private construction
+notification callback does not import Resolver into Provider. Legacy signatures
+and exception aliases below are superseded for KR-005 only by ADR-004's existing
+Foundation exceptions. Frozen ownership and the acyclic dependency DAG remain.
+
+
 **Directory**
 
 `src/kernel/runtime/`
