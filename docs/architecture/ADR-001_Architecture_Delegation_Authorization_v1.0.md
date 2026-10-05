@@ -22,6 +22,11 @@ module's authorized files, run Ruff, Pyright, and Pytest, commit, and push.
 Creating a pull request and merging it require separate explicit confirmation
 from the Architecture Authority.
 
+For routine PR creation and merge within the defined scope, this confirmation
+requirement is amended by the later explicit standing authorization in
+`ADR-003_Standing_PR_Merge_Authorization_v1.0.md`. All other rules in this
+document remain unchanged.
+
 ## Defaults for Missing Detail
 
 When the authoritative documents do not specify a detail, Codex may use only
