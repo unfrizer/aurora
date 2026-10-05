@@ -1,10 +1,15 @@
 # AURORA — Kernel Reconciliation Proposal v1.0
 
-**Document ID:** ADR-004  
-**Status:** DRAFT — EXPLICIT ARCHITECTURE AUTHORITY APPROVAL REQUIRED  
-**Date:** 2026-10-05  
-**Task:** RCN-001 follow-up; documentation only  
-**Repository baseline:** `d72120536643725d10ffd51c298cb4ed2847d061`  
+**Document ID:** ADR-004
+
+**Status:** DRAFT — EXPLICIT ARCHITECTURE AUTHORITY APPROVAL REQUIRED
+
+**Date:** 2026-10-05
+
+**Task:** RCN-001 follow-up; documentation only
+
+**Repository baseline:** `d72120536643725d10ffd51c298cb4ed2847d061`
+
 **Implementation authority:** NONE while DRAFT
 
 ## Purpose and Dependencies
