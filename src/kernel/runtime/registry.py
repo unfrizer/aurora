@@ -1,5 +1,8 @@
 """KR-005 service descriptor registry."""
 
+# Descriptors intentionally do not validate their own runtime construction.
+# pyright: reportUnnecessaryIsInstance=false
+
 from __future__ import annotations
 
 from src.core.exceptions import ServiceRegistrationError, ServiceResolutionError
@@ -8,12 +11,18 @@ from src.kernel.contracts.service import ServiceDescriptor
 
 
 class RegistryRuntime:
-    """Own the immutable service descriptor registry."""
+    """Own immutable descriptors; registration itself remains explicitly mutable."""
 
     def __init__(self) -> None:
         self._descriptors: dict[ServiceId, ServiceDescriptor] = {}
 
     def register(self, descriptor: ServiceDescriptor) -> None:
+        if (
+            not isinstance(descriptor, ServiceDescriptor)
+            or not isinstance(descriptor.service_id, str)
+            or not descriptor.service_id.strip()
+        ):
+            raise ServiceRegistrationError("Invalid service descriptor identity")
         if descriptor.service_id in self._descriptors:
             raise ServiceRegistrationError(
                 "Service is already registered", service_id=descriptor.service_id

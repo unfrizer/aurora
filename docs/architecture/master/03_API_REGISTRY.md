@@ -3168,6 +3168,19 @@ KR-004 exposes exactly seven canonical contracts.
 
 # KR-005 Public API Registry (Part 1)
 
+## Approved ADR-004 API replacement
+
+For KR-005, the exact APPROVED signatures in `../wave1/KR-005_DI.md` supersede
+the legacy signatures, properties, counts and sync examples below. Container
+retains sync register/contains/descriptors, makes resolve/remove asynchronous,
+and adds the approved async release/clear_session/clear_pipeline. Resolver receives
+Registry/Provider/typed Scope and resolves asynchronously. Provider.provide receives
+explicit dependency keywords and awaits initialize; dispose awaits shutdown.
+ScopeRuntime[T] receives a typed async callback and explicit IDs/scope, not
+descriptors, contexts or Provider. Registry's existing sync API is unchanged.
+These are ADR-004-approved changes, not new facade identifiers by inference.
+
+
 **Directory**
 
 `src/kernel/runtime/`
@@ -5879,6 +5892,15 @@ Replacement always creates a new immutable instance.
 ---
 
 # KR-005 Behavioral Registry (Dependency Injection)
+
+ADR-004 P-01/P-02/P-05 and APPROVED `../wave1/KR-005_DI.md` supersede this
+section's legacy sync-only, unregister, initialize and cleanup descriptions.
+Resolution returns initialized services; constructor bindings are explicit and
+graphs preflight before side effects. Transients have tracked release ownership.
+Removal rejects consumers, detaches before best-effort reverse-order teardown,
+and remains effective despite disposal errors. Cancellation preserves retryable
+pending cleanup. No other module's API is changed by this replacement.
+
 
 <table><table-section header><table-row header><table-cell header>API</table-cell><table-cell header>Purity</table-cell><table-cell header>Thread Safety</table-cell><table-cell header>Idempotent</table-cell></table-row></table-section><table-row><table-cell>register()</table-cell><table-cell>STATE_WRITE</table-cell><table-cell>SINGLE_THREAD</table-cell><table-cell>NO</table-cell></table-row><table-row><table-cell>unregister()</table-cell><table-cell>STATE_WRITE</table-cell><table-cell>SINGLE_THREAD</table-cell><table-cell>NO</table-cell></table-row><table-row><table-cell>resolve()</table-cell><table-cell>CACHE_WRITE</table-cell><table-cell>GUARDED</table-cell><table-cell>YES*</table-cell></table-row><table-row><table-cell>contains()</table-cell><table-cell>CACHE_READ</table-cell><table-cell>SAFE</table-cell><table-cell>YES</table-cell></table-row><table-row><table-cell>descriptors()</table-cell><table-cell>CACHE_READ</table-cell><table-cell>SAFE</table-cell><table-cell>YES</table-cell></table-row></table>
 

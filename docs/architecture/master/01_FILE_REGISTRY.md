@@ -1353,6 +1353,18 @@ Contracts remain pure immutable definitions.
 
 # KR-005 — Dependency Injection Runtime Registry
 
+## Approved ADR-004 reconciliation
+
+The APPROVED `../wave1/KR-005_DI.md` compiles ADR-004 P-01/P-02/P-05.
+It supersedes legacy method/signature and cache-freezing examples in this KR-005
+section only. Ownership and these five production paths remain unchanged.
+Container exposes register/contains/descriptors and async resolve/remove/release/
+clear_session/clear_pipeline. Registry retains register/unregister/get/contains/list.
+Resolver owns graph traversal and transient lifetime; Provider constructs and
+awaits hooks; generic Scope owns cached lifetimes through a typed async callback.
+No public component properties or additional Runtime are authorized.
+
+
 **Runtime Layer:** L0 Kernel
 
 Directory:
