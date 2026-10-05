@@ -1228,9 +1228,9 @@ Methods:
 
 ---
 
-#### ServiceFactory
-
-Callable service factory protocol.
+ADR-004 and the approved KR-004 reconciliation preserve only ServiceContract
+and ServiceDescriptor exports. The former ServiceFactory reservation is not a
+public implementation contract.
 
 ### Public Dataclasses
 
@@ -1246,12 +1246,15 @@ Immutable DI descriptor.
 | implementation | type[ServiceContract] |
 | scope | DIScope |
 | eager | bool |
-| dependencies | tuple[ServiceId, ...] |
+| dependencies | tuple[tuple[str, ServiceId], ...] |
 
 ### Validation Rules
 
 - implementation parameterized.
 - dependencies immutable.
+- eager defaults False; dependencies defaults ().
+- ADR-004: explicit constructor keyword/ServiceId bindings; validation belongs
+  to KR-005, not descriptor construction.
 
 ### Forbidden Responsibilities
 

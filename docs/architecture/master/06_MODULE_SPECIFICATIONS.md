@@ -1982,11 +1982,15 @@ class ServiceDescriptor
 | scope | DIScope |
 | implementation | type[ServiceContract] |
 | eager | bool |
+| dependencies | tuple[tuple[str, ServiceId], ...] |
 
 ### Rules
 
 - immutable
 - eager defaults False
+- ADR-004: dependencies defaults (); each pair binds a constructor keyword to a ServiceId
+- constructor, dependency graph and scope validation remain in KR-005
+- descriptor construction has no service construction/initialization side effects
 
 ### Public Abstract Class
 

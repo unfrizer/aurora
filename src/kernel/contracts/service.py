@@ -26,13 +26,16 @@ class ServiceDescriptor:
     """
     Immutable Dependency Injection service descriptor.
 
-    Describes service ownership, scope, and static dependencies.
+    Each dependency pair binds a constructor keyword to a registered ServiceId.
+    KR-005 owns constructor, graph and scope validation; this contract does not
+    construct, initialize, resolve or cache services (ADR-004 P-01).
     """
 
     service_id: ServiceId
     scope: DIScope
     implementation: type[ServiceContract]
     eager: bool = False
+    dependencies: tuple[tuple[str, ServiceId], ...] = ()
 
 
 # ============================================================================
@@ -53,13 +56,15 @@ class ServiceContract(ABC):
         """
         Initialize the service.
 
-        Called once when the owning scope creates the service instance.
+        DI must await this once before returning or caching a ready instance.
         """
 
     @abstractmethod
     async def shutdown(self) -> None:
         """
         Gracefully shut down the service and release owned resources.
+
+        Implementations must tolerate cleanup after partial initialization.
         """
 
 

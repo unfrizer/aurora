@@ -41,10 +41,12 @@ def _timestamp_factory() -> datetime:
 @dataclass(frozen=True, kw_only=True, slots=True)
 class RuntimeEvent:
     """
-    Canonical immutable Typed Event contract.
+    Frozen Typed Event shell with JSON-compatible payload.
 
-    Every event exchanged between runtime modules must conform to this
-    structure defined by Architecture Freeze v1.0.
+    Frozen fields do not make nested JSON immutable. KR-007 Publisher/Dispatch
+    own detached publication and per-handler payload copies (ADR-004 P-04).
+    Copies preserve logical event identity. This contract performs no copying,
+    validation or dispatch during direct construction.
     """
 
     event_id: EventId
