@@ -257,6 +257,11 @@ Tech Lead review of the Kernel reconciliation findings. Codex can prepare the
 needed resolution documents under ADR-001; the missing public behavior must not
 be assumed or silently approved against contradictory existing contracts.
 
+The follow-up [RCN-001 decision request](RCN-001_Kernel_Contract_Reconciliation_Request_v1.0.md)
+records the exact open questions and planned regression test matrix. It is DRAFT,
+not implementation authority; approving the audit PR does not approve those
+unresolved Kernel contracts.
+
 After reconciliation and review, the next product module is P4: an approved
 static-site builder and folder/ZIP export contract and its separate implementation
 branch. FastAPI, React/Vite, structured generation/images and Netlify remain later
