@@ -29,3 +29,19 @@ ISO-8601 strings. State is opaque JSON and cannot contain secrets. The module
 does not generate sites, call AI, expose HTTP, manage credentials, or import a
 Runtime implementation. Tests use `tmp_path`, including atomic write and
 reopen flows. Ruff, Pyright, and Pytest are required.
+
+## Audit Clarifications
+
+The repository validates UUID identities before any lookup or deletion, rejects
+ambiguous duplicate identities and linked project paths, and validates the
+supported metadata format on reopen. JSON state uses string object keys, finite
+numbers and acyclic containers. Persistence boundaries detach caller-owned data.
+Invalid input cannot create a partial project or replace existing saved state.
+
+Atomicity is per JSON file, not a crash-safe transaction spanning two files.
+Both payloads are validated before writing. State is replaced first; metadata
+replacement failure rolls state back while the process remains alive. A process
+interruption between replacements may leave newer state with older metadata.
+Multi-file transactions, concurrent writers and recovery journals are not
+implemented by this contract. Opaque state cannot identify arbitrary secret values;
+callers must keep credentials outside project state as required by ADR-002.

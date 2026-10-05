@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from src.accessibility import AccessibilityNode, AccessibilityRuntime
@@ -65,6 +67,16 @@ def test_audit_accepts_labelled_interactive_and_unlabelled_static_nodes() -> Non
     [
         AccessibilityNode(node_id=" ", role="document"),
         AccessibilityNode(node_id="root", role=" "),
+        AccessibilityNode(node_id=cast(str, None), role="document"),
+        AccessibilityNode(node_id="root", role=cast(str, 1)),
+        AccessibilityNode(node_id="root", role="document", label=cast(str, 1)),
+        AccessibilityNode(node_id="root", role="document", is_interactive=cast(bool, "yes")),
+        AccessibilityNode(
+            node_id="root", role="document", children=cast(tuple[AccessibilityNode, ...], [])
+        ),
+        AccessibilityNode(
+            node_id="root", role="document", children=(cast(AccessibilityNode, None),)
+        ),
         AccessibilityNode(
             node_id="root",
             role="document",
@@ -74,4 +86,27 @@ def test_audit_accepts_labelled_interactive_and_unlabelled_static_nodes() -> Non
 )
 def test_invalid_trees_are_rejected(root: AccessibilityNode) -> None:
     with pytest.raises(ValidationError):
+        AccessibilityRuntime().audit(root)
+
+
+def test_deep_tree_audit_preserves_preorder_without_recursion_limit() -> None:
+    root = AccessibilityNode(node_id="leaf", role="button", is_interactive=True)
+    for index in range(2000):
+        root = AccessibilityNode(
+            node_id=f"group-{index}", role="group", is_interactive=True, children=(root,)
+        )
+
+    report = AccessibilityRuntime().audit(root)
+
+    assert len(report.issues) == 2001
+    assert report.issues[0].node_id == "group-1999"
+    assert report.issues[-1].node_id == "leaf"
+    assert report.is_accessible is False
+
+
+def test_cycle_is_rejected_without_recursion_error() -> None:
+    root = AccessibilityNode(node_id="root", role="group")
+    object.__setattr__(root, "children", (root,))
+
+    with pytest.raises(ValidationError, match="acyclic"):
         AccessibilityRuntime().audit(root)

@@ -41,12 +41,34 @@ class AccessibilityRuntime(AccessibilityContract):
         return HealthStatus.OK
 
     def validate(self, root: AccessibilityNode) -> None:
-        self._validate_node(root, node_ids=set(), ancestors=set())
+        node_ids: set[str] = set()
+        ancestors: set[int] = set()
+        pending = [(root, False)]
+        while pending:
+            node, exiting = pending.pop()
+            if exiting:
+                ancestors.remove(id(node))
+                continue
+            self._validate_node(node, node_ids=node_ids, ancestors=ancestors)
+            node_ids.add(node.node_id)
+            ancestors.add(id(node))
+            pending.append((node, True))
+            pending.extend((child, False) for child in reversed(node.children))
 
     def audit(self, root: AccessibilityNode) -> AccessibilityReport:
         self.validate(root)
         issues: list[AccessibilityIssue] = []
-        self._audit_node(root, issues)
+        pending = [root]
+        while pending:
+            node = pending.pop()
+            if node.is_interactive and (node.label is None or not node.label.strip()):
+                issues.append(
+                    AccessibilityIssue(
+                        node_id=node.node_id,
+                        message="Interactive node requires an accessible label",
+                    )
+                )
+            pending.extend(reversed(node.children))
         return AccessibilityReport(issues=tuple(issues), is_accessible=not issues)
 
     def _validate_node(
@@ -58,36 +80,20 @@ class AccessibilityRuntime(AccessibilityContract):
     ) -> None:
         if not isinstance(node, AccessibilityNode):
             raise ValidationError("Accessibility tree contains an invalid node")
-        if not node.node_id.strip():
+        if not isinstance(node.node_id, str) or not node.node_id.strip():
             raise ValidationError("Accessibility node ID must be non-empty")
-        if not node.role.strip():
+        if not isinstance(node.role, str) or not node.role.strip():
             raise ValidationError("Accessibility node role must be non-empty")
-        if node.node_id in node_ids:
-            raise ValidationError("Accessibility node IDs must be unique", node_id=node.node_id)
         if id(node) in ancestors:
             raise ValidationError("Accessibility tree must be acyclic", node_id=node.node_id)
+        if node.node_id in node_ids:
+            raise ValidationError("Accessibility node IDs must be unique", node_id=node.node_id)
         if not isinstance(node.is_interactive, bool):
             raise ValidationError("Accessibility node interactivity must be boolean")
         if node.label is not None and not isinstance(node.label, str):
             raise ValidationError("Accessibility node label must be a string or None")
         if not isinstance(node.children, tuple):
             raise ValidationError("Accessibility node children must be an immutable tuple")
-
-        node_ids.add(node.node_id)
-        next_ancestors = ancestors | {id(node)}
-        for child in node.children:
-            self._validate_node(child, node_ids=node_ids, ancestors=next_ancestors)
-
-    def _audit_node(self, node: AccessibilityNode, issues: list[AccessibilityIssue]) -> None:
-        if node.is_interactive and (node.label is None or not node.label.strip()):
-            issues.append(
-                AccessibilityIssue(
-                    node_id=node.node_id,
-                    message="Interactive node requires an accessible label",
-                )
-            )
-        for child in node.children:
-            self._audit_node(child, issues)
 
 
 __all__ = ["AccessibilityRuntime"]

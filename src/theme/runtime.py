@@ -74,9 +74,9 @@ class ThemeRuntime(ThemeContract):
     def _validate_theme(theme: ThemeDefinition) -> None:
         if not isinstance(theme, ThemeDefinition):
             raise ValidationError("Theme must be a ThemeDefinition")
-        if not theme.theme_id.strip():
+        if not isinstance(theme.theme_id, str) or not theme.theme_id.strip():
             raise ValidationError("Theme ID must be non-empty")
-        if not theme.display_name.strip():
+        if not isinstance(theme.display_name, str) or not theme.display_name.strip():
             raise ValidationError("Theme display name must be non-empty")
         if not isinstance(theme.tokens, tuple):
             raise ValidationError("Theme tokens must be an immutable tuple")

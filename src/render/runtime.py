@@ -33,7 +33,19 @@ class RenderRuntime(RenderContract):
         return HealthStatus.OK
 
     def validate(self, root: RenderNode) -> None:
-        self._validate(root, ids=set(), ancestors=set())
+        ids: set[str] = set()
+        ancestors: set[int] = set()
+        pending = [(root, False)]
+        while pending:
+            node, exiting = pending.pop()
+            if exiting:
+                ancestors.remove(id(node))
+                continue
+            self._validate(node, ids=ids, ancestors=ancestors)
+            ids.add(node.node_id)
+            ancestors.add(id(node))
+            pending.append((node, True))
+            pending.extend((child, False) for child in reversed(node.children))
 
     def render(self, root: RenderNode) -> RenderTree:
         self.validate(root)
@@ -42,20 +54,17 @@ class RenderRuntime(RenderContract):
     def _validate(self, node: RenderNode, *, ids: set[str], ancestors: set[int]) -> None:
         if not isinstance(node, RenderNode):
             raise ValidationError("Render tree contains an invalid node")
-        if not node.node_id.strip() or not node.kind.strip():
-            raise ValidationError("Render node ID and kind must be non-empty")
-        if node.node_id in ids:
-            raise ValidationError("Render node IDs must be unique", node_id=node.node_id)
+        for value in (node.node_id, node.kind):
+            if not isinstance(value, str) or not value.strip():
+                raise ValidationError("Render node ID and kind must be non-empty strings")
         if id(node) in ancestors:
             raise ValidationError("Render tree must be acyclic", node_id=node.node_id)
+        if node.node_id in ids:
+            raise ValidationError("Render node IDs must be unique", node_id=node.node_id)
         if node.text is not None and not isinstance(node.text, str):
             raise ValidationError("Render node text must be a string or None")
         if not isinstance(node.children, tuple):
             raise ValidationError("Render node children must be an immutable tuple")
-        ids.add(node.node_id)
-        next_ancestors = ancestors | {id(node)}
-        for child in node.children:
-            self._validate(child, ids=ids, ancestors=next_ancestors)
 
 
 __all__ = ["RenderRuntime"]

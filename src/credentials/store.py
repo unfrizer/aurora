@@ -15,6 +15,7 @@ _TARGET_PREFIX: Final[str] = "AURORA:"
 _CRED_TYPE_GENERIC: Final[int] = 1
 _CRED_PERSIST_LOCAL_MACHINE: Final[int] = 2
 _ERROR_NOT_FOUND: Final[int] = 1168
+_MAX_CREDENTIAL_BYTES: Final[int] = 5 * 512
 _WINDLL_LOADER: Final[str] = "WinDLL"
 _GET_LAST_ERROR: Final[str] = "get_last_error"
 _CRED_WRITE: Final[str] = "CredWriteW"
@@ -60,7 +61,10 @@ class _WindowsCredentialApi:
             raise CredentialStoreError("Windows Credential Manager is available only on Windows.")
 
         native_loader = cast(Callable[..., object], getattr(ctypes, _WINDLL_LOADER))
-        library = native_loader("Advapi32.dll", use_last_error=True)
+        try:
+            library = native_loader("Advapi32.dll", use_last_error=True)
+        except OSError:
+            raise CredentialStoreError("Windows Credential Manager could not be loaded.") from None
         self._cred_write = cast(_NativeFunction, getattr(library, _CRED_WRITE))
         self._cred_read = cast(_NativeFunction, getattr(library, _CRED_READ))
         self._cred_delete = cast(_NativeFunction, getattr(library, _CRED_DELETE))
@@ -85,7 +89,7 @@ class _WindowsCredentialApi:
             function.restype = result_type
 
     def write(self, target: str, username: str, secret: str) -> None:
-        encoded_secret = secret.encode("utf-16-le")
+        encoded_secret = _encode_secret(secret)
         secret_buffer = (ctypes.c_ubyte * len(encoded_secret)).from_buffer_copy(encoded_secret)
         credential = _Credential(
             Flags=0,
@@ -101,8 +105,11 @@ class _WindowsCredentialApi:
             TargetAlias=None,
             UserName=username,
         )
-        if not self._cred_write(ctypes.byref(credential), 0):
-            self._raise_native_error("write")
+        try:
+            if not self._cred_write(ctypes.byref(credential), 0):
+                self._raise_native_error("write")
+        finally:
+            ctypes.memset(secret_buffer, 0, len(encoded_secret))
 
     def read(self, target: str) -> str | None:
         credential_pointer = _CredentialPointer()
@@ -112,13 +119,27 @@ class _WindowsCredentialApi:
             self._raise_native_error("read")
 
         try:
+            if not credential_pointer:
+                raise CredentialStoreError("Windows returned an invalid credential buffer.")
             credential = credential_pointer.contents
             if credential.CredentialBlobSize == 0:
                 return ""
+            if (
+                credential.CredentialBlobSize > _MAX_CREDENTIAL_BYTES
+                or credential.CredentialBlobSize % 2 != 0
+                or not credential.CredentialBlob
+            ):
+                raise CredentialStoreError("Windows returned an invalid credential buffer.")
             raw_secret = ctypes.string_at(credential.CredentialBlob, credential.CredentialBlobSize)
-            return raw_secret.decode("utf-16-le")
+            try:
+                return raw_secret.decode("utf-16-le")
+            except UnicodeDecodeError:
+                raise CredentialStoreError(
+                    "Windows returned an invalid credential encoding."
+                ) from None
         finally:
-            self._cred_free(credential_pointer)
+            if credential_pointer:
+                self._cred_free(credential_pointer)
 
     def delete(self, target: str) -> bool:
         if self._cred_delete(target, _CRED_TYPE_GENERIC, 0):
@@ -148,6 +169,18 @@ def _last_error() -> int:
     return native_last_error()
 
 
+def _encode_secret(secret: str) -> bytes:
+    if not isinstance(cast(object, secret), str) or not secret:
+        raise CredentialStoreError("A credential secret must not be empty and must be text.")
+    try:
+        encoded = secret.encode("utf-16-le")
+    except UnicodeEncodeError:
+        raise CredentialStoreError("A credential secret must be valid Unicode text.") from None
+    if len(encoded) > _MAX_CREDENTIAL_BYTES:
+        raise CredentialStoreError("The credential exceeds the Windows storage size limit.")
+    return encoded
+
+
 class WindowsCredentialStore:
     """Stores AURORA's approved production secrets outside application files."""
 
@@ -157,8 +190,7 @@ class WindowsCredentialStore:
     def set_secret(self, name: SecretName, secret: str) -> None:
         """Persist a non-empty secret in Windows Credential Manager."""
         target = self._target_for(name)
-        if not secret:
-            raise CredentialStoreError("A credential secret must not be empty.")
+        _encode_secret(secret)
         self._api.write(target, "AURORA", secret)
 
     def get_secret(self, name: SecretName) -> str | None:
@@ -171,6 +203,6 @@ class WindowsCredentialStore:
 
     @staticmethod
     def _target_for(name: SecretName) -> str:
-        if name not in _ALLOWED_NAMES:
+        if not isinstance(cast(object, name), str) or name not in _ALLOWED_NAMES:
             raise CredentialStoreError("This credential name is not approved for AURORA storage.")
         return f"{_TARGET_PREFIX}{name}"

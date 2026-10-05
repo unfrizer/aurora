@@ -14,22 +14,34 @@ class _LayoutSolver:
         return self._arrange(root, x=0.0, y=0.0)
 
     def _arrange(self, node: LayoutNode, *, x: float, y: float) -> LayoutBox:
-        children: list[LayoutBox] = []
-        cursor_x = x
-        cursor_y = y
-
-        for child in node.children:
-            children.append(self._arrange(child, x=cursor_x, y=cursor_y))
-            if node.direction is LayoutDirection.VERTICAL:
-                cursor_y += child.size.height + node.gap
-            else:
-                cursor_x += child.size.width + node.gap
-
-        return LayoutBox(
-            node_id=node.node_id,
-            rect=LayoutRect(x=x, y=y, width=node.size.width, height=node.size.height),
-            children=tuple(children),
-        )
+        boxes: dict[int, LayoutBox] = {}
+        pending = [(node, x, y, False)]
+        while pending:
+            current, origin_x, origin_y, exiting = pending.pop()
+            if exiting:
+                boxes[id(current)] = LayoutBox(
+                    node_id=current.node_id,
+                    rect=LayoutRect(
+                        x=origin_x,
+                        y=origin_y,
+                        width=current.size.width,
+                        height=current.size.height,
+                    ),
+                    children=tuple(boxes[id(child)] for child in current.children),
+                )
+                continue
+            pending.append((current, origin_x, origin_y, True))
+            children: list[tuple[LayoutNode, float, float, bool]] = []
+            cursor_x = origin_x
+            cursor_y = origin_y
+            for child in current.children:
+                children.append((child, cursor_x, cursor_y, False))
+                if current.direction is LayoutDirection.VERTICAL:
+                    cursor_y += child.size.height + current.gap
+                else:
+                    cursor_x += child.size.width + current.gap
+            pending.extend(reversed(children))
+        return boxes[id(node)]
 
 
 __all__ = []

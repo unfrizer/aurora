@@ -89,16 +89,16 @@ DI_SCOPE_VALUES: Final[tuple[str, ...]] = tuple(scope.value for scope in DIScope
 class RuntimeStatus(StrEnum):
     """Lifecycle state of a runtime module."""
 
-    CREATED = "created"
-    INITIALIZING = "initializing"
-    READY = "ready"
-    STARTING = "starting"
-    RUNNING = "running"
-    STOPPING = "stopping"
-    STOPPED = "stopped"
-    SHUTTING_DOWN = "shutting_down"
-    TERMINATED = "terminated"
-    FAILED = "failed"
+    CREATED = "CREATED"
+    INITIALIZING = "INITIALIZING"
+    READY = "READY"
+    STARTING = "STARTING"
+    RUNNING = "RUNNING"
+    STOPPING = "STOPPING"
+    STOPPED = "STOPPED"
+    SHUTTING_DOWN = "SHUTTING_DOWN"
+    TERMINATED = "TERMINATED"
+    FAILED = "FAILED"
 
 
 RUNTIME_STATUS_VALUES: Final[tuple[str, ...]] = tuple(status.value for status in RuntimeStatus)

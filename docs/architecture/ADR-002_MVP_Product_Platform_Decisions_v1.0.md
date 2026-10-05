@@ -45,7 +45,7 @@ OpenAI is the sole AI provider. Text and structured generation uses the
 Responses API with configurable defaults `gpt-5.6-terra` (general) and
 `gpt-5.6-sol` (complex); images use `gpt-image-2`. The model values are
 configuration, never business-logic constants. The model choices are supported
-by the [OpenAI model documentation](https://platform.openai.com/docs/models/gpt-4-turbo-and-gpt-4).
+by the [OpenAI model documentation](https://developers.openai.com/api/docs/models).
 
 The site output is a self-contained static `dist/` directory. Users can export
 a folder or a ZIP that contains `dist/`, never AURORA project state. Netlify is

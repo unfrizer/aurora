@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from src.core.exceptions import ValidationError
@@ -48,6 +50,19 @@ def test_submit_and_clear_follow_revision_semantics() -> None:
 def test_invalid_requests_are_rejected(interaction: InteractionRequest) -> None:
     with pytest.raises(ValidationError):
         InteractionRuntime().submit(interaction)
+
+
+def test_invalid_request_preserves_existing_request_and_revision() -> None:
+    runtime = InteractionRuntime()
+    before = runtime.submit(_request())
+    invalid = InteractionRequest(
+        interaction_id="select-2", action=cast(str, None), target_id="hero"
+    )
+
+    with pytest.raises(ValidationError):
+        runtime.submit(invalid)
+
+    assert runtime.snapshot() == before
 
 
 @pytest.mark.asyncio

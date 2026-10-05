@@ -58,26 +58,44 @@ class _StateStore:
 
     @staticmethod
     def _detach(value: JSONValue) -> JSONValue:
-        return deepcopy(value)
+        try:
+            return deepcopy(value)
+        except RecursionError:
+            raise StateValidationError("Shared state nesting is too deep") from None
 
     @staticmethod
     def _validate_key(key: str) -> None:
-        if not key.strip():
+        if not isinstance(cast(object, key), str) or not key.strip():
             raise StateValidationError("Shared state key must be non-empty", key=key)
 
     @classmethod
-    def _validate_json_value(cls, value: object) -> None:
-        if value is None or isinstance(value, str | int | float | bool):
+    def _validate_json_value(cls, value: object, ancestors: set[int] | None = None) -> None:
+        if ancestors is None:
+            ancestors = set()
+        if value is None or isinstance(value, str | int | bool):
             return
-        if isinstance(value, list):
-            for item in cast(list[object], value):
-                cls._validate_json_value(item)
+        if isinstance(value, float):
+            if value != value or abs(value) == float("inf"):
+                raise StateValidationError("Shared state numbers must be finite")
             return
-        if isinstance(value, dict):
-            for key, item in cast(dict[object, object], value).items():
-                if not isinstance(key, str):
-                    raise StateValidationError("JSON object keys must be strings", key=key)
-                cls._validate_json_value(item)
+        if isinstance(value, list | dict):
+            identity = id(cast(object, value))
+            if identity in ancestors:
+                raise StateValidationError("Shared state must not contain circular references")
+            ancestors.add(identity)
+            try:
+                if isinstance(value, list):
+                    for item in cast(list[object], value):
+                        cls._validate_json_value(item, ancestors)
+                else:
+                    for key, item in cast(dict[object, object], value).items():
+                        if not isinstance(key, str):
+                            raise StateValidationError("JSON object keys must be strings", key=key)
+                        cls._validate_json_value(item, ancestors)
+            except RecursionError:
+                raise StateValidationError("Shared state nesting is too deep") from None
+            finally:
+                ancestors.remove(identity)
             return
         raise StateValidationError(
             "Shared state values must be JSON-compatible",

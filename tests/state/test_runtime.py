@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import cast
 
 import pytest
 
@@ -128,4 +129,50 @@ def test_health_is_read_only_and_uses_canonical_vocabulary() -> None:
     before = runtime.snapshot()
 
     assert runtime.health() is HealthStatus.OK
+    assert runtime.snapshot() == before
+
+
+@pytest.mark.parametrize("number", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_numbers_are_rejected_without_mutation(number: float) -> None:
+    runtime = SharedStateRuntime()
+    before = runtime.set("valid", 1)
+    with pytest.raises(StateValidationError, match="finite"):
+        runtime.set("invalid", {"nested": [number]})
+    assert runtime.snapshot() == before
+
+
+def test_cyclic_data_is_rejected_but_shared_children_are_valid_json() -> None:
+    runtime = SharedStateRuntime()
+    cycle: list[JSONValue] = []
+    cycle.append(cycle)
+    with pytest.raises(StateValidationError, match="circular"):
+        runtime.set("invalid", cycle)
+    assert runtime.snapshot().revision == 0
+
+    child: list[JSONValue] = [1]
+    snapshot = runtime.set("valid", [child, child])
+    assert snapshot.revision == 1
+    assert runtime.get("valid") == [[1], [1]]
+
+
+@pytest.mark.parametrize("key", [None, 1, [], {}])
+def test_non_string_keys_are_rejected_at_every_boundary(key: object) -> None:
+    runtime = SharedStateRuntime()
+    invalid = cast(str, key)
+    for operation in (runtime.get, runtime.contains, runtime.remove):
+        with pytest.raises(StateValidationError):
+            operation(invalid)
+    with pytest.raises(StateValidationError):
+        runtime.set(invalid, "value")
+    assert runtime.snapshot().revision == 0
+
+
+def test_overdeep_input_is_rejected_without_a_partial_write() -> None:
+    runtime = SharedStateRuntime()
+    value: JSONValue = "leaf"
+    for _ in range(2000):
+        value = [value]
+    before = runtime.set("valid", True)
+    with pytest.raises(StateValidationError, match="deep"):
+        runtime.set("invalid", value)
     assert runtime.snapshot() == before

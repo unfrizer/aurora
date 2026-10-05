@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 GenerationErrorCategory = Literal[
@@ -20,8 +20,8 @@ class GenerationRequest:
     """A single direct Responses API text-generation request."""
 
     model: str
-    prompt: str
-    instructions: str | None = None
+    prompt: str = field(repr=False)
+    instructions: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,7 +30,7 @@ class GenerationResult:
 
     response_id: str
     model: str
-    output_text: str
+    output_text: str = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)

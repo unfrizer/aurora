@@ -11,6 +11,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --dev
+      - run: uv sync --frozen --dev --python 3.13
+      - run: uv run pytest
+      - run: uv run python -m src.main
+
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --dev --python 3.13
+      - run: uv run ruff check .
+      - run: uv run pyright
       - run: uv run pytest
       - run: uv run python -m src.main
