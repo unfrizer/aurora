@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from src.core.exceptions import ValidationError
@@ -27,6 +29,25 @@ def test_configuration_revision_and_identity() -> None:
 def test_invalid_platform_is_rejected(platform: PlatformDescriptor) -> None:
     with pytest.raises(ValidationError):
         PlatformRuntime().configure(platform)
+
+
+@pytest.mark.parametrize(
+    "invalid_platform",
+    [
+        PlatformDescriptor(platform_id=cast(str, None), display_name="Windows"),
+        PlatformDescriptor(platform_id="windows", display_name=cast(str, 123)),
+    ],
+)
+def test_invalid_platform_preserves_existing_configuration(
+    invalid_platform: PlatformDescriptor,
+) -> None:
+    runtime = PlatformRuntime()
+    before = runtime.configure(PlatformDescriptor(platform_id="windows", display_name="Windows"))
+
+    with pytest.raises(ValidationError):
+        runtime.configure(invalid_platform)
+
+    assert runtime.snapshot() == before
 
 
 @pytest.mark.asyncio

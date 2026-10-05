@@ -17,6 +17,18 @@ def test_canonical_runtime_vocabulary() -> None:
     )
     assert len(DIScope) == 4
     assert len(RuntimeStatus) == 10
+    assert tuple(status.value for status in RuntimeStatus) == (
+        "CREATED",
+        "INITIALIZING",
+        "READY",
+        "STARTING",
+        "RUNNING",
+        "STOPPING",
+        "STOPPED",
+        "SHUTTING_DOWN",
+        "TERMINATED",
+        "FAILED",
+    )
 
 
 def test_event_priority_is_descending_numeric_vocabulary() -> None:

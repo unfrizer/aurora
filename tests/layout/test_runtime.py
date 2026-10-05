@@ -153,3 +153,20 @@ def test_health_is_read_only() -> None:
 
     assert runtime.health() is HealthStatus.OK
     assert runtime.layout(root) == runtime.layout(root)
+
+
+def test_deep_valid_tree_does_not_depend_on_python_recursion_limit() -> None:
+    root = _node("leaf")
+    for index in range(1500):
+        root = _node(f"parent-{index}", children=(root,))
+    runtime = LayoutRuntime()
+    runtime.validate(root)
+    box = runtime.layout(root)
+    depth = 0
+    while box.children:
+        assert box.rect.x == box.rect.y == 0.0
+        assert len(box.children) == 1
+        box = box.children[0]
+        depth += 1
+    assert box.node_id == "leaf"
+    assert depth == 1500

@@ -41,7 +41,19 @@ class LayoutRuntime(LayoutContract):
         return HealthStatus.OK
 
     def validate(self, root: LayoutNode) -> None:
-        self._validate_node(root, node_ids=set(), ancestors=set())
+        node_ids: set[str] = set()
+        ancestors: set[int] = set()
+        pending = [(root, False)]
+        while pending:
+            node, exiting = pending.pop()
+            if exiting:
+                ancestors.remove(id(node))
+                continue
+            self._validate_node(node, node_ids=node_ids, ancestors=ancestors)
+            node_ids.add(node.node_id)
+            ancestors.add(id(node))
+            pending.append((node, True))
+            pending.extend((child, False) for child in reversed(node.children))
 
     def layout(self, root: LayoutNode) -> LayoutBox:
         self.validate(root)
@@ -73,11 +85,6 @@ class LayoutRuntime(LayoutContract):
             raise ValidationError(
                 "Layout children must be an immutable tuple", node_id=node.node_id
             )
-
-        node_ids.add(node.node_id)
-        next_ancestors = ancestors | {id(node)}
-        for child in node.children:
-            self._validate_node(child, node_ids=node_ids, ancestors=next_ancestors)
 
     @staticmethod
     def _validate_dimension(value: object, *, field: str, node_id: str) -> None:

@@ -40,7 +40,7 @@ class MotionRuntime(MotionContract):
     def validate(self, definition: MotionDefinition) -> None:
         if not isinstance(definition, MotionDefinition):
             raise ValidationError("Motion definition must be a MotionDefinition")
-        if not definition.motion_id.strip():
+        if not isinstance(definition.motion_id, str) or not definition.motion_id.strip():
             raise ValidationError("Motion ID must be non-empty")
         self._validate_time(definition.duration_ms, field="duration_ms")
 

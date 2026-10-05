@@ -33,3 +33,19 @@ manage configuration, or import a Runtime implementation. Tests replace the
 private native API boundary with an in-memory fake and cover set/get, missing
 credentials, deletion, invalid names, and native failures. Ruff, Pyright, and
 Pytest are required.
+
+## Audit Clarifications
+
+Secrets are non-empty Unicode strings encoded as UTF-16LE blobs. Encoded size
+cannot exceed the native limit of 2,560 bytes. Invalid native blob sizes, missing
+buffers and invalid UTF-16 produce sanitized `CredentialStoreError` failures.
+Successful native reads always release their allocated buffer with `CredFree`.
+The temporary native write buffer is cleared after the call; this does not imply
+that immutable Python strings can be reliably erased from memory.
+
+Tests exercise the native wrapper with synthetic buffers and substituted native
+functions, without accessing the user's Credential Manager entries. This is not
+a real native credential roundtrip or production integration certification.
+
+References: [CREDENTIALW](https://learn.microsoft.com/en-us/windows/win32/api/wincred/ns-wincred-credentialw)
+and [CredReadW](https://learn.microsoft.com/en-us/windows/win32/api/wincred/nf-wincred-credreadw).

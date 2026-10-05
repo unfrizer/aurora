@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from src.core.exceptions import ValidationError
@@ -56,6 +58,33 @@ def test_set_and_clear_follow_revision_semantics() -> None:
 def test_invalid_themes_are_rejected(theme: ThemeDefinition) -> None:
     with pytest.raises(ValidationError):
         ThemeRuntime().set(theme)
+
+
+@pytest.mark.parametrize(
+    "invalid_theme",
+    [
+        ThemeDefinition(theme_id=cast(str, None), display_name="Aurora"),
+        ThemeDefinition(theme_id="aurora", display_name=cast(str, 123)),
+        ThemeDefinition(
+            theme_id="aurora",
+            display_name="Aurora",
+            tokens=cast(tuple[tuple[str, str], ...], [("color", "blue")]),
+        ),
+        ThemeDefinition(
+            theme_id="aurora",
+            display_name="Aurora",
+            tokens=cast(tuple[tuple[str, str], ...], (["color", "blue"],)),
+        ),
+    ],
+)
+def test_invalid_theme_does_not_replace_existing_state(invalid_theme: ThemeDefinition) -> None:
+    runtime = ThemeRuntime()
+    before = runtime.set(_theme())
+
+    with pytest.raises(ValidationError):
+        runtime.set(invalid_theme)
+
+    assert runtime.snapshot() == before
 
 
 @pytest.mark.asyncio

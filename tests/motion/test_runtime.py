@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import cast
 
 import pytest
 
@@ -49,6 +50,10 @@ def test_zero_duration_is_immediately_complete() -> None:
         (MotionDefinition(motion_id="enter", duration_ms=math.inf), 0.0),
         (MotionDefinition(motion_id="enter", duration_ms=1.0), -1.0),
         (MotionDefinition(motion_id="enter", duration_ms=1.0), math.nan),
+        (MotionDefinition(motion_id=cast(str, None), duration_ms=1.0), 0.0),
+        (MotionDefinition(motion_id="enter", duration_ms=cast(float, "1")), 0.0),
+        (MotionDefinition(motion_id="enter", duration_ms=True), 0.0),
+        (MotionDefinition(motion_id="enter", duration_ms=1.0), True),
     ],
 )
 def test_invalid_motion_values_are_rejected(

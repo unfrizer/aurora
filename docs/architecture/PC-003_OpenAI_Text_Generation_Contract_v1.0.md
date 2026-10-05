@@ -12,7 +12,7 @@ terminal job/error snapshot. It may create:
 src/generation/__init__.py
 src/generation/models.py
 src/generation/openai_client.py
-tests/generation/test_models.py
+tests/generation/test_generation_models.py
 tests/generation/test_openai_client.py
 ```
 
@@ -32,11 +32,24 @@ prompt, API key, or response body. It sends `POST https://api.openai.com/v1/resp
 with `model`, `input`, optional `instructions`, and `store: false`. `store: false`
 matches this stateless local-MVP boundary; no response retrieval is required.
 
-Text extraction must examine every output message/content item marked
-`output_text`; it must not assume `output[0].content[0]` exists. HTTP 401/403,
+Success requires a completed, error-free response and completed assistant messages.
+Refusals, incomplete output, malformed fields and whitespace-only text fail safely.
+Text extraction examines every output message/content item marked `output_text`
+and concatenates the text exactly, without adding separators that could corrupt
+JSON. It must not assume `output[0].content[0]` exists. HTTP 401/403,
 429, 5xx, network, and malformed-response failures are mapped to safe failure
 categories without carrying a raw remote error body. Empty API keys and invalid
 requests are local configuration errors. Tests replace the network function and
 cover success, payload shape, multi-item output, status mapping, transport
 failure, malformed output, and snapshot invariants. Ruff, Pyright, and Pytest
 are required.
+
+Audit clarification: HTTP redirects are rejected; credentials never follow a
+redirect. The timeout must be finite and positive, response bodies are bounded
+to 8 MiB, and HTTP error responses are closed. Snapshot representations omit
+prompts, instructions, and generated text. No new error vocabulary is introduced.
+P3-001 currently provides plain text only: schema-constrained generation, images,
+and the multi-stage business generator remain future product work.
+
+API references: [Responses create](https://developers.openai.com/api/reference/python/resources/responses/methods/create)
+and [text generation](https://developers.openai.com/api/docs/guides/text).

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from src.core.types import RuntimeStatus
 from src.kernel.runtime.bootstrap import BootstrapRuntime
 
 
@@ -14,9 +15,9 @@ async def main() -> None:
         await runtime.initialize()
         await runtime.start()
     finally:
-        if runtime.status().value in {"running", "starting"}:
+        if runtime.status() in {RuntimeStatus.RUNNING, RuntimeStatus.STARTING}:
             await runtime.stop()
-        if runtime.status().value == "stopped":
+        if runtime.status() is RuntimeStatus.STOPPED:
             await runtime.shutdown()
 
 

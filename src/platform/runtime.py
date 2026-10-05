@@ -73,8 +73,9 @@ class PlatformRuntime(PlatformContract):
     def _validate(platform: PlatformDescriptor) -> None:
         if not isinstance(platform, PlatformDescriptor):
             raise ValidationError("Platform must be a PlatformDescriptor")
-        if not platform.platform_id.strip() or not platform.display_name.strip():
-            raise ValidationError("Platform fields must be non-empty")
+        for value in (platform.platform_id, platform.display_name):
+            if not isinstance(value, str) or not value.strip():
+                raise ValidationError("Platform fields must be non-empty strings")
 
 
 __all__ = ["PlatformRuntime"]
