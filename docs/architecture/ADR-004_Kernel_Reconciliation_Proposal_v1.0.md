@@ -2,31 +2,46 @@
 
 **Document ID:** ADR-004
 
-**Status:** DRAFT — EXPLICIT ARCHITECTURE AUTHORITY APPROVAL REQUIRED
+**Status:** APPROVED — CANONICAL KERNEL RECONCILIATION DECISION
 
 **Date:** 2026-10-05
 
-**Task:** RCN-001 follow-up; documentation only
+**Task:** RCN-001 resolution; phased KR-004–011 reconciliation
 
 **Repository baseline:** `d72120536643725d10ffd51c298cb4ed2847d061`
 
-**Implementation authority:** NONE while DRAFT
+**Implementation authority:** Compile approved module contracts, then implement
+one active module at a time within the ownership and test scope below.
+
+## Explicit Approval Record — 2026-10-05
+
+The Architecture Authority was asked whether ADR-004 v1.0 was approved in full,
+including P-01–P-05, the P-03 M-04 clarification and the specified test changes.
+The direct reply was:
+
+> го дальше
+
+In that explicit approval context, this authorizes the complete decision and
+contract-required canonical test adjustments for each active module. Codex
+records the approval; it does not claim an independent human code review or
+acceptance of implementations not yet built. ADR-003 governs routine PR handling.
+The frozen invariants below are unchanged. No other architecture change is approved.
 
 ## Purpose and Dependencies
 
-Propose one concrete resolution of K-01–K-05 instead of asking the project owner
-to write technical contracts. This is a proposed implementation contract, not an
-approved change to the current system. A routine GitHub approval/merge under
-ADR-003 does not approve the decisions below.
+Resolve K-01–K-05 without requiring the project owner to write technical contracts.
+The explicit approval record above, not routine GitHub approval/merge under
+ADR-003, supplies authority for these decisions. Implementation and acceptance
+remain phased; approval of this ADR is not a claim that current code complies.
 
 Inputs: AGENTS.md; ADR-001/003; AB-00B/C/D; RCN-001; relevant M-04 DI/pipeline/
 bootstrap boundaries, M-05 lifetime ownership and M-06 DI/pipeline specifications;
-current Kernel source and tests. No production source or test is changed by this
-document. The proposal deliberately identifies superseded APIs and limitations.
+current Kernel source and tests. This document identifies the superseded APIs
+and limitations; the implementation changes belong to separate module tasks.
 
 ### Кратко для Architecture Authority
 
-Предлагается утвердить пять связанных решений:
+Утверждены пять связанных решений:
 
 1. DI возвращает сервис только после `await initialize()`; зависимости
    конструктора задаются явно, без поиска по имени или скрытого реестра типов.
@@ -40,9 +55,10 @@ document. The proposal deliberately identifies superseded APIs and limitations.
 5. Cleanup пытается освободить всех затронутых участников, не превращая
    terminal FAILED в STOPPED или TERMINATED.
 
-Это изменения публичного поведения, поэтому Codex не переводит этот документ
-в APPROVED автоматически. Для утверждения достаточно явно указать ADR-004 v1.0;
-пользователю не требуется создавать файлы или самостоятельно писать код.
+Изменения публичного поведения утверждены явным ответом Architecture Authority,
+а не автоматическим решением Codex. Пользователю не требуется создавать файлы
+или самостоятельно писать код. Каждый модуль проходит отдельную реализацию,
+проверки и отчёт в соответствии с Build Protocol.
 
 ## Frozen Invariants
 
@@ -332,13 +348,12 @@ Orchestrator constructs its internal Executor. Bootstrap constructs/wires only
 the public Orchestrator facade with the existing EventBus facade; it no longer
 imports ExecutorRuntime. No second EventBus is created.
 
-This requires a narrow M-04 clarification permitting Orchestrator's EventBus
+The approved narrow M-04 clarification permits Orchestrator's EventBus
 reference for construction/type annotation only. Runtime event interaction stays
 in Executor through the EventBus facade. It adds no upward layer edge and follows
-the existing Orchestrator-to-Executor-to-EventBus dependency direction, but it is
-not silently deemed approved by this DRAFT. Architecture Authority must confirm
-this clarification is compatible with the frozen baseline; otherwise P-03 stays
-blocked and must be revised, not implemented through a hidden factory/import.
+the existing Orchestrator-to-Executor-to-EventBus dependency direction. Explicit
+Authority approval above confirms this limited implementation clarification;
+it does not permit another Runtime owner, an upward layer edge or hidden factory.
 
 ## P-04 — Detached Value Snapshots, Not Deeply Frozen JSON Types
 
@@ -425,7 +440,7 @@ Session-removal composition clears Session-scoped DI through the Container facad
 SessionRuntime does not import ContainerRuntime. Main always attempts cleanup
 through the facade after partial startup; it does not force illegal transitions.
 
-## Proposed Precedence and Migration — Effective Only After Approval
+## Approved Precedence and Migration
 
 | Subject | Explicit declarations to reconcile |
 | --- | --- |
@@ -441,9 +456,9 @@ No other AB-00B/C/D resolution is superseded. No core identifier/model policy,
 configuration cache, logging implementation, higher Wave or MVP adapter is
 redesigned. Defaults cannot be used to auto-approve these breaking semantics.
 
-## Proposed Module/File Ownership and Build Order
+## Approved Module/File Ownership and Build Order
 
-After explicit approval, reconcile the affected API/import/test registries and
+Reconcile the affected API/import/test registries for each active module and
 compile exact module contracts before any corresponding code change. Preserve
 one module per implementation task/branch and its report/review gate.
 
@@ -459,7 +474,7 @@ one module per implementation task/branch and its report/review gate.
 | 8 | KR-011 | Canonical Wave 1 test suite and integration acceptance only | Full Wave 1 suite; existing Wave 2–9/product regression suite |
 
 All production paths above are below src/kernel/ except the existing src/main.py.
-Tests remain owned by KR-011. Approval must explicitly allow contract-required
+Tests remain owned by KR-011. The approval above explicitly allows contract-required
 canonical test adjustments with each active module, as the Build Protocol permits;
 no unrelated production module may be repaired as part of one module task.
 
@@ -486,28 +501,26 @@ no unrelated production module may be repaired as part of one module task.
   that hide required acceptance behavior or paid/live credential requests.
 
 The existing 337 passing tests are a regression baseline, not evidence that these
-new acceptance conditions pass. This DRAFT is not a claim of a usable Windows MVP.
+new acceptance conditions pass. ADR approval is not a claim of a usable Windows MVP.
 
 ### Documentation-task validation — 2026-10-05
 
-Only this DRAFT and the RCN-001 follow-up link/status were edited. Pyright reported
+During DRAFT preparation, only this document and the RCN-001 follow-up link/status
+were edited. Pyright reported
 zero errors; Ruff passed; Pytest discovered and passed 337 tests on Python 3.13.15
 Windows. All seven Python signature blocks parse successfully; this is syntax
 validation, not implementation/type checking of those proposed signatures.
 No new acceptance test or production implementation is claimed by these results.
 
-## Alternatives and Approval Gate
+## Alternatives and Implementation Gate
 
 Rejected recommendations: blocking sync DI on an event loop; guessing constructor
 IDs from annotations/names; silent cached-instance leaks; universal execute;
 fake successful pipeline work; introducing frozen JSON types without an approved
 new model; FAILED-to-STOPPED recovery; disposal stopping at the first error.
 
-The Authority may approve ADR-004 v1.0 as a whole, request named changes, or defer
-one decision. Partial approval must identify P-01–P-05 and the P-03 M-04
-clarification explicitly; dependent implementation stays blocked until its
-required decisions and exact module contracts are approved.
-
-Until then: no source/test change, no registry supersession, and no automatic
-APPROVED stamp. Codex may save/publish this DRAFT for review under ADR-001/003;
-that workflow action must never be represented as architecture acceptance.
+P-01–P-05 and the P-03 M-04 clarification are approved together. Before a module
+is changed, its exact module contract and relevant registry entries must be
+compiled against this ADR. Unaffected modules stay frozen. Green baseline tests
+do not substitute for the new acceptance evidence. Any conflict beyond these
+specific decisions still requires STOP and an explicit Authority decision.

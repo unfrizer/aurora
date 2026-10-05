@@ -1,7 +1,7 @@
 # AURORA — Kernel Contract Reconciliation Request v1.0
 
 **Document ID:** RCN-001  
-**Status:** DRAFT — DECISIONS REQUIRED; NOT IMPLEMENTATION AUTHORITY  
+**Status:** RESOLVED BY APPROVED ADR-004 — IMPLEMENTATION PENDING
 **Date:** 2026-10-05  
 **Scope:** K-01–K-05 from AUD-001; existing Wave 1 owners only  
 **Implementation baseline:** `6ddc1815dc1a0fbacdd33b39c41794f964af885d`
@@ -211,8 +211,10 @@ claimed to pass today. The current 337 passing tests do not cover all of them.
 [ADR-004](ADR-004_Kernel_Reconciliation_Proposal_v1.0.md) proposes concrete P-01–P-05
 decisions, signatures, migration/ownership boundaries and acceptance tests. It
 also records the current Scope-to-Provider and Bootstrap-to-Executor import
-conflicts against M-04. ADR-004 remains DRAFT; it does not close this request
-until the Architecture Authority explicitly approves the applicable decisions.
+conflicts against M-04. The Architecture Authority explicitly approved ADR-004
+in full on 2026-10-05, including P-01–P-05, the P-03 M-04 clarification and
+contract-required canonical test adjustments. The direct reply to the approval
+question was "го дальше". This resolves the decision request, not the code defects.
 
 Routine PR creation/merge now follows ADR-003. That standing workflow permission
 does not replace architecture acceptance of ADR-004 or any unresolved contract.
@@ -220,8 +222,9 @@ does not replace architecture acceptance of ADR-004 or any unresolved contract.
 ## Next Authorized Action
 
 The local-hardening PR #14 is merged; standing workflow permission is recorded
-in ADR-003, merged through PR #15. Separately resolve K-01–K-05 through explicit
-architecture acceptance of a resolution/ADR, starting with the ADR-004 proposal.
+in ADR-003, merged through PR #15. ADR-004 now supplies the separately approved
+K-01–K-05 decisions. Compile/reconcile the active KR-004 module contract and
+registries, implement that module, validate and return one module report.
 Codex will maintain the documents; no manual file creation by the user is required.
-Until that resolution is approved, Kernel contract changes and dependent feature
-implementation remain stopped under the AGENTS conflict rule.
+Other Kernel modules and dependent features remain frozen until their corresponding
+approved module contracts and preceding module review gates are satisfied.
