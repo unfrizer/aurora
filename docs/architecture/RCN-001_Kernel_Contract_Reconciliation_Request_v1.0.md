@@ -188,7 +188,8 @@ After the Architecture Authority supplies or explicitly approves the decisions:
    dependency order. Cross-module changes are not implicitly authorized by this
    request.
 5. Ruff, strict Pyright, discovered Pytest tests and Windows/Linux CI must pass.
-   PR creation and merge remain separately confirmed under ADR-001.
+   Routine PR creation/merge follows ADR-003; unresolved architecture decisions
+   still require explicit acceptance and are not approved by routine PR handling.
 
 No AGENTS waiver or change to Runtime ownership is necessary or proposed.
 
@@ -205,10 +206,22 @@ No AGENTS waiver or change to Runtime ownership is necessary or proposed.
 These are acceptance requirements for a future approved reconciliation, not tests
 claimed to pass today. The current 337 passing tests do not cover all of them.
 
+## Concrete Proposal Prepared
+
+[ADR-004](ADR-004_Kernel_Reconciliation_Proposal_v1.0.md) proposes concrete P-01–P-05
+decisions, signatures, migration/ownership boundaries and acceptance tests. It
+also records the current Scope-to-Provider and Bootstrap-to-Executor import
+conflicts against M-04. ADR-004 remains DRAFT; it does not close this request
+until the Architecture Authority explicitly approves the applicable decisions.
+
+Routine PR creation/merge now follows ADR-003. That standing workflow permission
+does not replace architecture acceptance of ADR-004 or any unresolved contract.
+
 ## Next Authorized Action
 
-Review and merge the separately confirmed local-hardening PR if acceptable.
-Separately resolve K-01–K-05 through an explicit architecture resolution/ADR.
+The local-hardening PR #14 is merged; standing workflow permission is recorded
+in ADR-003, merged through PR #15. Separately resolve K-01–K-05 through explicit
+architecture acceptance of a resolution/ADR, starting with the ADR-004 proposal.
 Codex will maintain the documents; no manual file creation by the user is required.
 Until that resolution is approved, Kernel contract changes and dependent feature
 implementation remain stopped under the AGENTS conflict rule.
