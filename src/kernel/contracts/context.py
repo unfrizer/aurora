@@ -51,10 +51,11 @@ class TraceContext:
 @dataclass(frozen=True, kw_only=True, slots=True)
 class RuntimeContext:
     """
-    Immutable execution context for a runtime invocation.
+    Frozen execution-context shell with JSON-compatible metadata.
 
-    Carries session, pipeline, and tracing information between runtime
-    boundaries without exposing mutable runtime state.
+    Frozen fields do not make nested JSON immutable. KR-008 owns detached JSON
+    copies at public context boundaries (ADR-004 P-04); snapshot object identity
+    is not guaranteed. Direct construction does not copy or validate metadata.
     """
 
     session_id: SessionId

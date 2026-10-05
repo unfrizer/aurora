@@ -170,13 +170,29 @@ Coverage target:
 ### RuntimeContext
 
 - frozen dataclass.
-- metadata immutable snapshot.
+- AB-00D fields, UTC timestamps and independent metadata default factories.
+- ADR-004: frozen shell, not deeply immutable JSON; runtime-boundary detached
+  snapshots are tested in KR-008, not direct dataclass construction.
 
 ### RuntimeEvent
 
 - required field order valid.
-- payload immutable.
+- AB-00C priority/default and independent payload default factories.
+- ADR-004: detached publication/per-handler payload snapshots belong to KR-007;
+  direct event dataclasses do not implement dispatch, copying or validation.
 - trace immutable.
+
+### ServiceContract / ServiceDescriptor — ADR-004
+
+- Exactly async initialize/shutdown abstract methods, no universal execute.
+- Exactly service_id, scope, implementation, eager, dependencies fields.
+- implementation is type[ServiceContract]; dependencies is
+  tuple[tuple[str, ServiceId], ...], default ().
+- Old no-dependency construction preserved; eager defaults False.
+- Frozen/slotted/keyword-only descriptor; immutable explicit binding tuples.
+- Different constructor parameters may bind the same ServiceId.
+- Descriptor construction does not construct, initialize or resolve a service.
+- Shape/graph/scope rejection and initialization timing belong to KR-005 tests.
 
 ### LifecycleState
 

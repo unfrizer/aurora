@@ -2942,38 +2942,15 @@ Every registered service has exactly one descriptor.
 
 ## Public Fields
 
-### Identity
+Under the approved KR-004 reconciliation of ADR-004 P-01, exactly:
 
-| Field | Type |
-|-------|------|
-| service_id | ServiceId |
-| implementation | type |
-
----
-
-### Dependency Injection
-
-| Field | Type |
-|-------|------|
-| scope | DIScope |
-| dependencies | tuple[ServiceId, ...] |
-
----
-
-### Lifecycle Hooks
-
-| Field | Type |
-|-------|------|
-| initialize | str \| None |
-| shutdown | str \| None |
-
----
-
-### Metadata
-
-| Field | Type |
-|-------|------|
-| metadata | Metadata |
+| Field | Type | Default |
+| --- | --- | --- |
+| service_id | ServiceId | required |
+| scope | DIScope | required |
+| implementation | type[ServiceContract] | required |
+| eager | bool | False |
+| dependencies | tuple[tuple[str, ServiceId], ...] | () |
 
 ---
 
@@ -2981,11 +2958,11 @@ Every registered service has exactly one descriptor.
 
 ### service_id
 
-Globally unique service identifier.
+Registered service identifier; uniqueness is checked by KR-005 RegistryRuntime.
 
 ### implementation
 
-Concrete implementation type.
+Concrete ServiceContract implementation type, not a bare type or service factory.
 
 ### scope
 
@@ -2993,38 +2970,31 @@ Canonical DI scope.
 
 ### dependencies
 
-Immutable dependency list.
+Immutable explicit constructor keyword/ServiceId bindings. Different parameters
+may refer to the same registered ID. No dependency lookup by inferred name/type.
 
-### initialize
+### eager
 
-Optional initialization hook method name.
+Whether initialization prepares the service; KR-005 permits eager APPLICATION
+services only. No initialization runs during descriptor construction.
 
-### shutdown
-
-Optional shutdown hook method name.
+Lifecycle remains ServiceContract's async initialize/shutdown, not string hooks.
 
 ---
 
 ## Derived Properties
 
-| Property | Returns |
-|----------|---------|
-| dependency_count | int |
-| is_singleton | bool |
-| has_initialize_hook | bool |
-| has_shutdown_hook | bool |
+None. Former hook names, metadata and derived properties are superseded by the
+approved exact schema; no compatibility shim or replacement API is introduced.
 
 ---
 
 ## Validation Rules
 
-ServiceDescriptor validates:
-
-- service identifier uniqueness;
-- implementation existence;
-- scope vocabulary;
-- dependency uniqueness;
-- hook name compatibility.
+ServiceDescriptor is a frozen, keyword-only, slotted contract without concrete
+validation, construction, resolution or caching. KR-005 owns descriptor shape,
+constructor compatibility, duplicate bindings, missing IDs, dependency cycles and
+scope validation according to ADR-004. Defaults preserve old no-dependency callers.
 
 ---
 
@@ -3040,9 +3010,7 @@ ServiceDescriptor validates:
 
 ## Raised Exceptions
 
-| Exception | Condition |
-|-----------|-----------|
-| ValidationError | Invalid service descriptor. |
+None from descriptor construction. KR-005 owns validation errors.
 
 ---
 
