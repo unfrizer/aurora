@@ -13,6 +13,15 @@ matrices when they comply with the Architecture Freeze v1.0, Master Pack v1.1,
 and already approved decisions. Its canonical repository record is
 `docs/architecture/ADR-001_Architecture_Delegation_Authorization_v1.0.md`.
 
+Standing PR/merge authorization is recorded in
+`docs/architecture/ADR-003_Standing_PR_Merge_Authorization_v1.0.md`. For already
+authorized tasks with approved contracts, reviewed scope and passing required
+latest-commit checks, Codex may create and merge PRs without a new routine user
+acknowledgement. This does not permit a fabricated human review, repository
+protection bypass, approval of unresolved contracts or architecture conflicts,
+or waiver of mandatory safety confirmations. All other ADR-001 and Build
+Protocol rules remain unchanged.
+
 Never redesign architecture.
 
 ## Current Phase
