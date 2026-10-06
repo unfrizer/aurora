@@ -1,5 +1,28 @@
 # AURORA ENGINEERING BIBLE v1.1
 
+## Approved KR-010 Construction and Lifetime — ADR-008
+
+**Status:** APPROVED — ADR-008 B-01–B-05, 2026-10-06.
+Exact contract: [KR-010](../wave1/KR-010_RUNNER_BOOTSTRAP.md).
+Authority: [ADR-008](../ADR-008_KR010_Bootstrap_Reconciliation_Proposal_v1.0.md).
+
+KR-010 still owns only Bootstrap/Kernel/Main, KR-008 owns Session/Context,
+KR-005 owns disposal, KR-006 owns lifecycle/status. Bootstrap inserts the existing
+Session(context) storage collaborator after Context and passes it explicitly into
+Kernel; it is not another lifecycle participant or layer. Graph construction remains
+Settings/Logging/Context/Container/EventBus/Orchestrator/Lifecycle/Kernel, no initialization.
+Lifecycle registers Context, Container, EventBus, Orchestrator in that exact order;
+reverse touched cleanup supersedes conflicting KR-010 initialization diagrams below.
+Kernel constructs no collaborator; it holds six read-only references including Session.
+
+No Bootstrap-created root trace/context/event or business pipeline. Main is bounded
+startup/finalization, not a signal wait/inputless execute. Admitted execution cleans
+Pipeline through Container in finally; composed Session removal clears Session DI
+then registry; full admitted shutdown drains registry after lifecycle even on error/
+interruption, with pending DI retained by its owners. FAILED stays terminal, no recovery.
+Scoped ADR-008 precedence resolves only these KR-010 graph/lifetime claims in older
+examples; other layer/module ownership/directions remain frozen.
+
 ## Scoped KR-009 Reconciliation — ADR-007, APPROVED 2026-10-06
 
 **Status:** APPROVED — ADR-007 O-01–O-05, 2026-10-06.

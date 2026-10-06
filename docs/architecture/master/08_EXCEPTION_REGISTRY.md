@@ -1,5 +1,31 @@
 # AURORA MASTER HANDOFF v1.0
 
+## Approved KR-010 Error Mapping — ADR-008
+
+**Status:** APPROVED — ADR-008 B-01–B-05, 2026-10-06.
+Exact contract: [KR-010](../wave1/KR-010_RUNNER_BOOTSTRAP.md).
+Authority: [ADR-008](../ADR-008_KR010_Bootstrap_Reconciliation_Proposal_v1.0.md).
+
+No Foundation exception class changes; use existing exceptions only.
+
+| Boundary | Existing behavior |
+| --- | --- |
+| Bootstrap configuration | ConfigurationError propagates unchanged |
+| Other ordinary construction failure | RuntimeInitializationError with original cause/safe message |
+| Invalid Kernel Pipeline object/UUID ID | InvalidManifestError before scope cleanup |
+| Kernel execution not RUNNING or busy mutation | RuntimeStateError, no side effect/disposal |
+| Invalid Kernel Session UUID ID | ContractValidationError before removal |
+| Missing Session | existing Session RuntimeStateError before DI action |
+| Lifecycle/DI work or teardown failure | original existing exception/cause, no new wrapper vocabulary |
+| Secondary cleanup error/cancellation | ordered ExceptionGroup/BaseExceptionGroup cause, prior explicit cause preserved |
+| Main failure | first original error propagates after independent stop/shutdown attempts |
+
+Cleanup-only error/cancellation propagates unchanged; primary CancelledError remains
+that same cancellation, not success. SystemExit/KeyboardInterrupt are not converted.
+No PipelineExecutionError/DirectoryValidationError or raw payload/secret log. Partial
+startup cleanup delegates only existing legal FAILED transition; not recovery.
+This is limited KR-010 precedence; other modules' error mapping stays unchanged.
+
 ## Scoped KR-009 Reconciliation — ADR-007, APPROVED 2026-10-06
 
 **Status:** APPROVED — ADR-007 O-01–O-05, 2026-10-06.

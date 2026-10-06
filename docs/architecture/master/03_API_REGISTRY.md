@@ -4400,500 +4400,62 @@ scope cleanup/Session composition/Main partial-startup remains KR-010, not this 
 
 # KR-010 Public API Registry
 
-**Directory**
-
-`src/kernel/runtime/`
-
-**Runtime Layer**
-
-L0
-
-**Owner KR**
-
-KR-010 Bootstrap Runtime
-
----
-
-# Bootstrap Runtime Public API
-
-Bootstrap Runtime exposes exactly three public API symbols.
-
-| Symbol | Category | Owner File |
-|--------|----------|------------|
-| BootstrapRuntime | Runtime Class | bootstrap.py |
-| RuntimeKernel | Runtime Class | runtime.py |
-| main | Public Async Function | src/main.py |
-
-Bootstrap Runtime owns runtime construction only.
-
----
-
-# BOOTSTRAP-API-001 — BootstrapRuntime
-
-### Owner File
-
-`src/kernel/runtime/bootstrap.py`
-
-### Category
-
-Runtime Class
-
-### Runtime Owner
-
-Bootstrap Runtime
-
-### Purpose
-
-Constructs the complete RuntimeKernel graph.
-
-BootstrapRuntime is the only authorized runtime constructor.
-
----
-
-## Public Methods
-
-### build()
-
-```python
-def build() -> RuntimeKernel
-```
-
-Builds and wires the complete runtime graph.
-
-Returns initialized RuntimeKernel instance.
-
----
-
-### validate_environment()
-
-```python
-def validate_environment() -> None
-```
-
-Validates repository environment before runtime construction.
-
-Runs:
-
-- configuration validation;
-- directory validation;
-- environment validation.
-
----
-
-### build_context()
-
-```python
-def build_context() -> ContextRuntime
-```
-
-Creates ContextRuntime.
-
-Used internally during build.
-
-Public for tests only.
-
----
-
-### build_container()
-
-```python
-def build_container() -> ContainerRuntime
-```
-
-Creates ContainerRuntime.
-
----
-
-### build_event_bus()
-
-```python
-def build_event_bus() -> EventBusRuntime
-```
-
-Creates EventBusRuntime.
-
----
-
-### build_orchestrator()
-
-```python
-def build_orchestrator() -> OrchestratorRuntime
-```
-
-Creates OrchestratorRuntime.
-
----
-
-### build_lifecycle()
-
-```python
-def build_lifecycle() -> LifecycleRuntime
-```
-
-Creates LifecycleRuntime.
-
----
-
-## Runtime Construction Guarantees
-
-BootstrapRuntime guarantees:
-
-1. construction order is deterministic;
-2. every runtime constructed exactly once;
-3. dependencies injected before RuntimeKernel creation;
-4. RuntimeKernel returned fully wired.
-
----
-
-## Raises
-
-| Exception | Condition |
-|-----------|-----------|
-| RuntimeInitializationError | Runtime construction failure. |
-| ConfigurationError | Invalid Settings. |
-| DirectoryValidationError | Invalid repository layout. |
-
----
-
-## Imported By
-
-- src/main.py
-- integration tests
-
-No runtime imports BootstrapRuntime after startup.
-
----
-
-# BOOTSTRAP-API-002 — RuntimeKernel
-
-### Owner File
-
-`src/kernel/runtime/runtime.py`
-
-### Category
-
-Runtime Class
-
-### Implements
-
-RuntimeContract
-
-### Purpose
-
-Public runtime facade of Wave 1.
-
-Owns references to every runtime subsystem.
-
----
-
-## Public Properties
-
-### Runtime References
-
-| Property | Type |
-|----------|------|
-| container | ContainerRuntime |
-| lifecycle | LifecycleRuntime |
-| event_bus | EventBusRuntime |
-| context | ContextRuntime |
-| orchestrator | OrchestratorRuntime |
-
-Properties are immutable after construction.
-
----
-
-## Runtime Metadata
-
-| Property | Type |
-|----------|------|
-| version | str |
-| runtime_layer | RuntimeLayer |
-| architecture_version | str |
-
-Read-only.
-
----
-
-## Public Methods
-
-### initialize()
-
-```python
-def initialize() -> None
-```
-
-Initializes every runtime subsystem.
-
-Transition:
-
-CREATED → INITIALIZING → READY.
-
-Raises:
-
-- RuntimeInitializationError.
-
----
-
-### start()
-
-```python
-def start() -> None
-```
-
-Transitions runtime into RUNNING.
-
-Runs startup hooks.
-
-Raises:
-
-- RuntimeStateError.
-
----
-
-### stop()
-
-```python
-def stop() -> None
-```
-
-Gracefully stops runtime.
-
-Runs stop hooks.
-
-Raises:
-
-- RuntimeShutdownError.
-
----
-
-### shutdown()
-
-```python
-def shutdown() -> None
-```
-
-Gracefully disposes every runtime subsystem.
-
-Reverse shutdown order.
-
-Raises:
-
-- RuntimeShutdownError.
-
----
-
-### execute()
-
-```python
-def execute(
-    definition: PipelineDefinition,
-    context: RuntimeContext,
-) -> None
-```
-
-Delegates execution to OrchestratorRuntime.
-
-Raises:
-
-- PipelineExecutionError.
-
----
-
-### status()
-
-```python
-def status() -> RuntimeStatus
-```
-
-Returns RuntimeStatus snapshot.
-
----
-
-### state()
-
-```python
-def state() -> LifecycleState
-```
-
-Returns immutable LifecycleState snapshot.
-
----
-
-### health()
-
-```python
-def health() -> HealthStatus
-```
-
-Aggregates runtime health snapshot.
-
-Read-only aggregation.
-
----
-
-### diagnostics()
-
-```python
-def diagnostics() -> Metadata
-```
-
-Returns immutable diagnostics snapshot.
-
-Reserved public API for future Diagnostics Runtime.
-
-Wave 1 returns runtime metadata only.
-
----
-
-## Health Aggregation Rules
-
-RuntimeKernel aggregates:
-
-- ContainerRuntime.health()
-- LifecycleRuntime.health()
-- EventBusRuntime.health()
-- ContextRuntime.health()
-- OrchestratorRuntime.health()
-
-Aggregation never mutates runtime health.
-
----
-
-## Imported By
-
-- src/main.py
-- BootstrapRuntime
-- Tests
-
----
-
-## Raises
-
-| Exception | Condition |
-|-----------|-----------|
-| RuntimeInitializationError | Initialization failed. |
-| RuntimeShutdownError | Shutdown failed. |
-| RuntimeStateError | Invalid lifecycle transition. |
-| PipelineExecutionError | Pipeline execution failed. |
-
----
-
-# BOOTSTRAP-API-003 — main()
-
-### Owner File
-
-`src/main.py`
-
-### Category
-
-Public Async Function
-
-### Signature
-
-```python
-async def main() -> None
-```
-
-### Purpose
-
-Canonical asynchronous entrypoint of AURORA.
-
----
-
-## Execution Sequence
-
-1. BootstrapRuntime.build()
-2. RuntimeKernel.initialize()
-3. RuntimeKernel.start()
-4. Await runtime completion.
-5. RuntimeKernel.stop()
-6. RuntimeKernel.shutdown()
-
-Sequence is immutable.
-
----
-
-## Runtime Guarantees
-
-- exactly one RuntimeKernel exists;
-- graceful shutdown in finally block;
-- startup failures terminate process immediately.
-
----
-
-## Raises
-
-| Exception | Condition |
-|-----------|-----------|
-| RuntimeInitializationError | Bootstrap failed. |
-| RuntimeShutdownError | Graceful shutdown failed. |
-
-Exceptions are allowed to terminate the process.
-
----
-
-## Imported By
-
-Python process only.
-
-No production module imports `main()`.
-
----
-
-# Bootstrap Runtime Lifecycle Matrix
-
-| Public API | Runtime Phase |
-|------------|---------------|
-| build() | Runtime construction |
-| initialize() | Runtime initialization |
-| start() | Startup |
-| execute() | Runtime execution |
-| stop() | Graceful stop |
-| shutdown() | Graceful shutdown |
-| main() | Process lifecycle |
-
----
-
-# Bootstrap Import Matrix
-
-| Consumer | Allowed API |
-|----------|-------------|
-| src/main.py | BootstrapRuntime |
-| RuntimeKernel | RuntimeContract |
-| Tests | BootstrapRuntime, RuntimeKernel |
-
-BootstrapRuntime is never imported by runtime implementation modules.
-
----
-
-# Bootstrap Exception Matrix
-
-| API | Raises |
-|-----|--------|
-| build | RuntimeInitializationError |
-| validate_environment | ConfigurationError |
-| initialize | RuntimeInitializationError |
-| start | RuntimeStateError |
-| stop | RuntimeShutdownError |
-| shutdown | RuntimeShutdownError |
-| execute | PipelineExecutionError |
-| main | RuntimeInitializationError, RuntimeShutdownError |
-
----
-
-# Bootstrap API Invariants
-
-Bootstrap Runtime guarantees:
-
-1. BootstrapRuntime is the only runtime constructor.
-2. RuntimeKernel is created exactly once.
-3. Runtime references are immutable.
-4. Startup order is deterministic.
-5. Shutdown order is reverse startup order.
-6. RuntimeKernel aggregates but does not create runtime health.
-7. main() is the only process entrypoint.
-
-Violating any invariant is an Architecture Conflict.
+**Status:** APPROVED — ADR-008 B-01–B-05, 2026-10-06.
+Exact contract: [KR-010](../wave1/KR-010_RUNNER_BOOTSTRAP.md).
+Authority: [ADR-008](../ADR-008_KR010_Bootstrap_Reconciliation_Proposal_v1.0.md).
+
+Exactly three exported symbols: BootstrapRuntime, RuntimeKernel, main.
+The complete typed signatures are in the linked exact contract; no new alias.
+
+## BOOTSTRAP-API-001 — BootstrapRuntime
+
+- async build() -> RuntimeKernel: construction only, new independent CREATED graph.
+- validate_environment() -> None: existing configuration validation only.
+- build_context() -> ContextRuntime; build_container() -> ContainerRuntime.
+- build_event_bus() -> EventBusRuntime.
+- build_orchestrator(event_bus: EventBusRuntime) -> OrchestratorRuntime.
+- build_lifecycle(container, event_bus, context, orchestrator) -> LifecycleRuntime,
+  with those existing concrete collaborator types and current positional parameters.
+
+Builders remain public, not renamed private methods. ConfigurationError propagates;
+other ordinary construction failures use RuntimeInitializationError with original
+cause. No nonexistent DirectoryValidationError/configure_logging or root context/event.
+
+## BOOTSTRAP-API-002 — RuntimeKernel
+
+Implements AB-00D RuntimeContract. Required keyword-only constructor parameters:
+container: ContainerRuntime, lifecycle: LifecycleRuntime, event_bus: EventBusRuntime,
+context: ContextRuntime, orchestrator: OrchestratorRuntime, session: SessionRuntime.
+No default factory/optional compatibility constructor.
+
+Read-only properties: these six collaborator references; runtime_name: str (kernel),
+runtime_layer: RuntimeLayer (L0_KERNEL), version: str, architecture_version: str.
+Version facts come from core/version.py. Session property exposes the existing owner,
+not another registry/facade; bypassing composition retains lower-level obligations.
+
+Async None methods: initialize(), start(), stop(), shutdown(),
+execute(pipeline: PipelineDefinition, *, context: RuntimeContext),
+remove_session(session_id: SessionId). Sync read-only methods:
+status() -> RuntimeStatus; state() -> LifecycleState; health() -> HealthStatus;
+diagnostics() -> Metadata. Kernel guard spans each mutation and cleanup.
+
+execute requires RUNNING/valid captured UUID Pipeline ID, delegates full validation/
+work, always clears admitted Pipeline scope in finally. Rejected busy/state/invalid
+ID calls cannot clear another scope. remove_session validates UUID/existence then
+composes Container.clear_session and Session.remove; interruption retains Session
+for retry. Full admitted shutdown drains Session after lifecycle teardown.
+Partial startup abort uses existing legal FAILED transition through Lifecycle;
+CREATED/RUNNING invalid shutdown cannot invent transitions. FAILED stays terminal.
+First error object/prior cause survives ordered secondary error/cancellation groups;
+no PipelineExecutionError wrapper. Health ERROR > WARNING > OK is observational;
+diagnostics fresh existing metadata. No public recover, wait, boot or execute_pipeline.
+
+## BOOTSTRAP-API-003 — main
+
+async main() -> None; single asyncio.run entry. Build, initialize, start, bounded
+finally stop and shutdown as independent best-effort facade attempts. No inputless
+execute/signal wait/background server. Errors/cancellation propagate after cleanup,
+never fake success or mask first failure. Other runtime imports in Main are forbidden.
 
 ---
 
@@ -4918,8 +4480,8 @@ Total runtime classes documented so far: **22**.
 |----------|------:|
 | Runtime Classes | 2 |
 | Public Functions | 1 |
-| Public Methods | 16 |
-| Public Properties | 8 |
+| Public Methods | 17 |
+| Public Properties | 10 |
 
 Bootstrap Runtime exports exactly **three public API symbols**.
 
@@ -5393,7 +4955,7 @@ This number is frozen for Wave 1.
 | KR-007 Event Bus Runtime | 23 |
 | KR-008 Runtime Context Runtime | 19 |
 | KR-009 Pipeline Runtime | 24 |
-| KR-010 Bootstrap Runtime | 23 |
+| KR-010 Bootstrap Runtime | 30 (3 primary exports, 17 methods, 10 properties; constructors excluded) |
 
 Every symbol belongs to exactly one KR.
 

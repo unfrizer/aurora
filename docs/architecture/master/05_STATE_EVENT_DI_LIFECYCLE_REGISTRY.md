@@ -7,6 +7,32 @@
 
 # M-05 — State / Event / Dependency Injection / Lifecycle Registry
 
+## Approved KR-010 Composition — ADR-008
+
+**Status:** APPROVED — ADR-008 B-01–B-05, 2026-10-06.
+Exact contract: [KR-010](../wave1/KR-010_RUNNER_BOOTSTRAP.md).
+Authority: [ADR-008](../ADR-008_KR010_Bootstrap_Reconciliation_Proposal_v1.0.md).
+
+For KR-010 only: build is construction without lifecycle initialization, active
+context, generated trace, service registration/resolution or Bootstrap events.
+Bootstrap event names below are reserved vocabulary, not mandatory emissions here.
+Explicit callers supply identity/TraceContext; no new root-trace factory is inferred.
+SessionRuntime remains KR-008's registry owner and is explicitly composed by Bootstrap
+with Context; Lifecycle registers Context/Container/EventBus/Orchestrator, not Session.
+
+Kernel.execute admits only RUNNING/valid captured ID, keeps a Kernel-local mutation
+guard through finally Container.clear_pipeline. No new Pipeline/status event or
+Session/context eviction. Kernel.remove_session composes clear_session then removal;
+ordinary disposal failure still removes the registry entry, interruption keeps it
+for retry. Full admitted shutdown drains Session after lifecycle without using a
+closed Container; remaining DI ownership stays resumable in Container/Lifecycle.
+Partial startup abort delegates only existing legal FAILED transitions; no new
+status/scopes, FAILED-to-success/reset, shutdown hooks or changed trace/event fields.
+First error and prior cause survive ordered secondary cleanup/cancellation causes.
+Main is bounded smoke and independently attempts stop/shutdown, not a signal server.
+Only conflicting KR-010 composition/lifetime/root-context prose is superseded;
+ADR-006 snapshots and ADR-007 event timeline remain unchanged.
+
 **Document ID**
 
 M-05
