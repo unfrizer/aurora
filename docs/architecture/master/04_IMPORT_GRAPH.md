@@ -1,5 +1,15 @@
 # AURORA ENGINEERING BIBLE v1.1
 
+## Approved KR-009 Precedence — ADR-007, 2026-10-06
+
+The compiled KR-009 section below and exact wave1/KR-009 contract supersede
+all retained historical KR-009 summaries/examples in this document, including
+Executor health/lifecycle, unbound stage execution, ContextRuntime access,
+queue/DI acquisition and Orchestrator event production. Reserved event vocabulary
+and other modules' ownership remain unchanged. Only MetadataRuntime's public
+stateless transformations are permitted for detached context JSON. Bootstrap uses
+only OrchestratorRuntime(event_bus); full KR-010 cleanup remains deferred.
+
 Document ID: M-04
 
 Document Name: Import Graph
@@ -3431,427 +3441,84 @@ boundaries, Kernel smoke and required latest-head CI. One module/report/review g
 
 # KR-009 Import Graph
 
-**Directory**
+**Status:** APPROVED — ADR-007 O-01–O-05, 2026-10-06.
 
-`src/kernel/runtime/`
+The exact canonical implementation contract is
+[KR-009](../wave1/KR-009_PIPELINE_ORCHESTRATOR.md), compiled before source edits.
+It supersedes only prior KR-009 API/import/behavior/test declarations and the
+precise Bootstrap caller expression. Other module ownership remains frozen.
 
-**Runtime Layer**
+| File | Owner / scope |
+| --- | --- |
+| src/kernel/runtime/pipeline.py | KR-009 immutable models; preserve schema |
+| src/kernel/runtime/manifest.py | KR-009 stateless graph validation |
+| src/kernel/runtime/executor.py | KR-009 sequential operations/snapshots/events |
+| src/kernel/runtime/orchestrator.py | KR-009 registration/bindings/preflight |
+| tests/kernel/test_pipeline.py | KR-011 canonical test ownership; active acceptance authorized |
+| src/kernel/runtime/bootstrap.py | KR-010; ONLY remove Executor import and use OrchestratorRuntime(event_bus) |
 
-L0
+PipelineStage is frozen, keyword-only and slotted: stage_id: str,
+module_id: ModuleId, depends_on: tuple[str, ...]. Derived dependency_count: int
+and has_dependencies: bool remain. PipelineDefinition is frozen, keyword-only
+and slotted: pipeline_id: PipelineId, stages: tuple[PipelineStage, ...].
+Derived stage_count: int and is_empty: bool remain. Exactly five exported symbols:
+PipelineStage, PipelineDefinition, ManifestRuntime, ExecutorRuntime,
+OrchestratorRuntime. Each is exported only by its existing owner file.
 
-**Owner KR**
+ManifestRuntime retains:
+validate(definition: PipelineDefinition) -> PipelineDefinition;
+validate_stage_ids(definition: PipelineDefinition) -> None;
+validate_dependencies(definition: PipelineDefinition) -> None;
+validate_dag(definition: PipelineDefinition) -> None.
+Orchestrator retains unregister_module(module_id: ModuleId) -> None,
+modules() -> tuple[RuntimeModuleManifest, ...], contains(module_id: ModuleId) -> bool,
+the two identity properties, async initialize/start/stop/shutdown and sync health.
+No new public member or compatibility alias is authorized.
 
-KR-009 Pipeline Runtime
+## Canonical Dependencies and Behavior
 
----
+Orchestrator -> Manifest, Executor; EventBus construction/type annotation only;
+Orchestrator and Executor -> stateless MetadataRuntime for detached JSON.
+Executor -> EventBus facade and Manifest validation. Manifest -> frozen Pipeline
+models/Foundation only. No ContextRuntime/SessionRuntime storage, Container, higher
+layer, Publisher/Dispatcher/Subscriber internal or new event factory.
+Bootstrap -> OrchestratorRuntime(event_bus), NOT Executor.
 
-# Pipeline Import Graph
+Executor is a plain internal class, not RuntimeContract: no health/lifecycle/identity.
+Orchestrator is the RuntimeContract participant with name orchestrator, L0_KERNEL,
+health OK, no-op initialize/start/stop, idle shutdown clears manifests and bindings.
 
-Pipeline Runtime owns pipeline validation, orchestration and execution.
+Registration explicitly accepts operation: Callable[[RuntimeContext], Awaitable[None]]
+| None; no callback in serialized models. Per-execution independent binding snapshot.
+DAG validation returns the SAME definition; malformed structure -> InvalidManifestError,
+cycle -> RuntimeDependencyError, iterative traversal without a stage-count cap.
+Preserve stable ready-wave ordering: A, B(dep A), C -> A, C, B.
+Reachable module dependencies must exist, be acyclic and point to the same/lower
+RuntimeLayer; static dependencies never generate stage edges.
+Every stage module/binding and detached context must validate before ANY event/effect.
+Pipeline/context UUIDs must agree; supplied trace/UTC times preserved, expiry observational.
+JSON copy/validation uses MetadataRuntime; each callback gets its own stage metadata.
 
-It consists of four runtime modules plus two immutable pipeline contracts.
+Actual operation is awaited once per stage. First failure aborts later callbacks.
+Executor alone creates/publishes events through EventBus.create_for_runtime.
+Exact seven schemas/priorities and terminal rules are ADR-007 O-03:
+pipeline.started; stage started -> awaited work -> stage completed; pipeline.completed.
+On ordinary failure stage.failed when allowed then pipeline.failed; cancellation
+pipeline.cancelled. Only ONE logical terminal pipeline attempt. Failure delivering
+stage.completed does not produce a contradictory stage.failed. Terminal-delivery
+failure never creates another terminal. Reasons/logs are safe fixed summaries.
+Original exception object is re-raised; ordered secondary notification errors and
+earlier explicit cause are retained without grouping the primary inside its own cause.
+No KeyboardInterrupt/SystemExit conversion, background task, shield or new status.
 
-Only OrchestratorRuntime is public.
-
----
-
-# Pipeline Runtime Module Inventory
-
-| Module | Category | Public |
-|--------|----------|--------|
-| pipeline.py | Pipeline Dataclasses | Public Contracts |
-| manifest.py | Manifest Runtime | Internal Runtime |
-| executor.py | Executor Runtime | Internal Runtime |
-| orchestrator.py | Public Orchestrator Runtime | Yes |
-
----
-
-# Canonical Pipeline Runtime DAG
-
-```text
-contracts/module.py
-        │
-        ▼
-PipelineDefinition
-PipelineStage
-        │
-        ▼
-ManifestRuntime
-        │
-        ▼
-ExecutorRuntime
-        │
-        ▼
-OrchestratorRuntime
-```
-
-Execution happens only after validation.
-
----
-
-# PIPELINE-IMPORT-001 — pipeline.py
-
-### Module Category
-
-Pipeline Contracts
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-from dataclasses import dataclass
-
-from src.core.types import ModuleId, PipelineId
-```
-
-Foundation only.
+Instance busy guards reject re-entry/concurrent execute/mutation with RuntimeStateError
+and release in finally. Read-only registry/health remains available.
+Canonical acceptance is tests/kernel/test_pipeline.py, 100% executable-line coverage
+for all four production files, no exclusions/skips/xfail; Windows/Linux Pyright,
+Ruff, discovered full Pytest, smoke and latest-head required CI. Full DI Pipeline
+scope cleanup/Session composition/Main partial-startup remains KR-010, not this module.
 
 ---
-
-## Public Exports
-
-- PipelineStage
-- PipelineDefinition
-
----
-
-## Forbidden Imports
-
-pipeline.py must never import runtime implementations.
-
----
-
-## Imported By
-
-ManifestRuntime, ExecutorRuntime, OrchestratorRuntime.
-
----
-
-# PIPELINE-IMPORT-002 — manifest.py
-
-### Module Category
-
-Manifest Validation Runtime
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-from src.core.exceptions import (
-    DuplicateModuleError,
-    PipelineCycleError,
-    ValidationError,
-)
-
-from src.kernel.contracts.module import RuntimeModuleManifest
-from src.kernel.runtime.pipeline import (
-    PipelineDefinition,
-    PipelineStage,
-)
-```
-
-Imports contracts plus PipelineDefinition.
-
----
-
-## Public Export
-
-ManifestRuntime
-
----
-
-## Forbidden Imports
-
-manifest.py must never import:
-
-- OrchestratorRuntime
-- ExecutorRuntime
-- RuntimeKernel
-- EventBusRuntime
-
-Validation runtime never executes pipelines.
-
----
-
-## Imported By
-
-OrchestratorRuntime.
-
----
-
-## Ownership Rule
-
-ManifestRuntime owns:
-
-- DAG validation.
-- duplicate module validation.
-- dependency validation.
-- stage ordering validation.
-
----
-
-# PIPELINE-IMPORT-003 — executor.py
-
-### Module Category
-
-Pipeline Executor Runtime
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-from src.core.exceptions import PipelineExecutionError
-
-from src.kernel.contracts.context import RuntimeContext
-
-from src.kernel.runtime.bus import EventBusRuntime
-from src.kernel.runtime.pipeline import (
-    PipelineDefinition,
-    PipelineStage,
-)
-```
-
-Executor imports EventBusRuntime but never Event internals.
-
----
-
-## Public Export
-
-ExecutorRuntime
-
----
-
-## Forbidden Imports
-
-executor.py must never import:
-
-- RuntimeKernel
-- OrchestratorRuntime
-- PublisherRuntime
-- DispatcherRuntime
-- SubscriberRuntime
-
-Executor communicates through EventBusRuntime facade only.
-
----
-
-## Imported By
-
-OrchestratorRuntime.
-
----
-
-## Ownership Rule
-
-ExecutorRuntime owns:
-
-- execution order.
-- stage execution.
-- execution events.
-- execution timeout handling.
-
----
-
-# PIPELINE-IMPORT-004 — orchestrator.py
-
-### Module Category
-
-Public Pipeline Runtime
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-from src.core.exceptions import DuplicateModuleError
-
-from src.kernel.contracts.module import RuntimeModuleManifest
-from src.kernel.contracts.runtime import RuntimeContract
-
-from src.kernel.runtime.executor import ExecutorRuntime
-from src.kernel.runtime.manifest import ManifestRuntime
-```
-
-Imports contracts plus internal Pipeline runtimes only.
-
----
-
-## Public Export
-
-OrchestratorRuntime
-
----
-
-## Forbidden Imports
-
-orchestrator.py must never import:
-
-- RuntimeKernel
-- BootstrapRuntime
-- ContainerRuntime
-- LifecycleRuntime
-- ContextRuntime
-
-Pipeline Runtime remains runtime-independent.
-
----
-
-## Imported By
-
-RuntimeKernel and BootstrapRuntime.
-
----
-
-## Ownership Rule
-
-OrchestratorRuntime owns:
-
-- module registry.
-- pipeline registry.
-- public execute().
-- runtime diagnostics.
-
-Execution delegated internally.
-
----
-
-# Pipeline Runtime Import Matrix
-
-| Module | May Import |
-|--------|------------|
-| pipeline.py | Foundation only |
-| manifest.py | pipeline.py + contracts/module.py |
-| executor.py | pipeline.py + contracts/context.py + EventBusRuntime |
-| orchestrator.py | manifest.py, executor.py, contracts/runtime.py, contracts/module.py |
-
----
-
-# Pipeline Runtime Reverse Import Matrix
-
-| Target Module | Allowed Importers |
-|--------------|-------------------|
-| pipeline.py | ManifestRuntime, ExecutorRuntime |
-| manifest.py | OrchestratorRuntime |
-| executor.py | OrchestratorRuntime |
-| orchestrator.py | RuntimeKernel, BootstrapRuntime |
-
----
-
-# Pipeline Runtime Boundary Rules
-
-ExecutorRuntime communicates with Event Runtime through EventBusRuntime only.
-
-Forbidden:
-
-```text
-ExecutorRuntime
-      │
-      ▼
-PublisherRuntime
-```
-
-Required:
-
-```text
-ExecutorRuntime
-      │
-      ▼
-EventBusRuntime
-      │
-      ▼
-PublisherRuntime
-```
-
----
-
-# Pipeline Runtime Anti-Cycle Registry
-
-| Forbidden Cycle | Reason |
-|-----------------|--------|
-| OrchestratorRuntime ↔ ExecutorRuntime | Coordinator/executor separation. |
-| ManifestRuntime ↔ ExecutorRuntime | Validation/execution separation. |
-| ExecutorRuntime ↔ RuntimeKernel | Executor independent from kernel. |
-| OrchestratorRuntime ↔ RuntimeKernel | Kernel owns orchestrator, not vice versa. |
-
----
-
-# Runtime Context ↔ Pipeline Boundary Rules
-
-Pipeline Runtime may read RuntimeContext.
-
-Pipeline Runtime may never own RuntimeContext.
-
-Canonical dependency:
-
-```text
-ExecutorRuntime
-      │
-      ▼
-ContextRuntime
-      │
-      ▼
-RuntimeContext
-```
-
-Reverse dependency is forbidden.
-
----
-
-# KR-008 + KR-009 Import Integrity Rules
-
-These runtimes guarantee:
-
-1. ContextRuntime is the only public context facade.
-2. OrchestratorRuntime is the only public pipeline facade.
-3. ExecutorRuntime imports EventBusRuntime only.
-4. ManifestRuntime performs validation only.
-5. SessionRuntime owns RuntimeContext persistence.
-6. PipelineDefinition imports Foundation only.
-7. Both runtime graphs remain acyclic.
-
-Violating any rule is an Architecture Conflict.
-
----
-
-# KR-008 + KR-009 Import Statistics
-
-| Runtime | Modules | Internal Edges | Cycles |
-|---------|--------:|---------------:|-------:|
-| Runtime Context | 3 | 3 | 0 |
-| Pipeline Runtime | 4 | 5 | 0 |
-
-Combined dependency graph contains **zero circular dependencies**.
-
----
-
-**Document Status:** IN PROGRESS (Part 7 of 10)
 
 <!-- ========================================================================= -->
 <!-- M-04 PART 8 — KR-010 Bootstrap Runtime + RuntimeKernel + Entry Point Import Graph -->

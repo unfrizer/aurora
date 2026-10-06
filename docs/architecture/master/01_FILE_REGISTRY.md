@@ -2144,315 +2144,82 @@ boundaries, Kernel smoke and required latest-head CI. One module/report/review g
 
 # KR-009 — Pipeline Runtime Registry
 
-**Runtime Layer:** L0 Kernel
-
-Directory:
-
-```
-src/kernel/runtime/
-```
-
-Pipeline Runtime owns pipeline definitions, DAG validation, execution ordering and orchestration.
-
-Files:
-
-| File | Status | Public API |
-|------|--------|------------|
-| `pipeline.py` | FROZEN | Pipeline contracts |
-| `manifest.py` | FROZEN | ManifestRuntime |
-| `executor.py` | FROZEN | ExecutorRuntime |
-| `orchestrator.py` | FROZEN | OrchestratorRuntime |
-
-Pipeline Runtime never owns dependency injection, lifecycle transitions or logging configuration.
-
----
-
-# Pipeline Runtime Constitution
-
-Pipeline Runtime owns:
-
-- PipelineDefinition.
-- PipelineStage.
-- DAG validation.
-- Execution order.
-- Module orchestration.
-
-Pipeline Runtime never owns:
-
-- runtime construction.
-- event subscriptions.
-- service resolution.
-- runtime state transitions.
-
----
-
-## PIPELINE-001 — src/kernel/runtime/pipeline.py
-
-### Owner
-
-KR-009 Pipeline Runtime
-
-### Responsibility
-
-Immutable pipeline definitions.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-ManifestRuntime
-
-ExecutorRuntime
-
-OrchestratorRuntime
-
-Tests
-
-### Public Exports
-
-#### Dataclasses
-
-- `PipelineDefinition`
-- `PipelineStage`
-
-### Public Fields
-
-#### PipelineStage
-
-- stage_id
-- module_id
-- depends_on
-
-#### PipelineDefinition
-
-- pipeline_id
-- stages
-
-### Pipeline Rules
-
-- immutable.
-- stage IDs unique.
-- DAG only.
-
-### Forbidden Responsibilities
-
-- execution.
-- validation.
-- orchestration.
-
----
-
-## PIPELINE-002 — src/kernel/runtime/manifest.py
-
-### Owner
-
-KR-009 Pipeline Runtime
-
-### Responsibility
-
-Pipeline manifest validator.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-ExecutorRuntime
-
-OrchestratorRuntime
-
-Tests
-
-### Public Exports
-
-#### Classes
-
-- `ManifestRuntime`
-
-### Public Methods
-
-| Method | Purpose |
-|--------|---------|
-| `validate()` | Validate complete manifest. |
-| `validate_stage_ids()` | Validate uniqueness. |
-| `validate_dependencies()` | Validate references. |
-| `validate_dag()` | Detect cycles. |
-
-### Forbidden Responsibilities
-
-- stage execution.
-- runtime events.
-
----
-
-## PIPELINE-003 — src/kernel/runtime/executor.py
-
-### Owner
-
-KR-009 Pipeline Runtime
-
-### Responsibility
-
-Pipeline execution runtime.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-OrchestratorRuntime
-
-Tests
-
-### Public Exports
-
-#### Classes
-
-- `ExecutorRuntime`
-
-### Public Methods
-
-| Method | Purpose |
-|--------|---------|
-| `execute()` | Execute complete pipeline. |
-| `execute_stage()` | Execute one stage. |
-
-### Internal Helpers
-
-- `_execution_order()`
-- `_publish_stage_event()`
-
-### Execution Guarantees
-
-- sequential execution.
-- deterministic ordering.
-- immutable RuntimeContext.
-
-### Forbidden Responsibilities
-
-- DAG validation.
-- module registration.
-
----
-
-## PIPELINE-004 — src/kernel/runtime/orchestrator.py
-
-### Owner
-
-KR-009 Pipeline Runtime
-
-### Responsibility
-
-Runtime pipeline orchestration.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-BootstrapRuntime
-
-RuntimeKernel
-
-Tests
-
-### Public Exports
-
-#### Classes
-
-- `OrchestratorRuntime`
-
-### Public Methods
-
-| Method | Purpose |
-|--------|---------|
-| `register_module()` | Register RuntimeModuleManifest. |
-| `unregister_module()` | Remove manifest. |
-| `modules()` | Immutable manifest snapshot. |
-| `execute()` | Validate and execute pipeline. |
-
-### Internal Storage
-
-Owns:
-
-```
-dict[ModuleId, RuntimeModuleManifest]
-```
-
-### Forbidden Responsibilities
-
-- dependency injection.
-- lifecycle transitions.
-- runtime startup.
-
----
-
-# KR-009 Export Matrix
-
-| File | Public Symbols |
-|------|----------------|
-| pipeline.py | PipelineDefinition, PipelineStage |
-| manifest.py | ManifestRuntime |
-| executor.py | ExecutorRuntime |
-| orchestrator.py | OrchestratorRuntime |
-
----
-
-# KR-009 Dependency Matrix
-
-| File | Allowed Imports |
-|------|------------------|
-| pipeline.py | core.types |
-| manifest.py | pipeline.py |
-| executor.py | pipeline.py, EventRuntime, ContextRuntime |
-| orchestrator.py | manifest.py, executor.py, contracts.module |
-
-Pipeline Runtime never imports BootstrapRuntime or LifecycleRuntime.
-
----
-
-# KR-009 Ownership Matrix
-
-| Object | Owner |
-|--------|-------|
-| PipelineDefinition | pipeline.py |
-| PipelineStage | pipeline.py |
-| Manifest validation | ManifestRuntime |
-| Stage execution | ExecutorRuntime |
-| Module orchestration | OrchestratorRuntime |
-
-No shared ownership.
-
----
-
-# KR-009 Validation Ownership
-
-| Runtime | Validates |
-|----------|-----------|
-| ManifestRuntime | DAG validity |
-| ManifestRuntime | Dependency references |
-| ExecutorRuntime | Execution ordering |
-| OrchestratorRuntime | Module manifest consistency |
-
----
-
-# KR-009 Forbidden Patterns
-
-Pipeline Runtime may never contain:
-
-- parallel execution.
-- dependency injection.
-- lifecycle transitions.
-- logging configuration.
-- mutable PipelineDefinition.
-- mutable PipelineStage.
-
-Pipeline Runtime owns deterministic execution only.
+**Status:** APPROVED — ADR-007 O-01–O-05, 2026-10-06.
+
+The exact canonical implementation contract is
+[KR-009](../wave1/KR-009_PIPELINE_ORCHESTRATOR.md), compiled before source edits.
+It supersedes only prior KR-009 API/import/behavior/test declarations and the
+precise Bootstrap caller expression. Other module ownership remains frozen.
+
+| File | Owner / scope |
+| --- | --- |
+| src/kernel/runtime/pipeline.py | KR-009 immutable models; preserve schema |
+| src/kernel/runtime/manifest.py | KR-009 stateless graph validation |
+| src/kernel/runtime/executor.py | KR-009 sequential operations/snapshots/events |
+| src/kernel/runtime/orchestrator.py | KR-009 registration/bindings/preflight |
+| tests/kernel/test_pipeline.py | KR-011 canonical test ownership; active acceptance authorized |
+| src/kernel/runtime/bootstrap.py | KR-010; ONLY remove Executor import and use OrchestratorRuntime(event_bus) |
+
+PipelineStage is frozen, keyword-only and slotted: stage_id: str,
+module_id: ModuleId, depends_on: tuple[str, ...]. Derived dependency_count: int
+and has_dependencies: bool remain. PipelineDefinition is frozen, keyword-only
+and slotted: pipeline_id: PipelineId, stages: tuple[PipelineStage, ...].
+Derived stage_count: int and is_empty: bool remain. Exactly five exported symbols:
+PipelineStage, PipelineDefinition, ManifestRuntime, ExecutorRuntime,
+OrchestratorRuntime. Each is exported only by its existing owner file.
+
+ManifestRuntime retains:
+validate(definition: PipelineDefinition) -> PipelineDefinition;
+validate_stage_ids(definition: PipelineDefinition) -> None;
+validate_dependencies(definition: PipelineDefinition) -> None;
+validate_dag(definition: PipelineDefinition) -> None.
+Orchestrator retains unregister_module(module_id: ModuleId) -> None,
+modules() -> tuple[RuntimeModuleManifest, ...], contains(module_id: ModuleId) -> bool,
+the two identity properties, async initialize/start/stop/shutdown and sync health.
+No new public member or compatibility alias is authorized.
+
+## Canonical Dependencies and Behavior
+
+Orchestrator -> Manifest, Executor; EventBus construction/type annotation only;
+Orchestrator and Executor -> stateless MetadataRuntime for detached JSON.
+Executor -> EventBus facade and Manifest validation. Manifest -> frozen Pipeline
+models/Foundation only. No ContextRuntime/SessionRuntime storage, Container, higher
+layer, Publisher/Dispatcher/Subscriber internal or new event factory.
+Bootstrap -> OrchestratorRuntime(event_bus), NOT Executor.
+
+Executor is a plain internal class, not RuntimeContract: no health/lifecycle/identity.
+Orchestrator is the RuntimeContract participant with name orchestrator, L0_KERNEL,
+health OK, no-op initialize/start/stop, idle shutdown clears manifests and bindings.
+
+Registration explicitly accepts operation: Callable[[RuntimeContext], Awaitable[None]]
+| None; no callback in serialized models. Per-execution independent binding snapshot.
+DAG validation returns the SAME definition; malformed structure -> InvalidManifestError,
+cycle -> RuntimeDependencyError, iterative traversal without a stage-count cap.
+Preserve stable ready-wave ordering: A, B(dep A), C -> A, C, B.
+Reachable module dependencies must exist, be acyclic and point to the same/lower
+RuntimeLayer; static dependencies never generate stage edges.
+Every stage module/binding and detached context must validate before ANY event/effect.
+Pipeline/context UUIDs must agree; supplied trace/UTC times preserved, expiry observational.
+JSON copy/validation uses MetadataRuntime; each callback gets its own stage metadata.
+
+Actual operation is awaited once per stage. First failure aborts later callbacks.
+Executor alone creates/publishes events through EventBus.create_for_runtime.
+Exact seven schemas/priorities and terminal rules are ADR-007 O-03:
+pipeline.started; stage started -> awaited work -> stage completed; pipeline.completed.
+On ordinary failure stage.failed when allowed then pipeline.failed; cancellation
+pipeline.cancelled. Only ONE logical terminal pipeline attempt. Failure delivering
+stage.completed does not produce a contradictory stage.failed. Terminal-delivery
+failure never creates another terminal. Reasons/logs are safe fixed summaries.
+Original exception object is re-raised; ordered secondary notification errors and
+earlier explicit cause are retained without grouping the primary inside its own cause.
+No KeyboardInterrupt/SystemExit conversion, background task, shield or new status.
+
+Instance busy guards reject re-entry/concurrent execute/mutation with RuntimeStateError
+and release in finally. Read-only registry/health remains available.
+Canonical acceptance is tests/kernel/test_pipeline.py, 100% executable-line coverage
+for all four production files, no exclusions/skips/xfail; Windows/Linux Pyright,
+Ruff, discovered full Pytest, smoke and latest-head required CI. Full DI Pipeline
+scope cleanup/Session composition/Main partial-startup remains KR-010, not this module.
 
 ---
 

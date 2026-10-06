@@ -1,5 +1,15 @@
 # AURORA ENGINEERING BIBLE v1.1
 
+## Approved KR-009 Precedence — ADR-007, 2026-10-06
+
+The compiled KR-009 section below and exact wave1/KR-009 contract supersede
+all retained historical KR-009 summaries/examples in this document, including
+Executor health/lifecycle, unbound stage execution, ContextRuntime access,
+queue/DI acquisition and Orchestrator event production. Reserved event vocabulary
+and other modules' ownership remain unchanged. Only MetadataRuntime's public
+stateless transformations are permitted for detached context JSON. Bootstrap uses
+only OrchestratorRuntime(event_bus); full KR-010 cleanup remains deferred.
+
 Document ID: M-03
 
 Document Name: API Registry
@@ -4305,393 +4315,84 @@ boundaries, Kernel smoke and required latest-head CI. One module/report/review g
 
 # KR-009 Public API Registry
 
-**Directory**
+**Status:** APPROVED — ADR-007 O-01–O-05, 2026-10-06.
 
-`src/kernel/runtime/`
+The exact canonical implementation contract is
+[KR-009](../wave1/KR-009_PIPELINE_ORCHESTRATOR.md), compiled before source edits.
+It supersedes only prior KR-009 API/import/behavior/test declarations and the
+precise Bootstrap caller expression. Other module ownership remains frozen.
 
-**Runtime Layer**
+| File | Owner / scope |
+| --- | --- |
+| src/kernel/runtime/pipeline.py | KR-009 immutable models; preserve schema |
+| src/kernel/runtime/manifest.py | KR-009 stateless graph validation |
+| src/kernel/runtime/executor.py | KR-009 sequential operations/snapshots/events |
+| src/kernel/runtime/orchestrator.py | KR-009 registration/bindings/preflight |
+| tests/kernel/test_pipeline.py | KR-011 canonical test ownership; active acceptance authorized |
+| src/kernel/runtime/bootstrap.py | KR-010; ONLY remove Executor import and use OrchestratorRuntime(event_bus) |
 
-L0
+PipelineStage is frozen, keyword-only and slotted: stage_id: str,
+module_id: ModuleId, depends_on: tuple[str, ...]. Derived dependency_count: int
+and has_dependencies: bool remain. PipelineDefinition is frozen, keyword-only
+and slotted: pipeline_id: PipelineId, stages: tuple[PipelineStage, ...].
+Derived stage_count: int and is_empty: bool remain. Exactly five exported symbols:
+PipelineStage, PipelineDefinition, ManifestRuntime, ExecutorRuntime,
+OrchestratorRuntime. Each is exported only by its existing owner file.
 
-**Owner KR**
+ManifestRuntime retains:
+validate(definition: PipelineDefinition) -> PipelineDefinition;
+validate_stage_ids(definition: PipelineDefinition) -> None;
+validate_dependencies(definition: PipelineDefinition) -> None;
+validate_dag(definition: PipelineDefinition) -> None.
+Orchestrator retains unregister_module(module_id: ModuleId) -> None,
+modules() -> tuple[RuntimeModuleManifest, ...], contains(module_id: ModuleId) -> bool,
+the two identity properties, async initialize/start/stop/shutdown and sync health.
+No new public member or compatibility alias is authorized.
 
-KR-009 Pipeline Runtime
+## Canonical Dependencies and Behavior
 
----
+Orchestrator -> Manifest, Executor; EventBus construction/type annotation only;
+Orchestrator and Executor -> stateless MetadataRuntime for detached JSON.
+Executor -> EventBus facade and Manifest validation. Manifest -> frozen Pipeline
+models/Foundation only. No ContextRuntime/SessionRuntime storage, Container, higher
+layer, Publisher/Dispatcher/Subscriber internal or new event factory.
+Bootstrap -> OrchestratorRuntime(event_bus), NOT Executor.
 
-# Pipeline Runtime Public API
+Executor is a plain internal class, not RuntimeContract: no health/lifecycle/identity.
+Orchestrator is the RuntimeContract participant with name orchestrator, L0_KERNEL,
+health OK, no-op initialize/start/stop, idle shutdown clears manifests and bindings.
 
-Pipeline Runtime exposes four public runtime classes and two public dataclasses.
+Registration explicitly accepts operation: Callable[[RuntimeContext], Awaitable[None]]
+| None; no callback in serialized models. Per-execution independent binding snapshot.
+DAG validation returns the SAME definition; malformed structure -> InvalidManifestError,
+cycle -> RuntimeDependencyError, iterative traversal without a stage-count cap.
+Preserve stable ready-wave ordering: A, B(dep A), C -> A, C, B.
+Reachable module dependencies must exist, be acyclic and point to the same/lower
+RuntimeLayer; static dependencies never generate stage edges.
+Every stage module/binding and detached context must validate before ANY event/effect.
+Pipeline/context UUIDs must agree; supplied trace/UTC times preserved, expiry observational.
+JSON copy/validation uses MetadataRuntime; each callback gets its own stage metadata.
 
-| Symbol | Category | Owner File |
-|--------|----------|------------|
-| PipelineDefinition | Frozen Dataclass | pipeline.py |
-| PipelineStage | Frozen Dataclass | pipeline.py |
-| ManifestRuntime | Runtime Class | manifest.py |
-| ExecutorRuntime | Runtime Class | executor.py |
-| OrchestratorRuntime | Runtime Class | orchestrator.py |
+Actual operation is awaited once per stage. First failure aborts later callbacks.
+Executor alone creates/publishes events through EventBus.create_for_runtime.
+Exact seven schemas/priorities and terminal rules are ADR-007 O-03:
+pipeline.started; stage started -> awaited work -> stage completed; pipeline.completed.
+On ordinary failure stage.failed when allowed then pipeline.failed; cancellation
+pipeline.cancelled. Only ONE logical terminal pipeline attempt. Failure delivering
+stage.completed does not produce a contradictory stage.failed. Terminal-delivery
+failure never creates another terminal. Reasons/logs are safe fixed summaries.
+Original exception object is re-raised; ordered secondary notification errors and
+earlier explicit cause are retained without grouping the primary inside its own cause.
+No KeyboardInterrupt/SystemExit conversion, background task, shield or new status.
 
----
-
-# PIPELINE-API-001 — PipelineStage
-
-### Owner File
-
-`src/kernel/runtime/pipeline.py`
-
-### Category
-
-Frozen Public Dataclass
-
-### Purpose
-
-Represents one executable stage inside a pipeline.
-
----
-
-## Public Fields
-
-| Field | Type |
-|-------|------|
-| stage_id | str |
-| module_id | ModuleId |
-| depends_on | tuple[str, ...] |
-
----
-
-## Derived Properties
-
-| Property | Returns |
-|----------|---------|
-| dependency_count | int |
-| has_dependencies | bool |
-
----
-
-## Validation Rules
-
-- stage_id unique within pipeline;
-- depends_on references existing stages;
-- immutable tuple.
-
----
-
-# PIPELINE-API-002 — PipelineDefinition
-
-### Owner File
-
-`src/kernel/runtime/pipeline.py`
-
-### Category
-
-Frozen Public Dataclass
-
-### Purpose
-
-Immutable pipeline execution graph.
+Instance busy guards reject re-entry/concurrent execute/mutation with RuntimeStateError
+and release in finally. Read-only registry/health remains available.
+Canonical acceptance is tests/kernel/test_pipeline.py, 100% executable-line coverage
+for all four production files, no exclusions/skips/xfail; Windows/Linux Pyright,
+Ruff, discovered full Pytest, smoke and latest-head required CI. Full DI Pipeline
+scope cleanup/Session composition/Main partial-startup remains KR-010, not this module.
 
 ---
-
-## Public Fields
-
-| Field | Type |
-|-------|------|
-| pipeline_id | PipelineId |
-| stages | tuple[PipelineStage, ...] |
-
----
-
-## Derived Properties
-
-| Property | Returns |
-|----------|---------|
-| stage_count | int |
-| is_empty | bool |
-
----
-
-## Validation Rules
-
-- pipeline_id valid;
-- stage IDs unique;
-- DAG only.
-
----
-
-# PIPELINE-API-003 — ManifestRuntime
-
-### Owner File
-
-`src/kernel/runtime/manifest.py`
-
-### Category
-
-Runtime Class
-
-### Purpose
-
-Owns pipeline validation.
-
----
-
-## Public Methods
-
-### validate()
-
-```python
-def validate(definition: PipelineDefinition) -> PipelineDefinition
-```
-
-Returns validated immutable pipeline definition.
-
----
-
-### validate_stage_ids()
-
-Validates unique stage identifiers.
-
----
-
-### validate_dependencies()
-
-Validates dependency references.
-
----
-
-### validate_dag()
-
-Validates DAG topology.
-
-Raises PipelineCycleError.
-
----
-
-## Raises
-
-- ValidationError
-- PipelineCycleError
-- PipelineDefinitionError
-
----
-
-# PIPELINE-API-004 — ExecutorRuntime
-
-### Owner File
-
-`src/kernel/runtime/executor.py`
-
-### Category
-
-Runtime Class
-
-### Implements
-
-RuntimeContract
-
-### Purpose
-
-Executes validated PipelineDefinitions.
-
----
-
-## Public Methods
-
-### execute()
-
-```python
-def execute(
-    definition: PipelineDefinition,
-    context: RuntimeContext,
-) -> None
-```
-
-Executes the complete pipeline.
-
-Publishes lifecycle events.
-
----
-
-### execute_stage()
-
-Executes one PipelineStage.
-
-Returns stage result.
-
----
-
-### execution_order()
-
-Returns immutable execution order.
-
-Testing only.
-
----
-
-### health()
-
-Returns runtime health.
-
----
-
-## Event Publication
-
-ExecutorRuntime publishes:
-
-- PIPELINE_STARTED
-- STAGE_STARTED
-- STAGE_COMPLETED
-- STAGE_FAILED
-- PIPELINE_COMPLETED
-
----
-
-## Raises
-
-- PipelineExecutionError
-- ValidationError
-- EventDispatchError
-
----
-
-# PIPELINE-API-005 — OrchestratorRuntime
-
-### Owner File
-
-`src/kernel/runtime/orchestrator.py`
-
-### Category
-
-Runtime Class
-
-### Implements
-
-RuntimeContract
-
-### Purpose
-
-Coordinates runtime module registration and pipeline execution.
-
----
-
-## Public Methods
-
-### register_module()
-
-Registers RuntimeModuleManifest.
-
-Raises DuplicateModuleError.
-
----
-
-### unregister_module()
-
-Removes RuntimeModuleManifest.
-
-Raises UnknownModuleError.
-
----
-
-### modules()
-
-Returns immutable RuntimeModuleManifest tuple.
-
----
-
-### execute()
-
-```python
-def execute(
-    definition: PipelineDefinition,
-    context: RuntimeContext,
-) -> None
-```
-
-Validates and executes pipeline.
-
----
-
-### contains()
-
-Returns whether module exists.
-
----
-
-### health()
-
-Returns runtime health.
-
----
-
-## Imported By
-
-RuntimeKernel
-
-BootstrapRuntime
-
-Tests
-
----
-
-## Raises
-
-- DuplicateModuleError
-- UnknownModuleError
-- ValidationError
-- PipelineExecutionError
-
----
-
-# Pipeline Runtime Import Matrix
-
-| Consumer Runtime | Allowed API |
-|------------------|-------------|
-| RuntimeKernel | OrchestratorRuntime |
-| BootstrapRuntime | OrchestratorRuntime |
-| ExecutorRuntime | PipelineDefinition, PipelineStage |
-| ManifestRuntime | PipelineDefinition |
-| Tests | Entire Pipeline Runtime API |
-
----
-
-# Pipeline Runtime Exception Matrix
-
-| API | Raises |
-|-----|--------|
-| validate | ValidationError |
-| validate_dag | PipelineCycleError |
-| execute | PipelineExecutionError |
-| execute_stage | PipelineExecutionError |
-| register_module | DuplicateModuleError |
-| unregister_module | UnknownModuleError |
-
----
-
-# Pipeline Runtime API Invariants
-
-Pipeline Runtime guarantees:
-
-1. PipelineDefinition is immutable.
-2. PipelineStage is immutable.
-3. ManifestRuntime owns validation only.
-4. ExecutorRuntime owns execution only.
-5. OrchestratorRuntime owns coordination only.
-6. Stage execution order is deterministic.
-7. DAG validation completes before execution.
-
----
-
-# KR-008 + KR-009 API Summary
-
-| Runtime | Classes | Public Methods |
-|---------|--------:|---------------:|
-| Runtime Context Runtime | 3 | 16 |
-| Pipeline Runtime | 5 | 18 |
-
-Total public methods documented in this part: **34**.
-
----
-
-**Document Status:** IN PROGRESS (Part 8 of 12)
 
 <!-- ========================================================================= -->
 <!-- M-03 PART 9 — KR-010 Bootstrap Runtime Public API -->
