@@ -3650,7 +3650,8 @@ This section defines:
 - correlation rules.
 - lifecycle rules.
 
-RuntimeContext is immutable during propagation.
+RuntimeContext fields are frozen; nested JSON is detached at each KR-008 owner
+boundary and remains locally editable (ADR-004 P-04, ADR-006 C-03).
 
 ---
 
@@ -3668,19 +3669,18 @@ RuntimeContext
 
 ContextRuntime owns RuntimeContext.
 
-MetadataRuntime owns metadata mutation.
+MetadataRuntime owns metadata validation and detached transformations.
 
-SessionRuntime owns storage.
+SessionRuntime owns its session registry; ContextRuntime owns the active reference.
 
 ---
 
 ## CONTEXT-001 — Context Is Immutable During Propagation
 
-After RuntimeContext enters EventBusRuntime it becomes immutable.
-
-Only MetadataRuntime may create a new RuntimeContext snapshot.
-
-Mutation is forbidden.
+Frozen contract fields are unchanged. Nested JSON is detached at the owning
+runtime boundary under ADR-004 P-04; edits to a received snapshot are local only.
+Context owns the active reference, Session owns its registry and Metadata owns
+JSON transformations. No handler/caller edits their canonical storage implicitly.
 
 ---
 
@@ -3700,120 +3700,39 @@ Existing snapshots remain unchanged.
 
 ---
 
-# RuntimeContext Schema
+# Canonical Context/Trace Schema and Propagation
 
-**Canonical Dataclass**
+AB-00D and approved ADR-006 C-03/C-04 define exactly:
 
-<table columnSizing="equal">
-  <table-row>
-    <table-cell>**Field**</table-cell>
-    <table-cell>**Type**</table-cell>
-    <table-cell>**Required**</table-cell>
-  </table-row>
-  <table-row><table-cell>trace</table-cell><table-cell>TraceContext</table-cell><table-cell>Yes</table-cell></table-row>
-  <table-row><table-cell>session_id</table-cell><table-cell>SessionId</table-cell><table-cell>Yes</table-cell></table-row>
-  <table-row><table-cell>pipeline_id</table-cell><table-cell>PipelineId \| None</table-cell><table-cell>No</table-cell></table-row>
-  <table-row><table-cell>module_id</table-cell><table-cell>ModuleId \| None</table-cell><table-cell>No</table-cell></table-row>
-  <table-row><table-cell>metadata</table-cell><table-cell>Mapping[str, Any]</table-cell><table-cell>Yes</table-cell></table-row>
-</table>
+| RuntimeContext field | Type |
+| --- | --- |
+| session_id | SessionId (UUID-backed) |
+| pipeline_id | PipelineId (UUID-backed) |
+| runtime_layer | RuntimeLayer |
+| trace | TraceContext |
+| metadata | Metadata (canonical JSONDict) |
+| created_at | aware UTC datetime |
+| expires_at | aware UTC datetime or None |
 
-Field set is immutable.
-
----
-
-# TraceContext Schema
-
-**Canonical Dataclass**
-
-<table columnSizing="equal">
-  <table-row>
-    <table-cell>**Field**</table-cell>
-    <table-cell>**Type**</table-cell>
-    <table-cell>**Required**</table-cell>
-  </table-row>
-  <table-row><table-cell>trace_id</table-cell><table-cell>TraceId</table-cell><table-cell>Yes</table-cell></table-row>
-  <table-row><table-cell>parent_trace_id</table-cell><table-cell>TraceId \| None</table-cell><table-cell>No</table-cell></table-row>
-  <table-row><table-cell>root_trace_id</table-cell><table-cell>TraceId</table-cell><table-cell>Yes</table-cell></table-row>
-  <table-row><table-cell>span_depth</table-cell><table-cell>int</table-cell><table-cell>Yes</table-cell></table-row>
-  <table-row><table-cell>created_at</table-cell><table-cell>datetime</table-cell><table-cell>Yes</table-cell></table-row>
-</table>
-
-TraceContext is immutable.
-
----
-
-# Trace Identifier Registry
-
-| Identifier | Owner | Lifetime |
-|------------|-------|----------|
-| trace_id | ContextRuntime | One RuntimeEvent chain. |
-| root_trace_id | ContextRuntime | Entire execution tree. |
-| parent_trace_id | PublisherRuntime | Parent RuntimeEvent only. |
-
-Identifiers never change after creation.
-
----
-
-# Trace Generation Rules
-
-ContextRuntime generates identifiers.
-
-<table columnSizing="equal">
-  <table-row>
-    <table-cell>**Identifier**</table-cell>
-    <table-cell>**Generation Rule**</table-cell>
-  </table-row>
-  <table-row><table-cell>trace_id</table-cell><table-cell>UUIDv7.</table-cell></table-row>
-  <table-row><table-cell>root_trace_id</table-cell><table-cell>UUIDv7 created once per root execution.</table-cell></table-row>
-  <table-row><table-cell>parent_trace_id</table-cell><table-cell>Copied from parent RuntimeEvent trace_id.</table-cell></table-row>
-</table>
-
-Generation ownership is immutable.
-
----
-
-# Trace Tree Model
-
-Nested RuntimeEvents create a trace tree.
-
-```text
-root_trace_id
-      │
-      ▼
-trace A
-      │
-      ├──────── trace B
-      │
-      ├──────── trace C
-      │
-      └──────── trace D
-```
-
-All child traces share the same root_trace_id.
-
----
-
-# Span Depth Rules
-
-<table columnSizing="equal">
-  <table-row>
-    <table-cell>**RuntimeEvent**</table-cell>
-    <table-cell>**span_depth**</table-cell>
-  </table-row>
-  <table-row><table-cell>Root RuntimeEvent</table-cell><table-cell>0</table-cell></table-row>
-  <table-row><table-cell>Child RuntimeEvent</table-cell><table-cell>1</table-cell></table-row>
-  <table-row><table-cell>Grandchild RuntimeEvent</table-cell><table-cell>2</table-cell></table-row>
-</table>
-
-Depth increments exactly by one.
+Derived properties: is_expired, trace_id, root_trace_id, depth. There is no stored
+module_id, root_trace_id, span_depth or additional context field.
+TraceContext contains trace_id, parent_trace_id (optional), correlation_id
+(optional). Supplied trace and IDs are preserved; Context/Session do not generate
+trace IDs or require UUIDv7. Existing root/depth properties remain observational;
+no new trace tree builder or trace-generation owner is introduced.
+Expiration remains readable, with no automatic eviction or background policy.
+Context/Session create/read/replace/update detach metadata on ingress and egress.
+The exact approved [KR-008 contract](../wave1/KR-008_PIPELINE_CONTEXT.md) controls
+boundary validation and session coordination; ADR-004 P-04 replaces deep-frozen
+and identity claims. Other runtime trace behavior is not redesigned.
 
 ---
 
 # Metadata Registry
 
-Metadata belongs exclusively to MetadataRuntime.
+Metadata validation and transformations belong exclusively to MetadataRuntime.
 
-Metadata is a mapping.
+Metadata is the canonical dict-root JSONDict, not an arbitrary mapping.
 
 Allowed value types:
 
@@ -3821,13 +3740,12 @@ Allowed value types:
 - int
 - float
 - bool
-- UUID
-- datetime
 - list
 - dict
 - None
 
-Objects are forbidden.
+Non-JSON objects, cycles, invalid Unicode and non-finite floats are forbidden.
+The maximum is 256 dict/list levels, counting the root (ADR-004 P-04).
 
 ---
 
@@ -3863,7 +3781,7 @@ These keys may not be repurposed.
   <table-row><table-cell>Create metadata</table-cell><table-cell>MetadataRuntime</table-cell></table-row>
   <table-row><table-cell>Replace metadata snapshot</table-cell><table-cell>MetadataRuntime</table-cell></table-row>
   <table-row><table-cell>Read metadata</table-cell><table-cell>All runtimes</table-cell></table-row>
-  <table-row><table-cell>Store metadata</table-cell><table-cell>SessionRuntime</table-cell></table-row>
+  <table-row><table-cell>Store detached metadata</table-cell><table-cell>ContextRuntime active snapshot; SessionRuntime session snapshots (separate storage).</table-cell></table-row>
 </table>
 
 Metadata ownership never overlaps.
@@ -3886,7 +3804,7 @@ Metadata Update
 Context V2
 ```
 
-Context V1 remains immutable.
+Context V1 fields remain frozen; its detached nested JSON is local to that snapshot.
 
 ---
 
@@ -3922,7 +3840,10 @@ RuntimeContext inheritance depends on execution boundary.
   <table-row><table-cell>OrchestratorRuntime</table-cell><table-cell>Read-only.</table-cell></table-row>
 </table>
 
-Only ContextRuntime creates new snapshots.
+ContextRuntime creates/replaces its active snapshot; SessionRuntime captures its
+independent registry and return snapshots. Both use MetadataRuntime transformations
+and detach public reads (ADR-006 C-02/C-03). This does not change another module's
+composition or trace-generation responsibility.
 
 ---
 
@@ -3930,7 +3851,7 @@ Only ContextRuntime creates new snapshots.
 
 ## Runtime Boundary
 
-Same RuntimeContext instance.
+Detached value snapshots, not object identity (ADR-004 P-04).
 
 ## Session Boundary
 
@@ -3942,7 +3863,8 @@ Inherited RuntimeContext plus pipeline_id.
 
 ## Module Boundary
 
-Inherited RuntimeContext plus module_id.
+Inherited context values; module information belongs to existing metadata,
+not an added RuntimeContext field (AB-00D).
 
 ---
 
@@ -3990,27 +3912,20 @@ No shared mutable metadata exists.
 
 SessionRuntime stores RuntimeContext snapshots.
 
-<table columnSizing="equal">
-  <table-row>
-    <table-cell>**Session State**</table-cell>
-    <table-cell>**Context Behaviour**</table-cell>
-  </table-row>
-  <table-row><table-cell>CREATED</table-cell><table-cell>Create RuntimeContext.</table-cell></table-row>
-  <table-row><table-cell>ACTIVE</table-cell><table-cell>Context available.</table-cell></table-row>
-  <table-row><table-cell>IDLE</table-cell><table-cell>Context retained.</table-cell></table-row>
-  <table-row><table-cell>EXPIRED</table-cell><table-cell>Context frozen.</table-cell></table-row>
-  <table-row><table-cell>REMOVED</table-cell><table-cell>Context destroyed.</table-cell></table-row>
-</table>
+No session lifecycle state machine or vocabulary is introduced. Successful create
+stores a detached snapshot and makes that session active; same-ID create replaces
+without reordering. Reads/updates return independent snapshots. Expiration remains
+observational, not a new session state or eviction policy (ADR-006 C-02/C-03).
 
 ---
 
 # Context Cleanup Rules
 
-ContextRuntime clears RuntimeContext only after:
-
-- session removal;
-- runtime shutdown;
-- bootstrap failure cleanup.
+ContextRuntime.clear is an explicit idempotent operation; shutdown clears only
+the active context. SessionRuntime.remove clears active context only on a matching
+session_id. Clearing/shutting down Context does not delete a Session registry;
+no additional automatic cleanup, DI disposal or expiry gate is introduced
+(ADR-006 C-02/C-03). Bootstrap cleanup remains its existing composition work.
 
 Pipeline completion does not clear session context.
 
@@ -4093,7 +4008,7 @@ Wave 1 guarantees:
 7. Logging uses RuntimeContext for correlation.
 8. Exceptions carry trace identifiers.
 9. RuntimeContext serialization is deterministic.
-10. Metadata keys are append-only.
+10. Metadata updates remain shallow and removal is permitted through MetadataRuntime.
 
 Violating any rule is an Architecture Conflict.
 
@@ -4106,7 +4021,7 @@ Part 7 is complete only if:
 - [x] RuntimeContext schema defined.
 - [x] TraceContext schema defined.
 - [x] Metadata registry defined.
-- [x] Trace generation rules defined.
+- [x] Trace propagation without KR-008 trace generation defined.
 - [x] Context inheritance registry defined.
 - [x] Context propagation matrix defined.
 - [x] Context isolation rules defined.

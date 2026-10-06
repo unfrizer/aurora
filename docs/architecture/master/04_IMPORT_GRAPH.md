@@ -3366,312 +3366,66 @@ Combined runtime graph contains **zero circular dependencies**.
 
 # KR-008 Import Graph
 
-**Directory**
-
-`src/kernel/runtime/`
-
-**Runtime Layer**
-
-L0
-
-**Owner KR**
-
-KR-008 Runtime Context Runtime
-
----
-
-# Runtime Context Import Graph
-
-Runtime Context Runtime owns creation, storage and propagation of immutable `RuntimeContext`.
-
-It consists of three runtime modules.
-
-Only `ContextRuntime` is public.
-
----
-
-# Runtime Context Module Inventory
-
-| Module | Category | Public |
-|--------|----------|--------|
-| context.py | Public Context Runtime | Yes |
-| metadata.py | Metadata Runtime | Internal Runtime |
-| session.py | Session Runtime | Internal Runtime |
-
----
-
-# Canonical Runtime Context DAG
-
-```text
-contracts/context.py
-        │
-        ▼
- MetadataRuntime
-        │
-        ▼
- SessionRuntime
-        │
-        ▼
- ContextRuntime
-```
-
-RuntimeContext always flows upward.
-
----
-
-# CONTEXT-IMPORT-001 — metadata.py
-
-### Module Category
-
-Metadata Runtime
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-from src.core.types import Metadata
-from src.core.exceptions import MetadataValidationError
-```
-
-Foundation only.
-
----
-
-## Public Export
-
-`MetadataRuntime`
-
----
-
-## Forbidden Imports
-
-metadata.py must never import:
-
-- ContextRuntime
-- SessionRuntime
-- RuntimeKernel
-- EventBusRuntime
-- LifecycleRuntime
-
-MetadataRuntime owns metadata transformations only.
-
----
-
-## Imported By
-
-| Runtime | Purpose |
-|---------|---------|
-| SessionRuntime | Metadata persistence. |
-| ContextRuntime | Metadata replacement. |
-
----
-
-## Ownership Rule
-
-MetadataRuntime owns:
-
-- merge()
-- put()
-- remove()
-- contains()
-- immutable metadata validation.
-
-No runtime mutates metadata directly.
-
----
-
-# CONTEXT-IMPORT-002 — session.py
-
-### Module Category
-
-Session Runtime
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-from src.core.exceptions import SessionNotFoundError
-
-from src.kernel.contracts.context import RuntimeContext
-from src.kernel.runtime.metadata import MetadataRuntime
-```
-
-Imports contracts plus MetadataRuntime only.
-
----
-
-## Public Export
-
-`SessionRuntime`
-
----
-
-## Forbidden Imports
-
-session.py must never import:
-
-- ContextRuntime
-- RuntimeKernel
-- LifecycleRuntime
-- EventBusRuntime
-- ExecutorRuntime
-
-SessionRuntime owns session storage only.
-
----
-
-## Imported By
-
-| Runtime | Purpose |
-|---------|---------|
-| ContextRuntime | Context persistence. |
-| BootstrapRuntime | Initial session creation. |
-
----
-
-## Ownership Rule
-
-SessionRuntime owns:
-
-- create session.
-- update metadata.
-- retrieve RuntimeContext.
-- remove session.
-- clear sessions.
-
----
-
-# CONTEXT-IMPORT-003 — context.py
-
-### Module Category
-
-Public Context Runtime
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-from src.core.exceptions import ContextNotAvailableError
-
-from src.kernel.contracts.context import (
-    RuntimeContext,
-    TraceContext,
-)
-
-from src.kernel.contracts.runtime import RuntimeContract
-
-from src.kernel.runtime.metadata import MetadataRuntime
-from src.kernel.runtime.session import SessionRuntime
-```
-
-Imports contracts plus internal Context runtimes only.
-
----
-
-## Public Export
-
-`ContextRuntime`
-
----
-
-## Forbidden Imports
-
-context.py must never import:
-
-- RuntimeKernel
-- EventBusRuntime
-- LifecycleRuntime
-- OrchestratorRuntime
-- ExecutorRuntime
-
-ContextRuntime exposes context API only.
-
----
-
-## Imported By
-
-| Runtime | Purpose |
-|---------|---------|
-| RuntimeKernel | Public context facade. |
-| ExecutorRuntime | Execution context lookup. |
-| EventBusRuntime | Context propagation. |
-| BootstrapRuntime | Runtime initialization. |
-
----
-
-## Ownership Rule
-
-ContextRuntime owns:
-
-- current RuntimeContext.
-- trace propagation.
-- replacement API.
-- clearing active context.
-
-Session persistence is delegated.
-
----
-
-# Runtime Context Import Matrix
-
-| Module | May Import |
-|--------|------------|
-| metadata.py | Foundation only |
-| session.py | metadata.py + contracts/context.py |
-| context.py | metadata.py, session.py, contracts/context.py, contracts/runtime.py |
-
----
-
-# Runtime Context Reverse Import Matrix
-
-| Target Module | Allowed Importers |
-|--------------|-------------------|
-| metadata.py | SessionRuntime, ContextRuntime |
-| session.py | ContextRuntime, BootstrapRuntime |
-| context.py | RuntimeKernel, ExecutorRuntime, EventBusRuntime |
-
----
-
-# Runtime Context Anti-Cycle Registry
-
-| Forbidden Cycle | Reason |
-|-----------------|--------|
-| ContextRuntime ↔ SessionRuntime | API/storage separation. |
-| SessionRuntime ↔ MetadataRuntime | Storage/metadata separation. |
-| ContextRuntime ↔ MetadataRuntime | API/metadata separation. |
-
----
-
-# Runtime Context Integrity Rules
-
-Runtime Context Runtime guarantees:
-
-1. ContextRuntime is the only public facade.
-2. SessionRuntime owns RuntimeContext persistence.
-3. MetadataRuntime owns metadata transformations.
-4. RuntimeContext is immutable.
-5. Context graph contains zero cycles.
+## Approved KR-008 reconciliation
+
+The exact APPROVED [KR-008 contract](../wave1/KR-008_PIPELINE_CONTEXT.md), compiled
+from AB-00B/D, ADR-004 P-04 and explicitly approved ADR-006 C-01–C-04, governs
+this KR-008 section. Its full signatures and acceptance matrix are canonical.
+
+| File | Sole export | Owner / project dependencies |
+| --- | --- | --- |
+| src/kernel/runtime/context.py | ContextRuntime | KR-008 active context; Foundation, contracts.context/runtime, MetadataRuntime |
+| src/kernel/runtime/metadata.py | MetadataRuntime | KR-008 stateless JSON; Foundation only |
+| src/kernel/runtime/session.py | SessionRuntime | KR-008 session registry; Foundation, contracts.context, ContextRuntime, MetadataRuntime |
+
+Session → Context → Metadata, plus Session → Metadata, is the approved internal
+DAG (ADR-006 C-01). Context never imports Session; no reverse/upward import,
+shared abstraction, DI, event dispatch, pipeline work, network or persistence.
+Existing constructors and three classes remain. RuntimeContext/TraceContext
+fields and all core/lifecycle/event/DI vocabularies are unchanged.
+
+Context implements the exact AB-00D RuntimeContract, with create/current/replace/
+clear/has_context and health. create/replace/current validate and return detached
+snapshots; active storage is private and separately detached. Missing context
+uses RuntimeStateError. Lifecycle initialize/start/stop remain no-op; shutdown
+clears active context only; no new shutdown/expiry state policy.
+
+Metadata merge/put/remove/contains/get keep the exact existing signatures.
+Validate and recursively detach JSON, including both merge inputs and final put
+nesting; shallow key updates and deterministic insertion order, no recursive
+merge. get validates/copies a default only if it is actually returned.
+String keys/Unicode, finite numbers, cycles/non-JSON objects and the 256-container
+depth boundary are checked; repeated acyclic references are detached. Invalid
+metadata/context/session fields use existing ContractValidationError with safe
+messages, not new/nonexistent exceptions or data dumps.
+
+Session create/get/update_metadata/remove/contains/list keep their signatures.
+list returns tuple[SessionId, ...] in insertion order, never contexts; there is
+no Session.clear. Same-ID create atomically replaces the entry without reordering,
+using the existing UUIDv4 PipelineId/L0_KERNEL. Separate session/active/returned
+snapshots; failure changes neither owner. Update/remove affect active context only
+on matching session_id. Missing get/update/remove uses RuntimeStateError.
+Context.clear/shutdown do not delete an independent Session registry.
+
+Supplied TraceContext is preserved, not generated; existing derived root/depth
+properties only. IDs remain UUID-backed; RuntimeLayer is an actual enum member;
+timestamps use aware UTC. Expiration is observational, with no hidden TTL,
+automatic eviction, timestamp-order rule or trace-generation owner invention.
+Frozen dataclass shells do not freeze nested JSON; value equality not identity.
+
+Superseded KR-008 obligations only: opposite Context-to-Session DAG/prohibition,
+context-valued list()/Session.clear, set/get context facade, shallow/deep-frozen/
+identity guarantees, UUIDv7 trace/root generation and incompatible stored fields,
+nonexistent MetadataValidationError/SessionNotFoundError/ContextNotAvailableError.
+No unrelated module obligation is changed.
+
+Canonical acceptance: tests/kernel/test_context.py (KR-011 ownership; ADR-004/006
+explicitly allow active-module changes). All APIs/exports, malformed fields/JSON,
+256/257/extreme depth, nested ingress/egress/session isolation, atomic errors,
+shallow order/defaults, same-ID create and matching/nonmatching active lifetimes;
+at least 95% executable lines per owned file, no acceptance skips/xfail.
+Strict Pyright Windows/Linux, Ruff, collected Pytest, AST DAG/schema/factory
+boundaries, Kernel smoke and required latest-head CI. One module/report/review gate.
 
 ---
 
@@ -4967,8 +4721,8 @@ Internal DI runtimes are private.
     <table-cell>Metadata runtime independent.</table-cell>
   </table-row>
   <table-row>
-    <table-cell>`SessionRuntime → ContextRuntime`</table-cell>
-    <table-cell>Storage independent from facade.</table-cell>
+    <table-cell>`ContextRuntime → SessionRuntime`</table-cell>
+    <table-cell>Reverse edge forbidden; Session-to-Context is explicitly approved by ADR-006 C-01.</table-cell>
   </table-row>
   <table-row>
     <table-cell>`ContextRuntime → RuntimeKernel`</table-cell>
@@ -5335,7 +5089,7 @@ Importing an internal runtime from another runtime is forbidden.
   </table-row>
   <table-row>
     <table-cell>Runtime Context</table-cell>
-    <table-cell>ContextRuntime → SessionRuntime → MetadataRuntime.</table-cell>
+    <table-cell>SessionRuntime → ContextRuntime → MetadataRuntime; SessionRuntime → MetadataRuntime (ADR-006 C-01).</table-cell>
   </table-row>
   <table-row>
     <table-cell>Pipeline Runtime</table-cell>
