@@ -4171,352 +4171,64 @@ Ordering is immutable.
 
 # KR-007 Public API Registry
 
-**Directory**
-
-`src/kernel/runtime/`
-
-**Runtime Layer**
-
-L0
-
-**Owner KR**
-
-KR-007 Event Bus Runtime
-
----
-
-# Event Bus Runtime Public API
-
-Event Runtime exposes four runtime classes.
-
-| Symbol | Category | Owner File |
-|--------|----------|------------|
-| EventBusRuntime | Runtime Class | bus.py |
-| PublisherRuntime | Runtime Class | publisher.py |
-| DispatcherRuntime | Runtime Class | dispatcher.py |
-| SubscriberRuntime | Runtime Class | subscriber.py |
-
----
-
-# EVENT-API-001 — EventBusRuntime
-
-### Owner File
-
-`src/kernel/runtime/bus.py`
-
-### Category
-
-Runtime Class
-
-### Implements
-
-RuntimeContract
-
-### Purpose
-
-Canonical public Event Bus.
-
----
-
-## Public Methods
-
-### publish()
-
-```python
-def publish(event: RuntimeEvent) -> None
-```
-
-Publishes validated RuntimeEvent.
-
-Raises:
-
-- EventValidationError
-
----
-
-### publish_many()
-
-Publishes immutable event collection.
-
----
-
-### subscribe()
-
-Registers event handler.
-
----
-
-### unsubscribe()
-
-Removes event handler.
-
----
-
-### handlers()
-
-Returns immutable handler snapshot.
-
----
-
-### initialize()
-
-Initializes Event Runtime.
-
----
-
-### shutdown()
-
-Disposes subscriber registry.
-
----
-
-### health()
-
-Returns Event Runtime health.
-
----
-
-# EVENT-API-002 — PublisherRuntime
-
-### Owner File
-
-`src/kernel/runtime/publisher.py`
-
-### Category
-
-Runtime Class
-
-### Purpose
-
-Owns RuntimeEvent creation and validation.
-
----
-
-## Public Methods
-
-### create()
-
-```python
-def create(
-    event_type: str,
-    payload: Payload,
-    context: RuntimeContext,
-    priority: EventPriority = EventPriority.NORMAL,
-) -> RuntimeEvent
-```
-
-Creates immutable RuntimeEvent.
-
----
-
-### publish()
-
-Validates and publishes one RuntimeEvent.
-
----
-
-### publish_many()
-
-Publishes immutable RuntimeEvent collection.
-
----
-
-## Validation Responsibilities
-
-Publisher validates:
-
-- payload
-- trace
-- headers
-- event type
-- priority
-
----
-
-## Raises
-
-- EventValidationError
-
----
-
-# EVENT-API-003 — DispatcherRuntime
-
-### Owner File
-
-`src/kernel/runtime/dispatcher.py`
-
-### Category
-
-Runtime Class
-
-### Purpose
-
-Dispatches RuntimeEvents to subscribers.
-
----
-
-## Public Methods
-
-### dispatch()
-
-Dispatches one RuntimeEvent.
-
----
-
-### dispatch_many()
-
-Dispatches immutable RuntimeEvent collection.
-
----
-
-### dispatch_sync()
-
-Synchronous dispatch helper.
-
-Testing only.
-
----
-
-### dispatch_async()
-
-Asynchronous dispatch helper.
-
-Production runtime.
-
----
-
-## Dispatch Guarantees
-
-- deterministic ordering;
-- priority ordering;
-- registration-order stability.
-
----
-
-## Raises
-
-- EventDispatchError
-- EventHandlerError
-
----
-
-# EVENT-API-004 — SubscriberRuntime
-
-### Owner File
-
-`src/kernel/runtime/subscriber.py`
-
-### Category
-
-Runtime Class
-
-### Purpose
-
-Owns subscriber registry.
-
----
-
-## Public Methods
-
-### subscribe()
-
-Registers handler for event type.
-
-Raises DuplicateSubscriberError.
-
----
-
-### unsubscribe()
-
-Removes handler.
-
-Raises UnknownSubscriberError.
-
----
-
-### handlers_for()
-
-Returns immutable handler tuple.
-
----
-
-### contains()
-
-Checks handler registration.
-
----
-
-### clear()
-
-Clears registry.
-
-Testing only.
-
----
-
-## Registration Rules
-
-- duplicate registration forbidden;
-- registration order preserved;
-- immutable handler snapshots.
-
----
-
-## Raises
-
-- DuplicateSubscriberError
-- UnknownSubscriberError
-
----
-
-# Event Runtime Import Matrix
-
-| Consumer Runtime | Allowed API |
-|------------------|-------------|
-| RuntimeKernel | EventBusRuntime |
-| LifecycleRuntime | EventBusRuntime |
-| PipelineRuntime | EventBusRuntime |
-| ContextRuntime | EventBusRuntime |
-| Tests | Entire event runtime API |
-
----
-
-# Event Runtime Exception Matrix
-
-| API | Raises |
-|-----|--------|
-| publish | EventValidationError |
-| publish_many | EventValidationError |
-| create | EventValidationError |
-| dispatch | EventDispatchError |
-| dispatch_async | EventDispatchError |
-| subscribe | DuplicateSubscriberError |
-| unsubscribe | UnknownSubscriberError |
-
----
-
-# Event Runtime API Invariants
-
-Event Runtime guarantees:
-
-1. RuntimeEvent is immutable.
-2. Publisher owns creation.
-3. Dispatcher owns execution.
-4. Subscriber owns registry.
-5. EventBusRuntime owns public API.
-6. Dispatch ordering is deterministic.
-7. Handler registry snapshots are immutable.
-
----
+**Authority:** APPROVED ADR-005 E-01–E-04, ADR-004 P-04 and AB-00C/D (2026-10-06).
+The exact signatures and acceptance contract are `../wave1/KR-007_EVENT_BUS.md`.
+Only KR-007 entries are reconciled; other module contracts remain unchanged.
+
+| File | Export | Responsibility | Concrete dependencies |
+| --- | --- | --- | --- |
+| bus.py | EventBusRuntime | Public facade/composition | Publisher, Dispatcher, Subscriber |
+| publisher.py | PublisherRuntime | Sole new event factory, validation, publication | Dispatcher |
+| dispatcher.py | DispatcherRuntime | Sequential snapshot delivery | Subscriber |
+| subscriber.py | SubscriberRuntime | Instance-local registry | None |
+
+| Class | Exact method names |
+| --- | --- |
+| EventBusRuntime | subscribe, unsubscribe, async publish, async publish_many, create_for_runtime, handlers, contains, clear; async initialize/start/stop/shutdown, health; runtime_name/runtime_layer properties |
+| PublisherRuntime | create, validate, async publish, async publish_many |
+| DispatcherRuntime | async dispatch, async dispatch_many |
+| SubscriberRuntime | subscribe, unsubscribe, handlers, contains, clear |
+
+Constructors remain Bus(), Subscriber(), Dispatcher(subscribers), Publisher(dispatcher).
+Exact argument/return annotations are compiled in the referenced module contract;
+no new public symbols or compatibility methods. No handlers_for, dispatch_sync,
+dispatch_async, headers or handler-priority API. All publication/dispatch is async.
+Runtime identity is event_bus/L0_KERNEL; health is OK. Four lifecycle methods retain
+the AB-00D contract; shutdown clears registration without adding a status owner.
+
+Publisher is the only new logical RuntimeEvent constructor. Facade creation delegates
+without becoming another factory. Standard-library copies of existing events preserve
+all identity fields. Frozen event shells contain detached, locally mutable JSON;
+caller, captured batch and sibling handler data are recursively isolated.
+
+Validate complete batches before any handler. Reject invalid event fields/JSON with
+EventValidationError; JSON is string-keyed dict/list/primitive, finite floats, valid
+Unicode, no cycles or non-JSON objects, maximum 256 container levels including root.
+Repeated acyclic references are accepted and detached without coercion.
+
+Events are ordered CRITICAL -> HIGH -> NORMAL -> LOW -> BACKGROUND, stable input
+FIFO within priority. Handlers run awaited in insertion order. Capture a handler
+tuple per event; registry mutations affect later events, never that tuple. Nested
+publication runs inline; no tasks, queue or re-entry rejection. Duplicate registration
+and missing unsubscription raise EventHandlerError without registry mutation. Matching
+is case-sensitive and membership semantics stay unchanged. Empty dispatch is a no-op.
+Ordinary handler Exception aborts remaining delivery and becomes EventHandlerError
+with original cause and safe handler identity. Cancellation/BaseException propagate.
+Shutdown clears subscribers; no additional lifecycle state or publication gate.
+
+The only KR-007 custom failures are existing EventValidationError (invalid event
+fields/data) and EventHandlerError (duplicate/missing registration, ordinary handler
+failure). Original failure remains the cause; no EventDispatchError,
+DuplicateSubscriberError or UnknownSubscriberError is added to Foundation.
 
 # KR-006 + KR-007 API Summary
 
 | Runtime | Classes | Public Methods |
 |---------|--------:|---------------:|
 | Lifecycle Runtime | 3 | 17 |
-| Event Bus Runtime | 4 | 19 |
+| Event Bus Runtime | 4 | 24 |
 
-Total public methods documented in this part: **36**.
+Total methods in the displayed module rows: **41** (constructors/properties excluded).
 
 ---
 
@@ -5945,6 +5657,14 @@ pending cleanup. No other module's API is changed by this replacement.
 ---
 
 # KR-007 Behavioral Registry (Event Bus)
+
+Canonical clarification: APPROVED ADR-005 E-01–E-04 and the exact
+`../wave1/KR-007_EVENT_BUS.md` contract supersede legacy sync-only publication,
+obsolete method names and exception rows for KR-007 only. publish/publish_many
+and dispatch/dispatch_many are async, awaited sequentially; subscription is sync.
+Detached JSON/captured handler snapshots follow ADR-004 P-04. Existing
+EventValidationError/EventHandlerError are the only KR-007 custom error mappings;
+cancellation/BaseException propagate. No new Runtime, vocabulary or schema field.
 
 <table><table-section header><table-row header><table-cell header>API</table-cell><table-cell header>Side Effects</table-cell><table-cell header>Thread Safety</table-cell></table-row></table-section><table-row><table-cell>publish()</table-cell><table-cell>Dispatch handlers</table-cell><table-cell>SINGLE_THREAD</table-cell></table-row><table-row><table-cell>publish_many()</table-cell><table-cell>Dispatch handlers</table-cell><table-cell>SINGLE_THREAD</table-cell></table-row><table-row><table-cell>create()</table-cell><table-cell>None</table-cell><table-cell>SAFE</table-cell></table-row><table-row><table-cell>dispatch()</table-cell><table-cell>Execute handlers</table-cell><table-cell>SINGLE_THREAD</table-cell></table-row><table-row><table-cell>subscribe()</table-cell><table-cell>Mutate registry</table-cell><table-cell>SINGLE_THREAD</table-cell></table-row><table-row><table-cell>unsubscribe()</table-cell><table-cell>Mutate registry</table-cell><table-cell>SINGLE_THREAD</table-cell></table-row></table>
 

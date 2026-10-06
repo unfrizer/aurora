@@ -117,6 +117,12 @@ Ownership never overlaps.
 
 ## REGISTRY-003 — Events Are Immutable
 
+KR-007 clarification (APPROVED ADR-004 P-04 / ADR-005): AB-00D's existing
+RuntimeEvent shell/fields are unchanged. Nested JSON is recursively detached at
+creation/publication and per handler, not deeply frozen. Local edits never affect
+caller/captured/sibling data. Legacy headers/phase/queue examples below do not
+extend the approved event schema or authorize additional KR-007 mechanisms.
+
 Runtime events are immutable value objects.
 
 After creation the following fields may never change:
@@ -3214,7 +3220,9 @@ RuntimeEvent
       └────────► Subscriber D
 ```
 
-Every subscriber receives the same immutable RuntimeEvent instance.
+Each handler receives its own detached RuntimeEvent snapshot, preserving all
+logical event identity fields. Frozen shells do not freeze nested JSON leaves;
+object identity between handler snapshots is not guaranteed (ADR-004 P-04).
 
 ---
 
@@ -3412,6 +3420,11 @@ Duplicate `event_id` generation is architecture-breaking.
 
 # Nested Event Publishing
 
+ADR-005 E-04: nested publication is awaited inline through the Bus facade. Capture
+handlers per event as an immutable tuple. Registry mutations cannot change that
+tuple but affect later event snapshots, including nested calls; no hidden queue,
+background task or re-entry rejection. Priority ordering is on batch events.
+
 Subscribers may publish new RuntimeEvents.
 
 Canonical flow:
@@ -3506,11 +3519,10 @@ Failure handling follows Part 4 subscriber policy.
 
 # Event Cancellation Rules
 
-RuntimeEvent dispatch cannot be cancelled after DISPATCH phase begins.
-
-Cancellation is allowed only while event is queued.
-
-Queue cancellation produces no RuntimeEvent.
+ADR-005 E-03: cancellation and other BaseException control flow propagate unchanged
+from handler execution. No shielding, background cleanup or success conversion.
+Ordinary Exception aborts remaining delivery and raises existing EventHandlerError
+with its original cause. KR-007 adds no queue, phase mutation or failure-event factory.
 
 ---
 

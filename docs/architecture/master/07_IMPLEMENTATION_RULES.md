@@ -580,7 +580,7 @@ Environment uses Literal.
 
 RuntimeStatus uses StrEnum.
 
-EventPriority uses StrEnum.
+EventPriority uses the five-member IntEnum fixed by AB-00C.
 
 No duplicated literals.
 
@@ -1070,124 +1070,40 @@ Bootstrap initializes eager services after registration.
 
 # 11. Event Constitution
 
-KR-007 owns events.
+**Authority:** APPROVED ADR-005 E-01–E-04, ADR-004 P-04 and AB-00C/D (2026-10-06).
+The exact signatures and acceptance contract are `../wave1/KR-007_EVENT_BUS.md`.
+Only KR-007 entries are reconciled; other module contracts remain unchanged.
 
----
+Only PublisherRuntime.create constructs new logical events. Facade creation delegates;
+tests directly construct RuntimeEvent only to test the contract itself. Ordinary
+standard-library copies during dispatch preserve logical identity and are not factories.
+Never add an event.py, EventRuntime, headers field or handler-priority property.
 
-## 11.1 Event Immutability
+Publisher is the only new logical RuntimeEvent constructor. Facade creation delegates
+without becoming another factory. Standard-library copies of existing events preserve
+all identity fields. Frozen event shells contain detached, locally mutable JSON;
+caller, captured batch and sibling handler data are recursively isolated.
 
-RuntimeEvent is frozen.
+Validate complete batches before any handler. Reject invalid event fields/JSON with
+EventValidationError; JSON is string-keyed dict/list/primitive, finite floats, valid
+Unicode, no cycles or non-JSON objects, maximum 256 container levels including root.
+Repeated acyclic references are accepted and detached without coercion.
 
-Never mutate payload.
+Events are ordered CRITICAL -> HIGH -> NORMAL -> LOW -> BACKGROUND, stable input
+FIFO within priority. Handlers run awaited in insertion order. Capture a handler
+tuple per event; registry mutations affect later events, never that tuple. Nested
+publication runs inline; no tasks, queue or re-entry rejection. Duplicate registration
+and missing unsubscription raise EventHandlerError without registry mutation. Matching
+is case-sensitive and membership semantics stay unchanged. Empty dispatch is a no-op.
+Ordinary handler Exception aborts remaining delivery and becomes EventHandlerError
+with original cause and safe handler identity. Cancellation/BaseException propagate.
+Shutdown clears subscribers; no additional lifecycle state or publication gate.
 
----
-
-## 11.2 Event Creation Rule
-
-Events are created only through EventRuntime.create().
-
-Never instantiate RuntimeEvent directly outside tests.
-
----
-
-## 11.3 Event Payload Rule
-
-Payload is JSON-compatible.
-
-Allowed:
-
-string
-
-number
-
-bool
-
-null
-
-dict
-
-list
-
-Forbidden:
-
-datetime
-
-Path
-
-UUID
-
-Runtime objects
-
----
-
-## 11.4 Event Timestamp Rule
-
-Always UTC.
-
-Always generated during creation.
-
-Never supplied manually in production.
-
----
-
-## 11.5 Event Dispatch Rule
-
-Publication flow is immutable.
-
-EventRuntime
-
-↓
-
-PublisherRuntime
-
-↓
-
-DispatcherRuntime
-
-↓
-
-Subscribers
-
-No shortcuts.
-
----
-
-## 11.6 Handler Rule
-
-Every handler implements EventHandlerContract.
-
-Signature frozen.
-
-```python
-async def handle(
-    self,
-    event: RuntimeEvent,
-) -> None
-```
-
----
-
-## 11.7 Handler Ordering Rule
-
-Priority first.
-
-Registration order second.
-
-Stable ordering required.
-
----
-
-## 11.8 Failure Propagation Rule
-
-First handler exception aborts dispatch.
-
-Remaining handlers are skipped.
-
-Exception propagates upward.
-
-No silent failures.
-
----
+RuntimeEvent fields remain frozen. Nested JSON may be edited in a detached local
+snapshot without changing canonical/caller/sibling data. Standard-library copying,
+strict object-based validation narrowing and private typed helpers are permitted
+within KR-007; no public Any/Unknown, cross-owner utility or new abstraction.
+All unaffected typing, ownership and build rules remain unchanged.
 
 # 12. Runtime Ownership Rules
 

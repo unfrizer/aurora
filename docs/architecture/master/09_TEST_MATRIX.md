@@ -58,7 +58,7 @@ tests/
 │   ├── test_scope.py
 │   ├── test_resolver.py
 │   ├── test_lifecycle.py
-│   └── test_events.py
+│   └── test_event_bus.py
 │
 └── runtime/
     ├── test_context.py
@@ -337,48 +337,32 @@ Coverage target:
 
 # KR-007 Tests
 
-## tests/kernel/test_events.py
+**Authority:** APPROVED ADR-005 E-01–E-04, ADR-004 P-04 and AB-00C/D (2026-10-06).
+The exact signatures and acceptance contract are `../wave1/KR-007_EVENT_BUS.md`.
+Only KR-007 entries are reconciled; other module contracts remain unchanged.
 
-### Event Bus
+## tests/kernel/test_event_bus.py
 
-- publish()
-- subscribe()
-- unsubscribe()
+Owner KR-011, authorized contract-required adjustments with active KR-007.
 
-### Dispatch
+- Every facade/internal method and constructor/export boundary, exact async APIs.
+- All five event priorities (CRITICAL/HIGH/NORMAL/LOW/BACKGROUND), stable FIFO and
+  sequential insertion-ordered handlers; priority is on events, not handlers.
+- Invalid mandatory fields, trace/IDs, priority, UTC timestamp and dict-root JSON.
+- Non-string keys, non-finite floats, invalid Unicode, cycles/non-JSON values;
+  repeated acyclic references; depth 256 accepted, 257 rejected without RecursionError.
+- Detached caller/create/publication/per-handler/batch data, preserved logical
+  identity fields and validation before any handler side effect.
+- Duplicate/missing registration errors with unchanged registry; tuple snapshots,
+  mutations affecting later/nested events, independent bus instances.
+- Nested inline publication, empty batch/no handlers, first ordinary handler error
+  abort with EventHandlerError/original cause, cancellation/BaseException propagation.
+- Runtime identity/health/lifecycle cleanup and cleared handler references.
 
-- Sync dispatch.
-- Async dispatch.
-- Multiple handlers.
-- Registration order preserved.
-
-### Priority
-
-Dispatch order:
-
-1. Critical
-2. High
-3. Normal
-4. Low
-
-### Event Validation
-
-- Missing payload.
-- Missing trace.
-- Invalid event_type.
-- Invalid session_id.
-
-### Edge Cases
-
-- Handler throws AuroraError.
-- Handler publishes new event.
-- Duplicate subscription ignored.
-
-Coverage target:
-
-100%.
-
----
+Use Publisher/facade for new logical events; contract-only direct construction stays
+in contract tests. No sync wrappers, obsolete method aliases or ignored duplicates.
+Executable-line coverage target: 100%; report actual measured coverage/gaps.
+Ruff, strict Pyright, discovered full Pytest, Kernel smoke and latest-head CI required.
 
 # KR-008 Tests
 
@@ -501,7 +485,7 @@ Coverage target:
 | Resolver | test_resolver.py |
 | Container | test_container.py |
 | Lifecycle | test_lifecycle.py |
-| Event Bus | test_events.py |
+| Event Bus | test_event_bus.py |
 | Context | test_context.py |
 | Pipeline | test_pipeline.py |
 | Executor | test_executor.py |

@@ -2027,309 +2027,51 @@ Lifecycle Runtime owns runtime state transitions only.
 
 # KR-007 — Event Bus Runtime Registry
 
-**Runtime Layer:** L0 Kernel
-
-Directory:
-
-```
-src/kernel/runtime/
-```
-
-Event Bus Runtime owns runtime event publication and dispatch.
-
-Files:
-
-| File | Status | Public API |
-|------|--------|------------|
-| `bus.py` | FROZEN | EventBusRuntime |
-| `publisher.py` | FROZEN | PublisherRuntime |
-| `dispatcher.py` | FROZEN | DispatcherRuntime |
-| `subscriber.py` | FROZEN | SubscriberRuntime |
-
----
-
-# Event Runtime Constitution
-
-Event Runtime owns:
-
-- event creation;
-- subscription registry;
-- publication;
-- dispatch;
-- handler ordering.
-
-Event Runtime never owns:
-
-- logging;
-- lifecycle transitions;
-- DI;
-- runtime context mutation.
-
----
-
-## EVENT-001 — src/kernel/runtime/bus.py
-
-### Owner
-
-KR-007 Event Bus Runtime
-
-### Responsibility
-
-Public Event Bus API.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-- RuntimeKernel
-- LifecycleRuntime
-- PipelineRuntime
-- BootstrapRuntime
-- Tests
-
-### Public Exports
-
-#### Classes
-
-- `EventBusRuntime`
-
-### Public Methods
-
-| Method | Purpose |
-|--------|---------|
-| `subscribe()` | Register handler. |
-| `unsubscribe()` | Remove handler. |
-| `publish()` | Publish one event. |
-| `publish_many()` | Publish event batch. |
-| `handlers()` | Immutable handler snapshot. |
-
-### Internal Ownership
-
-Owns:
-
-- PublisherRuntime
-- DispatcherRuntime
-- SubscriberRuntime
-
-### Forbidden Responsibilities
-
-- handler implementation.
-- runtime lifecycle.
-
----
-
-## EVENT-002 — src/kernel/runtime/publisher.py
-
-### Owner
-
-KR-007 Event Bus Runtime
-
-### Responsibility
-
-Runtime event publisher.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-EventBusRuntime
-
-DispatcherRuntime
-
-Tests
-
-### Public Exports
-
-#### Classes
-
-- `PublisherRuntime`
-
-### Public Methods
-
-| Method | Purpose |
-|--------|---------|
-| `create()` | Create RuntimeEvent. |
-| `publish()` | Publish validated event. |
-| `publish_many()` | Publish immutable event collection. |
-
-### Validation Ownership
-
-Validates RuntimeEvent before dispatch.
-
-### Forbidden Responsibilities
-
-- handler registry.
-- dispatch ordering.
-
----
-
-## EVENT-003 — src/kernel/runtime/dispatcher.py
-
-### Owner
-
-KR-007 Event Bus Runtime
-
-### Responsibility
-
-Dispatch runtime events.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-PublisherRuntime
-
-EventBusRuntime
-
-Tests
-
-### Public Exports
-
-#### Classes
-
-- `DispatcherRuntime`
-
-### Public Methods
-
-| Method | Purpose |
-|--------|---------|
-| `dispatch()` | Dispatch single event. |
-| `dispatch_many()` | Dispatch collection. |
-
-### Dispatch Guarantees
-
-- deterministic ordering;
-- async dispatch;
-- priority ordering;
-- registration-order stability.
-
-### Forbidden Responsibilities
-
-- event creation.
-- handler registration.
-
----
-
-## EVENT-004 — src/kernel/runtime/subscriber.py
-
-### Owner
-
-KR-007 Event Bus Runtime
-
-### Responsibility
-
-Subscriber registry runtime.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-EventBusRuntime
-
-DispatcherRuntime
-
-Tests
-
-### Public Exports
-
-#### Classes
-
-- `SubscriberRuntime`
-
-### Public Methods
-
-| Method | Purpose |
-|--------|---------|
-| `subscribe()` | Register handler. |
-| `unsubscribe()` | Remove handler. |
-| `handlers_for()` | Return immutable handler list. |
-| `contains()` | Check handler registration. |
-
-### Internal Storage
-
-Owns:
-
-```
-dict[str, tuple[EventHandlerContract, ...]]
-```
-
-### Forbidden Responsibilities
-
-- event dispatch.
-- event creation.
-- runtime state.
-
----
-
-# KR-007 Export Matrix
-
-| File | Public Symbols |
-|------|----------------|
-| bus.py | EventBusRuntime |
-| publisher.py | PublisherRuntime |
-| dispatcher.py | DispatcherRuntime |
-| subscriber.py | SubscriberRuntime |
-
----
-
-# KR-007 Dependency Matrix
-
-| File | Allowed Imports |
-|------|------------------|
-| bus.py | publisher.py, dispatcher.py, subscriber.py |
-| publisher.py | contracts.events |
-| dispatcher.py | subscriber.py, contracts.events |
-| subscriber.py | contracts.events |
-
-No imports from LifecycleRuntime or ContainerRuntime.
-
----
-
-# KR-007 Ownership Matrix
-
-| Object | Owner |
-|--------|-------|
-| EventBus public API | EventBusRuntime |
-| RuntimeEvent creation | PublisherRuntime |
-| Handler registry | SubscriberRuntime |
-| Dispatch execution | DispatcherRuntime |
-| Handler ordering | DispatcherRuntime |
-
----
-
-# KR-007 Validation Ownership
-
-| Runtime | Validates |
-|----------|-----------|
-| PublisherRuntime | RuntimeEvent validity |
-| SubscriberRuntime | Duplicate handlers |
-| DispatcherRuntime | Handler ordering |
-| EventBusRuntime | Public API consistency |
-
----
-
-# KR-007 Forbidden Patterns
-
-Event Bus Runtime may never contain:
-
-- mutable global subscribers;
-- logging configuration;
-- runtime lifecycle transitions;
-- dependency injection;
-- filesystem access;
-- HTTP requests.
-
-Event Bus Runtime owns runtime event flow only.
-
----
+**Authority:** APPROVED ADR-005 E-01–E-04, ADR-004 P-04 and AB-00C/D (2026-10-06).
+The exact signatures and acceptance contract are `../wave1/KR-007_EVENT_BUS.md`.
+Only KR-007 entries are reconciled; other module contracts remain unchanged.
+
+| File | Export | Responsibility | Concrete dependencies |
+| --- | --- | --- | --- |
+| bus.py | EventBusRuntime | Public facade/composition | Publisher, Dispatcher, Subscriber |
+| publisher.py | PublisherRuntime | Sole new event factory, validation, publication | Dispatcher |
+| dispatcher.py | DispatcherRuntime | Sequential snapshot delivery | Subscriber |
+| subscriber.py | SubscriberRuntime | Instance-local registry | None |
+
+| Class | Exact method names |
+| --- | --- |
+| EventBusRuntime | subscribe, unsubscribe, async publish, async publish_many, create_for_runtime, handlers, contains, clear; async initialize/start/stop/shutdown, health; runtime_name/runtime_layer properties |
+| PublisherRuntime | create, validate, async publish, async publish_many |
+| DispatcherRuntime | async dispatch, async dispatch_many |
+| SubscriberRuntime | subscribe, unsubscribe, handlers, contains, clear |
+
+Each file exports only its listed class. Subscriber stores a private
+`dict[str, list[EventHandlerContract]]` and returns immutable handler tuples.
+Publisher is consumed by Bus/tests, not Dispatcher; Dispatcher is consumed by
+Publisher/Bus/tests. Foundation, contracts and all runtime ownership stay unchanged.
+
+Publisher is the only new logical RuntimeEvent constructor. Facade creation delegates
+without becoming another factory. Standard-library copies of existing events preserve
+all identity fields. Frozen event shells contain detached, locally mutable JSON;
+caller, captured batch and sibling handler data are recursively isolated.
+
+Validate complete batches before any handler. Reject invalid event fields/JSON with
+EventValidationError; JSON is string-keyed dict/list/primitive, finite floats, valid
+Unicode, no cycles or non-JSON objects, maximum 256 container levels including root.
+Repeated acyclic references are accepted and detached without coercion.
+
+Events are ordered CRITICAL -> HIGH -> NORMAL -> LOW -> BACKGROUND, stable input
+FIFO within priority. Handlers run awaited in insertion order. Capture a handler
+tuple per event; registry mutations affect later events, never that tuple. Nested
+publication runs inline; no tasks, queue or re-entry rejection. Duplicate registration
+and missing unsubscription raise EventHandlerError without registry mutation. Matching
+is case-sensitive and membership semantics stay unchanged. Empty dispatch is a no-op.
+Ordinary handler Exception aborts remaining delivery and becomes EventHandlerError
+with original cause and safe handler identity. Cancellation/BaseException propagate.
+Shutdown clears subscribers; no additional lifecycle state or publication gate.
+
+Tests: `tests/kernel/test_event_bus.py`, owned by KR-011 with approved active-module
+adjustments. No event.py/EventRuntime, utilities, globals, I/O, DI or lifecycle state.
 
 <!-- ========================================================================= -->
 <!-- M-01 PART 6 — KR-008 Runtime Context Runtime + KR-009 Pipeline Runtime -->

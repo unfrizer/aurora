@@ -52,6 +52,7 @@ AuroraError
 ├── ScopeViolationError
 │
 ├── EventBusError
+│   ├── EventValidationError
 │   ├── InvalidEventError
 │   ├── EventPublishError
 │   └── EventHandlerError
@@ -257,6 +258,10 @@ Session resolves Transient after disposal.
 
 # Event Bus Exceptions
 
+Canonical KR-007 mapping: explicitly APPROVED ADR-005 E-03 supersedes conflicting
+legacy M-03/M-06 entries. Foundation classes remain unchanged. Do not introduce
+EventDispatchError, DuplicateSubscriberError or UnknownSubscriberError.
+
 ## EventBusError
 
 Base Event Bus failure.
@@ -265,37 +270,35 @@ Base Event Bus failure.
 
 ## InvalidEventError
 
-Raised before publishing.
+Existing Foundation class retained, but not required by reconciled KR-007.
+Invalid event fields/data now use EventValidationError before any handler effect.
 
-Examples
+## EventValidationError
 
-Missing required event field.
-
-Invalid payload.
+Existing Foundation class used for invalid mandatory event fields, trace/IDs,
+priority, UTC timestamp or JSON. Reject cycles, invalid keys/Unicode/non-finite
+floats/non-JSON objects and depth over 256 containers without coercion or payload
+disclosure. No contract dataclass constructor becomes a hidden validator.
 
 ---
 
 ## EventPublishError
 
-Raised during publish pipeline.
-
-Examples
-
-Dispatcher unavailable.
-
-Event Bus stopped.
+Existing Foundation class retained; reconciled KR-007 adds no stopped-bus policy
+or artificial use of this exception. No lifecycle state ownership moves here.
 
 ---
 
 ## EventHandlerError
 
-Raised when handler throws AuroraError.
+KR-007 raises this existing class for duplicate registration or missing
+unsubscription (without registry mutation) and ordinary handler Exception.
 
 Rules
 
-Original exception preserved as cause.
-
-Handler name included.
+An ordinary handler failure aborts remaining handlers/events; its original
+exception is preserved as cause. Only safe handler identity is included, not
+event data/secrets. Cancellation and other BaseException propagate unchanged.
 
 ---
 
