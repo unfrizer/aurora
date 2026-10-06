@@ -285,6 +285,25 @@ Coverage target:
 
 # KR-006 Tests
 
+## Approved KR-006 lifecycle reconciliation
+
+Apply the exact APPROVED `../wave1/KR-006_LIFECYCLE.md` compiled from AB-00B/D
+and ADR-004 P-05. It supersedes obsolete KR-006 sync lifecycle signatures,
+reset helpers, shutdown-hook APIs, first-error teardown and FAILED-to-STOPPED
+examples below. StateRuntime alone owns the unchanged AB-00B ten-state matrix.
+LifecycleRuntime preserves the current status property and exact existing API;
+HookRuntime preserves only the six BEFORE/AFTER initialize/start/stop hooks.
+Cleanup tracks touched participants, attempts all eligible resources despite
+ordinary errors, preserves ordered causes and cancellation, resumes interrupted
+ownership and clears final participant/hook references. FAILED remains terminal.
+Only the three canonical KR-006 source files and canonical test_lifecycle.py
+(owned by KR-011, explicitly authorized by ADR-004) may change in this module.
+Standard-library cancellation/immutable matrix bookkeeping and existing
+Foundation exceptions are allowed within the same DAG; no higher import is added.
+Tests cover all 100 transitions and P-05 failures/cancellation/idempotency with
+all public APIs exercised and at least 95% executable-line coverage per file.
+Other module declarations, vocabulary and ownership remain unchanged.
+
 ## tests/kernel/test_lifecycle.py
 
 ### State Machine
