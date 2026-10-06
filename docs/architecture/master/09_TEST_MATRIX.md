@@ -366,28 +366,66 @@ Ruff, strict Pyright, discovered full Pytest, Kernel smoke and latest-head CI re
 
 # KR-008 Tests
 
-## tests/runtime/test_context.py
+## Approved KR-008 reconciliation
 
-### Context API
+The exact APPROVED [KR-008 contract](../wave1/KR-008_PIPELINE_CONTEXT.md), compiled
+from AB-00B/D, ADR-004 P-04 and explicitly approved ADR-006 C-01–C-04, governs
+this KR-008 section. Its full signatures and acceptance matrix are canonical.
 
-- set()
-- get()
-- remove()
-- contains()
+| File | Sole export | Owner / project dependencies |
+| --- | --- | --- |
+| src/kernel/runtime/context.py | ContextRuntime | KR-008 active context; Foundation, contracts.context/runtime, MetadataRuntime |
+| src/kernel/runtime/metadata.py | MetadataRuntime | KR-008 stateless JSON; Foundation only |
+| src/kernel/runtime/session.py | SessionRuntime | KR-008 session registry; Foundation, contracts.context, ContextRuntime, MetadataRuntime |
 
-### Metadata
+Session → Context → Metadata, plus Session → Metadata, is the approved internal
+DAG (ADR-006 C-01). Context never imports Session; no reverse/upward import,
+shared abstraction, DI, event dispatch, pipeline work, network or persistence.
+Existing constructors and three classes remain. RuntimeContext/TraceContext
+fields and all core/lifecycle/event/DI vocabularies are unchanged.
 
-- Immutable snapshot.
-- JSON serialization.
+Context implements the exact AB-00D RuntimeContract, with create/current/replace/
+clear/has_context and health. create/replace/current validate and return detached
+snapshots; active storage is private and separately detached. Missing context
+uses RuntimeStateError. Lifecycle initialize/start/stop remain no-op; shutdown
+clears active context only; no new shutdown/expiry state policy.
 
-### Lifetime
+Metadata merge/put/remove/contains/get keep the exact existing signatures.
+Validate and recursively detach JSON, including both merge inputs and final put
+nesting; shallow key updates and deterministic insertion order, no recursive
+merge. get validates/copies a default only if it is actually returned.
+String keys/Unicode, finite numbers, cycles/non-JSON objects and the 256-container
+depth boundary are checked; repeated acyclic references are detached. Invalid
+metadata/context/session fields use existing ContractValidationError with safe
+messages, not new/nonexistent exceptions or data dumps.
 
-- Pipeline scope disposal.
-- Session scope persistence.
+Session create/get/update_metadata/remove/contains/list keep their signatures.
+list returns tuple[SessionId, ...] in insertion order, never contexts; there is
+no Session.clear. Same-ID create atomically replaces the entry without reordering,
+using the existing UUIDv4 PipelineId/L0_KERNEL. Separate session/active/returned
+snapshots; failure changes neither owner. Update/remove affect active context only
+on matching session_id. Missing get/update/remove uses RuntimeStateError.
+Context.clear/shutdown do not delete an independent Session registry.
 
-Coverage target:
+Supplied TraceContext is preserved, not generated; existing derived root/depth
+properties only. IDs remain UUID-backed; RuntimeLayer is an actual enum member;
+timestamps use aware UTC. Expiration is observational, with no hidden TTL,
+automatic eviction, timestamp-order rule or trace-generation owner invention.
+Frozen dataclass shells do not freeze nested JSON; value equality not identity.
 
-100%.
+Superseded KR-008 obligations only: opposite Context-to-Session DAG/prohibition,
+context-valued list()/Session.clear, set/get context facade, shallow/deep-frozen/
+identity guarantees, UUIDv7 trace/root generation and incompatible stored fields,
+nonexistent MetadataValidationError/SessionNotFoundError/ContextNotAvailableError.
+No unrelated module obligation is changed.
+
+Canonical acceptance: tests/kernel/test_context.py (KR-011 ownership; ADR-004/006
+explicitly allow active-module changes). All APIs/exports, malformed fields/JSON,
+256/257/extreme depth, nested ingress/egress/session isolation, atomic errors,
+shallow order/defaults, same-ID create and matching/nonmatching active lifetimes;
+at least 95% executable lines per owned file, no acceptance skips/xfail.
+Strict Pyright Windows/Linux, Ruff, collected Pytest, AST DAG/schema/factory
+boundaries, Kernel smoke and required latest-head CI. One module/report/review gate.
 
 ---
 

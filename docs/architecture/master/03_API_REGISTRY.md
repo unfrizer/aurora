@@ -4240,359 +4240,66 @@ Total methods in the displayed module rows: **41** (constructors/properties excl
 
 # KR-008 Public API Registry
 
-**Directory**
-
-`src/kernel/runtime/`
-
-**Runtime Layer**
-
-L0
-
-**Owner KR**
-
-KR-008 Runtime Context Runtime
-
----
-
-# Runtime Context Runtime Public API
-
-Runtime Context Runtime exposes exactly three runtime classes.
-
-| Symbol | Category | Owner File |
-|--------|----------|------------|
-| ContextRuntime | Runtime Class | context.py |
-| MetadataRuntime | Runtime Class | metadata.py |
-| SessionRuntime | Runtime Class | session.py |
-
----
-
-# CONTEXT-API-001 — ContextRuntime
-
-### Owner File
-
-`src/kernel/runtime/context.py`
-
-### Category
-
-Runtime Class
-
-### Implements
-
-RuntimeContract
-
-### Purpose
-
-Canonical owner of the active RuntimeContext during execution.
-
-ContextRuntime never mutates RuntimeContext.
-
----
-
-## Public Methods
-
-### create()
-
-```python
-def create(
-    session_id: SessionId,
-    pipeline_id: PipelineId,
-    runtime_layer: RuntimeLayer,
-    metadata: Metadata,
-    trace: TraceContext,
-) -> RuntimeContext
-```
-
-Creates immutable RuntimeContext.
-
----
-
-### current()
-
-```python
-def current() -> RuntimeContext
-```
-
-Returns active RuntimeContext snapshot.
-
-Raises `ContextNotAvailableError` when absent.
-
----
-
-### replace()
-
-```python
-def replace(context: RuntimeContext) -> RuntimeContext
-```
-
-Replaces active RuntimeContext with a new immutable snapshot.
-
-Returns the new snapshot.
-
----
-
-### clear()
-
-```python
-def clear() -> None
-```
-
-Removes active RuntimeContext.
-
-Called during session shutdown.
-
----
-
-### has_context()
-
-```python
-def has_context() -> bool
-```
-
-Checks whether an active RuntimeContext exists.
-
----
-
-### health()
-
-```python
-def health() -> HealthStatus
-```
-
-Returns runtime health.
-
----
-
-## Imported By
-
-- RuntimeKernel
-- ExecutorRuntime
-- EventBusRuntime
-- LifecycleRuntime
-- Tests
-
----
-
-## Raises
-
-- ContextNotAvailableError
-- ValidationError
-
----
-
-# CONTEXT-API-002 — MetadataRuntime
-
-### Owner File
-
-`src/kernel/runtime/metadata.py`
-
-### Category
-
-Runtime Class
-
-### Purpose
-
-Owns immutable metadata snapshots.
-
-Never mutates dictionaries in place.
-
----
-
-## Public Methods
-
-### merge()
-
-```python
-def merge(base: Metadata, updates: Metadata) -> Metadata
-```
-
-Returns merged immutable metadata snapshot.
-
----
-
-### put()
-
-```python
-def put(metadata: Metadata, key: str, value: JSONValue) -> Metadata
-```
-
-Returns new metadata snapshot containing inserted key.
-
----
-
-### remove()
-
-```python
-def remove(metadata: Metadata, key: str) -> Metadata
-```
-
-Returns metadata snapshot without key.
-
----
-
-### contains()
-
-```python
-def contains(metadata: Metadata, key: str) -> bool
-```
-
-Checks metadata key existence.
-
----
-
-### get()
-
-```python
-def get(metadata: Metadata, key: str, default: JSONValue | None = None) -> JSONValue | None
-```
-
-Safely reads metadata value.
-
----
-
-## Metadata Rules
-
-- immutable snapshots only;
-- JSON-compatible values only;
-- deterministic merge order.
-
----
-
-## Imported By
-
-ContextRuntime
-
-SessionRuntime
-
-Tests
-
----
-
-## Raises
-
-- ValidationError
-- MetadataValidationError
-
----
-
-# CONTEXT-API-003 — SessionRuntime
-
-### Owner File
-
-`src/kernel/runtime/session.py`
-
-### Category
-
-Runtime Class
-
-### Purpose
-
-Owns RuntimeContext lifecycle for every active session.
-
----
-
-## Public Methods
-
-### create()
-
-Creates RuntimeContext for a new session.
-
-Returns RuntimeContext.
-
----
-
-### get()
-
-```python
-def get(session_id: SessionId) -> RuntimeContext
-```
-
-Returns RuntimeContext for one session.
-
-Raises SessionNotFoundError.
-
----
-
-### update_metadata()
-
-```python
-def update_metadata(session_id: SessionId, metadata: Metadata) -> RuntimeContext
-```
-
-Replaces metadata snapshot.
-
-Returns updated RuntimeContext.
-
----
-
-### remove()
-
-```python
-def remove(session_id: SessionId) -> None
-```
-
-Destroys session RuntimeContext.
-
----
-
-### contains()
-
-Returns whether session exists.
-
----
-
-### list()
-
-Returns immutable tuple of active RuntimeContexts.
-
----
-
-### clear()
-
-Removes all sessions.
-
-Testing only.
-
----
-
-## Imported By
-
-ContextRuntime
-
-BootstrapRuntime
-
-Tests
-
----
-
-## Raises
-
-- SessionNotFoundError
-- ValidationError
-
----
-
-# KR-008 Import Matrix
-
-| Consumer | Allowed API |
-|----------|-------------|
-| RuntimeKernel | ContextRuntime |
-| EventBusRuntime | ContextRuntime |
-| PipelineRuntime | ContextRuntime |
-| LifecycleRuntime | ContextRuntime |
-| Tests | Entire Context Runtime API |
-
----
-
-# KR-008 API Invariants
-
-Runtime Context Runtime guarantees:
-
-1. RuntimeContext is immutable.
-2. Metadata snapshots are immutable.
-3. TraceContext is preserved across replacements.
-4. SessionRuntime owns session lifecycle.
-5. ContextRuntime owns active RuntimeContext only.
-6. MetadataRuntime owns metadata transformation only.
+## Approved KR-008 reconciliation
+
+The exact APPROVED [KR-008 contract](../wave1/KR-008_PIPELINE_CONTEXT.md), compiled
+from AB-00B/D, ADR-004 P-04 and explicitly approved ADR-006 C-01–C-04, governs
+this KR-008 section. Its full signatures and acceptance matrix are canonical.
+
+| File | Sole export | Owner / project dependencies |
+| --- | --- | --- |
+| src/kernel/runtime/context.py | ContextRuntime | KR-008 active context; Foundation, contracts.context/runtime, MetadataRuntime |
+| src/kernel/runtime/metadata.py | MetadataRuntime | KR-008 stateless JSON; Foundation only |
+| src/kernel/runtime/session.py | SessionRuntime | KR-008 session registry; Foundation, contracts.context, ContextRuntime, MetadataRuntime |
+
+Session → Context → Metadata, plus Session → Metadata, is the approved internal
+DAG (ADR-006 C-01). Context never imports Session; no reverse/upward import,
+shared abstraction, DI, event dispatch, pipeline work, network or persistence.
+Existing constructors and three classes remain. RuntimeContext/TraceContext
+fields and all core/lifecycle/event/DI vocabularies are unchanged.
+
+Context implements the exact AB-00D RuntimeContract, with create/current/replace/
+clear/has_context and health. create/replace/current validate and return detached
+snapshots; active storage is private and separately detached. Missing context
+uses RuntimeStateError. Lifecycle initialize/start/stop remain no-op; shutdown
+clears active context only; no new shutdown/expiry state policy.
+
+Metadata merge/put/remove/contains/get keep the exact existing signatures.
+Validate and recursively detach JSON, including both merge inputs and final put
+nesting; shallow key updates and deterministic insertion order, no recursive
+merge. get validates/copies a default only if it is actually returned.
+String keys/Unicode, finite numbers, cycles/non-JSON objects and the 256-container
+depth boundary are checked; repeated acyclic references are detached. Invalid
+metadata/context/session fields use existing ContractValidationError with safe
+messages, not new/nonexistent exceptions or data dumps.
+
+Session create/get/update_metadata/remove/contains/list keep their signatures.
+list returns tuple[SessionId, ...] in insertion order, never contexts; there is
+no Session.clear. Same-ID create atomically replaces the entry without reordering,
+using the existing UUIDv4 PipelineId/L0_KERNEL. Separate session/active/returned
+snapshots; failure changes neither owner. Update/remove affect active context only
+on matching session_id. Missing get/update/remove uses RuntimeStateError.
+Context.clear/shutdown do not delete an independent Session registry.
+
+Supplied TraceContext is preserved, not generated; existing derived root/depth
+properties only. IDs remain UUID-backed; RuntimeLayer is an actual enum member;
+timestamps use aware UTC. Expiration is observational, with no hidden TTL,
+automatic eviction, timestamp-order rule or trace-generation owner invention.
+Frozen dataclass shells do not freeze nested JSON; value equality not identity.
+
+Superseded KR-008 obligations only: opposite Context-to-Session DAG/prohibition,
+context-valued list()/Session.clear, set/get context facade, shallow/deep-frozen/
+identity guarantees, UUIDv7 trace/root generation and incompatible stored fields,
+nonexistent MetadataValidationError/SessionNotFoundError/ContextNotAvailableError.
+No unrelated module obligation is changed.
+
+Canonical acceptance: tests/kernel/test_context.py (KR-011 ownership; ADR-004/006
+explicitly allow active-module changes). All APIs/exports, malformed fields/JSON,
+256/257/extreme depth, nested ingress/egress/session isolation, atomic errors,
+shallow order/defaults, same-ID create and matching/nonmatching active lifetimes;
+at least 95% executable lines per owned file, no acceptance skips/xfail.
+Strict Pyright Windows/Linux, Ruff, collected Pytest, AST DAG/schema/factory
+boundaries, Kernel smoke and required latest-head CI. One module/report/review gate.
 
 ---
 

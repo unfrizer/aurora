@@ -1,7 +1,8 @@
-"""KR-008 session context lifecycle."""
+"""KR-008 detached session-context registry and active-owner coordination."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from uuid import uuid4
 
 from src.core.exceptions import RuntimeStateError
@@ -12,7 +13,7 @@ from src.kernel.runtime.metadata import MetadataRuntime
 
 
 class SessionRuntime:
-    """Own immutable context snapshots for active sessions."""
+    """Own session snapshots independently of caller and active context data."""
 
     def __init__(self, context_runtime: ContextRuntime) -> None:
         self._context_runtime = context_runtime
@@ -33,35 +34,32 @@ class SessionRuntime:
             metadata={} if metadata is None else metadata,
             trace=trace,
         )
-        self._sessions[session_id] = context
-        return context
+        stored = self._snapshot(context)
+        returned = self._snapshot(stored)
+        self._sessions[session_id] = stored
+        return returned
 
     def get(self, session_id: SessionId) -> RuntimeContext:
         try:
-            return self._sessions[session_id]
+            stored = self._sessions[session_id]
         except KeyError as exc:
             raise RuntimeStateError(
                 "Session context does not exist", session_id=session_id
             ) from exc
+        return self._snapshot(stored)
 
     def update_metadata(self, session_id: SessionId, metadata: Metadata) -> RuntimeContext:
         context = self.get(session_id)
-        replacement = RuntimeContext(
-            session_id=context.session_id,
-            pipeline_id=context.pipeline_id,
-            runtime_layer=context.runtime_layer,
-            trace=context.trace,
-            metadata=self._metadata.merge(context.metadata, metadata),
-            created_at=context.created_at,
-            expires_at=context.expires_at,
-        )
-        self._sessions[session_id] = replacement
+        replacement = replace(context, metadata=self._metadata.merge(context.metadata, metadata))
+        stored = self._snapshot(replacement)
+        returned = self._snapshot(stored)
         if (
             self._context_runtime.has_context()
             and self._context_runtime.current().session_id == session_id
         ):
-            self._context_runtime.replace(replacement)
-        return replacement
+            self._context_runtime.replace(stored)
+        self._sessions[session_id] = stored
+        return returned
 
     def remove(self, session_id: SessionId) -> None:
         self.get(session_id)
@@ -77,6 +75,10 @@ class SessionRuntime:
 
     def list(self) -> tuple[SessionId, ...]:
         return tuple(self._sessions)
+
+    def _snapshot(self, context: RuntimeContext) -> RuntimeContext:
+        """Detach a stored context whose fields were validated by ContextRuntime."""
+        return replace(context, metadata=self._metadata.merge({}, context.metadata))
 
 
 __all__ = ["SessionRuntime"]
