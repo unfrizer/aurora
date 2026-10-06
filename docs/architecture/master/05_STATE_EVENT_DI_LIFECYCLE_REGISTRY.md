@@ -4036,690 +4036,152 @@ Part 7 is complete only if:
 IN PROGRESS — Part 7 of 10.
 
 <!-- ========================================================================= -->
-<!-- M-05 PART 8 — Pipeline Execution Timeline & Runtime Timeline Registry -->
+<!-- M-05 PART 8 — Approved KR-009 Sequential Pipeline Timeline -->
 <!-- ========================================================================= -->
 
-# Pipeline Execution Timeline Registry
-
-**Owner Runtime**
-
-Pipeline Runtime
-
-**Primary Runtime**
-
-ExecutorRuntime
-
-**Coordinator Runtime**
-
-OrchestratorRuntime
-
-**Related KR**
-
-KR-009 Pipeline Runtime
-
----
-
-# Purpose
-
-This section defines the complete execution timeline of every pipeline executed
-inside Wave 1.
-
-Every pipeline follows the exact same execution sequence.
-
-No runtime may skip, reorder or repeat timeline phases.
-
----
-
-# Pipeline Execution Constitution
-
-Pipeline execution consists of nine immutable phases.
-
-```text
-REQUEST
-   │
-REGISTER
-   │
-VALIDATE
-   │
-QUEUE
-   │
-START
-   │
-EXECUTE STAGES
-   │
-COMPLETE / FAIL / CANCEL
-   │
-STOP
-   │
-DESTROY PIPELINE SCOPE
-```
-
-This order is immutable.
-
----
-
-## PIPELINE-001 — One Execution Context
-
-Each pipeline execution owns exactly one:
-
-- PipelineId
-- RuntimeContext snapshot
-- Pipeline DI Scope
-- Execution Timeline
-
----
-
-## PIPELINE-002 — Stage Order Is Deterministic
-
-Pipeline stages execute strictly according to PipelineDefinition.
-
-Parallel execution is not supported in Wave 1.
-
----
-
-## PIPELINE-003 — Pipeline Scope Isolation
-
-Every pipeline owns one isolated PIPELINE DI scope.
-
-The scope is destroyed immediately after pipeline completion.
-
----
-
-# Canonical Pipeline Timeline
-
-<table columnSizing="equal">
-  <table-row>
-    <table-cell>**Phase**</table-cell>
-    <table-cell>**Owner Runtime**</table-cell>
-    <table-cell>**Runtime Event**</table-cell>
-  </table-row>
-  <table-row><table-cell>Execution Requested</table-cell><table-cell>OrchestratorRuntime</table-cell><table-cell>`orchestrator.pipeline.execution.requested`</table-cell></table-row>
-  <table-row><table-cell>Pipeline Created</table-cell><table-cell>ExecutorRuntime</table-cell><table-cell>`pipeline.created`</table-cell></table-row>
-  <table-row><table-cell>Pipeline Validated</table-cell><table-cell>ManifestRuntime</table-cell><table-cell>`pipeline.validated`</table-cell></table-row>
-  <table-row><table-cell>Pipeline Queued</table-cell><table-cell>ExecutorRuntime</table-cell><table-cell>`pipeline.queued`</table-cell></table-row>
-  <table-row><table-cell>Pipeline Started</table-cell><table-cell>ExecutorRuntime</table-cell><table-cell>`pipeline.started`</table-cell></table-row>
-  <table-row><table-cell>Stage Started</table-cell><table-cell>ExecutorRuntime</table-cell><table-cell>`pipeline.stage.started`</table-cell></table-row>
-  <table-row><table-cell>Stage Completed</table-cell><table-cell>ExecutorRuntime</table-cell><table-cell>`pipeline.stage.completed`</table-cell></table-row>
-  <table-row><table-cell>Pipeline Completed</table-cell><table-cell>ExecutorRuntime</table-cell><table-cell>`pipeline.completed`</table-cell></table-row>
-  <table-row><table-cell>Pipeline Failed</table-cell><table-cell>ExecutorRuntime</table-cell><table-cell>`pipeline.failed`</table-cell></table-row>
-  <table-row><table-cell>Pipeline Cancelled</table-cell><table-cell>ExecutorRuntime</table-cell><table-cell>`pipeline.cancelled`</table-cell></table-row>
-</table>
-
----
-
-# Timeline Phase 1 — Execution Requested
-
-**Producer Runtime**
-
-OrchestratorRuntime
-
-**Event**
-
-`orchestrator.pipeline.execution.requested`
-
-Responsibilities:
-
-- receive execution request;
-- resolve PipelineDefinition;
-- allocate PipelineId;
-- forward request to ExecutorRuntime.
-
-No pipeline state exists before this phase.
-
----
-
-# Timeline Phase 2 — Pipeline Creation
-
-**Producer Runtime**
-
-ExecutorRuntime
-
-**Event**
-
-`pipeline.created`
-
-Responsibilities:
-
-- create execution object;
-- allocate execution timestamps;
-- create Pipeline RuntimeContext snapshot.
-
-State transition:
-
-```text
-None
-   │
-   ▼
-CREATED
-```
-
----
-
-# Timeline Phase 3 — Manifest Validation
-
-**Producer Runtime**
-
-ManifestRuntime
-
-**Event**
-
-`pipeline.validated`
-
-Validation includes:
-
-- stage graph;
-- module existence;
-- dependency ordering;
-- duplicate stage detection;
-- manifest version validation.
-
-Transition:
-
-```text
-CREATED
-   │
-   ▼
-VALIDATED
-```
-
-Validation failure terminates execution.
-
----
-
-# Timeline Phase 4 — Queue Registration
-
-**Producer Runtime**
-
-ExecutorRuntime
-
-**Event**
-
-`pipeline.queued`
-
-Responsibilities:
-
-- enqueue pipeline;
-- assign queue timestamp;
-- assign queue position.
-
-Transition:
-
-```text
-VALIDATED
-   │
-   ▼
-QUEUED
-```
-
----
-
-# Timeline Phase 5 — Pipeline Startup
-
-**Producer Runtime**
-
-ExecutorRuntime
-
-**Event**
-
-`pipeline.started`
-
-Responsibilities:
-
-- create Pipeline DI Scope;
-- activate RuntimeContext snapshot;
-- publish pipeline start event.
-
-Transition:
-
-```text
-QUEUED
-   │
-   ▼
-EXECUTING
-```
-
----
-
-# Pipeline Scope Creation Timeline
-
-During startup.
-
-```text
-Pipeline Started
-      │
-      ▼
-container.scope.created
-      │
-      ▼
-PIPELINE Scope ACTIVE
-```
-
-Owner:
-
-ScopeRuntime.
-
----
-
-# RuntimeContext Enrichment Timeline
-
-ExecutorRuntime enriches RuntimeContext before first stage.
-
-Additional context values:
-
-<table columnSizing="equal">
-  <table-row>
-    <table-cell>**Field**</table-cell>
-    <table-cell>**Source**</table-cell>
-  </table-row>
-  <table-row><table-cell>pipeline_id</table-cell><table-cell>ExecutorRuntime</table-cell></table-row>
-  <table-row><table-cell>execution_started_at</table-cell><table-cell>ExecutorRuntime metadata.</table-cell></table-row>
-  <table-row><table-cell>stage_count</table-cell><table-cell>PipelineDefinition.</table-cell></table-row>
-</table>
-
-Creates new RuntimeContext snapshot.
-
----
-
-# Stage Execution Timeline
-
-Each stage executes independently.
-
-```text
-Stage Created
-      │
-      ▼
-pipeline.stage.started
-      │
-      ▼
-Module Execute
-      │
-      ▼
-pipeline.stage.completed
-```
-
-Failure path.
-
-```text
-pipeline.stage.started
-      │
-      ▼
-Module Execute
-      │
-      ▼
-pipeline.stage.failed
-```
-
----
-
-# Stage Execution Ownership
-
-<table columnSizing="equal">
-  <table-row>
-    <table-cell>**Step**</table-cell>
-    <table-cell>**Owner Runtime**</table-cell>
-  </table-row>
-  <table-row><table-cell>Prepare Stage Context</table-cell><table-cell>ExecutorRuntime</table-cell></table-row>
-  <table-row><table-cell>Resolve Stage Dependencies</table-cell><table-cell>ContainerRuntime</table-cell></table-row>
-  <table-row><table-cell>Execute Module</table-cell><table-cell>ExecutorRuntime</table-cell></table-row>
-  <table-row><table-cell>Publish Stage Event</table-cell><table-cell>PublisherRuntime</table-cell></table-row>
-</table>
-
-Ownership never overlaps.
-
----
-
-# Stage RuntimeContext Snapshot
-
-Every stage receives a derived RuntimeContext.
-
-Inherited:
-
-- trace_id
-- root_trace_id
-- session_id
-- pipeline_id
-
-Added metadata:
-
-- stage_id
-- module_id
-- stage_index
-
-Snapshot is immutable.
-
----
-
-# Stage Dependency Resolution Timeline
-
-```text
-Stage Started
-      │
-      ▼
-ResolverRuntime
-      │
-      ▼
-ProviderRuntime
-      │
-      ▼
-Module Instance
-      │
-      ▼
-Execute()
-```
-
-Transient services are destroyed immediately after execution.
-
----
-
-# Stage Completion Timeline
-
-**Producer Runtime**
-
-ExecutorRuntime
-
-**Event**
-
-`pipeline.stage.completed`
-
-Responsibilities:
-
-- record duration;
-- publish completion;
-- release transient scope.
-
----
-
-# Stage Failure Timeline
-
-**Producer Runtime**
-
-ExecutorRuntime
-
-**Event**
-
-`pipeline.stage.failed`
-
-Responsibilities:
-
-- record exception;
-- publish failure;
-- terminate pipeline execution.
-
-Pipeline enters FAILED immediately.
-
----
-
-# Stage Skip Timeline
-
-**Producer Runtime**
-
-ExecutorRuntime
-
-**Event**
-
-`pipeline.stage.skipped`
-
-Reasons:
-
-- dependency disabled;
-- conditional execution false;
-- previous failure cancelled execution.
-
-Skipped stages never execute later.
-
----
-
-# Pipeline Completion Timeline
-
-**Producer Runtime**
-
-ExecutorRuntime
-
-**Event**
-
-`pipeline.completed`
-
-Responsibilities:
-
-- compute duration;
-- publish completion;
-- destroy Pipeline Scope.
-
-Transition:
-
-```text
-EXECUTING
-   │
-   ▼
-COMPLETED
-```
-
----
-
-# Pipeline Failure Timeline
-
-**Producer Runtime**
-
-ExecutorRuntime
-
-**Event**
-
-`pipeline.failed`
-
-Responsibilities:
-
-- publish failure;
-- destroy Pipeline Scope;
-- preserve RuntimeContext snapshot.
-
-Transition:
-
-```text
-EXECUTING
-   │
-   ▼
-FAILED
-```
-
----
-
-# Pipeline Cancellation Timeline
-
-**Producer Runtime**
-
-ExecutorRuntime
-
-**Event**
-
-`pipeline.cancelled`
-
-Cancellation allowed only before completion.
-
-Transition:
-
-```text
-QUEUED
-   │
-   ▼
-CANCELLED
-```
-
-or
-
-```text
-EXECUTING
-   │
-   ▼
-CANCELLED
-```
-
----
-
-# Pipeline Scope Destruction Timeline
-
-After completion, failure or cancellation.
-
-```text
-Pipeline Finished
-      │
-      ▼
-container.scope.destroyed
-      │
-      ▼
-PIPELINE Scope DESTROYED
-```
-
-Scope destruction is mandatory.
-
----
-
-# RuntimeContext Cleanup Timeline
-
-Pipeline completion never clears Session RuntimeContext.
-
-Cleanup order:
-
-```text
-Pipeline Scope Destroyed
-      │
-      ▼
-Stage Metadata Removed
-      │
-      ▼
-Pipeline Metadata Removed
-      │
-      ▼
-Session Context Remains
-```
-
----
-
-# Execution Duration Registry
-
-ExecutorRuntime records four canonical durations.
-
-<table columnSizing="equal">
-  <table-row>
-    <table-cell>**Duration**</table-cell>
-    <table-cell>**Meaning**</table-cell>
-  </table-row>
-  <table-row><table-cell>queue_duration_ms</table-cell><table-cell>Queued → Started.</table-cell></table-row>
-  <table-row><table-cell>execution_duration_ms</table-cell><table-cell>Started → Completed.</table-cell></table-row>
-  <table-row><table-cell>stage_duration_ms</table-cell><table-cell>Stage execution time.</table-cell></table-row>
-  <table-row><table-cell>total_duration_ms</table-cell><table-cell>Created → Finished.</table-cell></table-row>
-</table>
-
-Durations are immutable metrics.
-
----
-
-# Pipeline Timeline Guarantees
-
-Wave 1 guarantees:
-
-1. One PipelineId per execution.
-2. One RuntimeContext snapshot per execution.
-3. One Pipeline Scope per execution.
-4. Deterministic stage ordering.
-5. One completion event.
-6. One failure event maximum.
-7. Scope destruction after terminal state.
-8. RuntimeContext preserved until session cleanup.
-
----
-
-# Pipeline Event Timeline Diagram
-
-```text
-Execution Requested
-        │
-        ▼
-Pipeline Created
-        │
-        ▼
-Pipeline Validated
-        │
-        ▼
-Pipeline Queued
-        │
-        ▼
-Pipeline Started
-        │
-        ▼
-Stage Started
-        │
-        ▼
-Stage Completed
-        │
-        ▼
-Next Stage ...
-        │
-        ▼
-Pipeline Completed
-        │
-        ▼
-Pipeline Scope Destroyed
-```
-
-Failure replaces completion branch.
-
----
-
-# Pipeline Terminal State Rules
-
-Terminal pipeline states:
-
-- COMPLETED
-- FAILED
-- CANCELLED
-
-Terminal states:
-
-- emit exactly one terminal event;
-- destroy Pipeline Scope;
-- never transition again.
-
----
-
-# Execution Integrity Rules
-
-Wave 1 guarantees:
-
-1. Validation happens before queueing.
-2. Queueing happens before execution.
-3. Pipeline Scope exists only during execution.
-4. RuntimeContext enrichment happens before first stage.
-5. Every stage receives immutable RuntimeContext.
-6. Transient services never outlive a stage.
-7. Pipeline Scope never outlives pipeline execution.
-8. Terminal states are irreversible.
-9. Exactly one terminal RuntimeEvent exists.
-10. Timeline order is deterministic.
-
-Violating any rule is an Architecture Conflict.
-
----
-
-# Definition of Done — Part 8
-
-Part 8 is complete only if:
-
-- [x] Canonical execution timeline defined.
-- [x] Pipeline scope lifecycle defined.
-- [x] RuntimeContext enrichment timeline defined.
-- [x] Stage execution timeline defined.
-- [x] Stage failure timeline defined.
-- [x] Pipeline completion timeline defined.
-- [x] Pipeline cancellation timeline defined.
-- [x] Pipeline scope destruction defined.
-- [x] Duration registry defined.
-- [x] Timeline integrity rules defined.
-
----
-
-**Document Status**
-
-IN PROGRESS — Part 8 of 10.
+## Approved KR-009 Precedence — ADR-007, 2026-10-06
+
+The compiled KR-009 section below and exact wave1/KR-009 contract supersede
+all retained historical KR-009 summaries/examples in this document, including
+Executor health/lifecycle, unbound stage execution, ContextRuntime access,
+queue/DI acquisition and Orchestrator event production. Reserved event vocabulary
+and other modules' ownership remain unchanged. Only MetadataRuntime's public
+stateless transformations are permitted for detached context JSON. Bootstrap uses
+only OrchestratorRuntime(event_bus); full KR-010 cleanup remains deferred.
+
+# Pipeline Execution Timeline Registry — ADR-007 O-03
+
+**Status:** APPROVED, 2026-10-06. This exact sequential timeline replaces
+the older mandatory request/create/validate/queue/DI/service-resolution timeline.
+Reserved event types stay registered; KR-009 does not emit requested, created,
+validated, queued, skipped or orchestrator-registration events, and does not create
+a queue, execution registry, lifecycle state, timeout/retry or conditional stage.
+
+**Status:** APPROVED — ADR-007 O-01–O-05, 2026-10-06.
+
+The exact canonical implementation contract is
+[KR-009](../wave1/KR-009_PIPELINE_ORCHESTRATOR.md), compiled before source edits.
+It supersedes only prior KR-009 API/import/behavior/test declarations and the
+precise Bootstrap caller expression. Other module ownership remains frozen.
+
+| File | Owner / scope |
+| --- | --- |
+| src/kernel/runtime/pipeline.py | KR-009 immutable models; preserve schema |
+| src/kernel/runtime/manifest.py | KR-009 stateless graph validation |
+| src/kernel/runtime/executor.py | KR-009 sequential operations/snapshots/events |
+| src/kernel/runtime/orchestrator.py | KR-009 registration/bindings/preflight |
+| tests/kernel/test_pipeline.py | KR-011 canonical test ownership; active acceptance authorized |
+| src/kernel/runtime/bootstrap.py | KR-010; ONLY remove Executor import and use OrchestratorRuntime(event_bus) |
+
+PipelineStage is frozen, keyword-only and slotted: stage_id: str,
+module_id: ModuleId, depends_on: tuple[str, ...]. Derived dependency_count: int
+and has_dependencies: bool remain. PipelineDefinition is frozen, keyword-only
+and slotted: pipeline_id: PipelineId, stages: tuple[PipelineStage, ...].
+Derived stage_count: int and is_empty: bool remain. Exactly five exported symbols:
+PipelineStage, PipelineDefinition, ManifestRuntime, ExecutorRuntime,
+OrchestratorRuntime. Each is exported only by its existing owner file.
+
+ManifestRuntime retains:
+validate(definition: PipelineDefinition) -> PipelineDefinition;
+validate_stage_ids(definition: PipelineDefinition) -> None;
+validate_dependencies(definition: PipelineDefinition) -> None;
+validate_dag(definition: PipelineDefinition) -> None.
+Orchestrator retains unregister_module(module_id: ModuleId) -> None,
+modules() -> tuple[RuntimeModuleManifest, ...], contains(module_id: ModuleId) -> bool,
+the two identity properties, async initialize/start/stop/shutdown and sync health.
+No new public member or compatibility alias is authorized.
+
+## Canonical Dependencies and Behavior
+
+Orchestrator -> Manifest, Executor; EventBus construction/type annotation only;
+Orchestrator and Executor -> stateless MetadataRuntime for detached JSON.
+Executor -> EventBus facade and Manifest validation. Manifest -> frozen Pipeline
+models/Foundation only. No ContextRuntime/SessionRuntime storage, Container, higher
+layer, Publisher/Dispatcher/Subscriber internal or new event factory.
+Bootstrap -> OrchestratorRuntime(event_bus), NOT Executor.
+
+Executor is a plain internal class, not RuntimeContract: no health/lifecycle/identity.
+Orchestrator is the RuntimeContract participant with name orchestrator, L0_KERNEL,
+health OK, no-op initialize/start/stop, idle shutdown clears manifests and bindings.
+
+Registration explicitly accepts operation: Callable[[RuntimeContext], Awaitable[None]]
+| None; no callback in serialized models. Per-execution independent binding snapshot.
+DAG validation returns the SAME definition; malformed structure -> InvalidManifestError,
+cycle -> RuntimeDependencyError, iterative traversal without a stage-count cap.
+Preserve stable ready-wave ordering: A, B(dep A), C -> A, C, B.
+Reachable module dependencies must exist, be acyclic and point to the same/lower
+RuntimeLayer; static dependencies never generate stage edges.
+Every stage module/binding and detached context must validate before ANY event/effect.
+Pipeline/context UUIDs must agree; supplied trace/UTC times preserved, expiry observational.
+JSON copy/validation uses MetadataRuntime; each callback gets its own stage metadata.
+
+Actual operation is awaited once per stage. First failure aborts later callbacks.
+Executor alone creates/publishes events through EventBus.create_for_runtime.
+Exact seven schemas/priorities and terminal rules are ADR-007 O-03:
+pipeline.started; stage started -> awaited work -> stage completed; pipeline.completed.
+On ordinary failure stage.failed when allowed then pipeline.failed; cancellation
+pipeline.cancelled. Only ONE logical terminal pipeline attempt. Failure delivering
+stage.completed does not produce a contradictory stage.failed. Terminal-delivery
+failure never creates another terminal. Reasons/logs are safe fixed summaries.
+Original exception object is re-raised; ordered secondary notification errors and
+earlier explicit cause are retained without grouping the primary inside its own cause.
+No KeyboardInterrupt/SystemExit conversion, background task, shield or new status.
+
+Instance busy guards reject re-entry/concurrent execute/mutation with RuntimeStateError
+and release in finally. Read-only registry/health remains available.
+Canonical acceptance is tests/kernel/test_pipeline.py, 100% executable-line coverage
+for all four production files, no exclusions/skips/xfail; Windows/Linux Pyright,
+Ruff, discovered full Pytest, smoke and latest-head required CI. Full DI Pipeline
+scope cleanup/Session composition/Main partial-startup remains KR-010, not this module.
+
+
+| Event | Priority | Exact payload keys |
+| --- | --- | --- |
+| pipeline.started | NORMAL | pipeline_id, session_id |
+| pipeline.stage.started | NORMAL | pipeline_id, stage_id, module_id, duration_ms, reason |
+| pipeline.stage.completed | NORMAL | pipeline_id, stage_id, module_id, duration_ms, reason |
+| pipeline.stage.failed | HIGH | pipeline_id, stage_id, module_id, duration_ms, reason |
+| pipeline.completed | NORMAL | pipeline_id, duration_ms, stage_count |
+| pipeline.failed | HIGH | pipeline_id, failed_stage, reason, exception_type |
+| pipeline.cancelled | HIGH | pipeline_id, reason |
+
+Started stage duration/reason are None; completed duration is a finite nonnegative
+float and reason None; failed duration is nonnegative and reason is a safe fixed
+failure summary. Use standard-library monotonic elapsed time in milliseconds.
+Pipeline failed_stage is the current stage_id or empty string when no stage entered.
+Failure/cancellation reason strings and logs must not dump callback exception
+messages, context metadata, payloads, credentials or other raw input values.
+The original exception still propagates to its caller as ADR-004 requires.
+
+Success: pipeline.started, then for each stage stage.started → awaited operation
+→ stage.completed, then pipeline.completed. No completion for a callback that fails.
+All event construction goes through create_for_runtime; no direct RuntimeEvent,
+Publisher, Dispatcher or Subscriber import/construction.
+
+Ordinary failure before a stage completion publication: best-effort stage.failed
+if a stage was entered, followed by pipeline.failed. Abort all remaining stages;
+do not emit fake completions or run later callbacks. If stage.completed delivery
+fails after its logical terminal event was created, abort the remaining pipeline
+and attempt pipeline.failed, NOT a contradictory second terminal stage.failed.
+
+Cancellation before a terminal pipeline event: best-effort pipeline.cancelled,
+no pipeline.failed/completed and no later callback. Do not label cancellation as
+ordinary success/failure or add a new stage-cancelled type.
+
+Exactly one logical terminal PIPELINE event attempt per execution. If publication
+of pipeline.completed/failed/cancelled fails or is cancelled, propagate/preserve
+that error according to O-04, but never construct another terminal pipeline event.
+Already observed terminal events cannot be undone by emitting a contradictory one.
+Pipeline/context/session ownership and future KR-010 scope cleanup do not move
+into the event runtime or Executor.
+
+
+Pipeline phases are observations of this execution, not a new public state store
+or RuntimeStatus. Executor duration measurements use monotonic milliseconds.
+The former four-duration/queue metric requirement is not a KR-009 contract.
+Session and DI Pipeline lifetime cleanup stays composition-owned under ADR-004 P-05:
+future KR-010 RuntimeKernel uses Container in finally. Executor never acquires,
+resolves or disposes services. This registry does not claim that integration done.
 
 <!-- ========================================================================= -->
 <!-- M-05 PART 9 — Failure & Recovery Registry -->

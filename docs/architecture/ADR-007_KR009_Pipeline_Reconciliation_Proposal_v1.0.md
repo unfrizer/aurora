@@ -1,47 +1,71 @@
-# KR-009 — Pipeline Orchestrator Contract v1.0
+# AURORA — KR-009 Pipeline Reconciliation Proposal v1.0
 
-**Status:** APPROVED — COMPILED BEFORE IMPLEMENTATION
+**Document ID:** ADR-007
+**Status:** APPROVED — CANONICAL KR-009 RECONCILIATION DECISION
 **Date:** 2026-10-06
-**Authority:** ADR-004 P-03/P-04/P-05 and explicitly approved ADR-007 O-01–O-05.
-**Purpose:** Execute explicitly bound async application work in deterministic
-stage DAG order, without changing frozen ownership or contract vocabulary.
-**Dependencies:** KR-001 Foundation; KR-004 contracts; KR-007 EventBus facade;
-KR-008 stateless MetadataRuntime only. No Container/ContextRuntime/SessionRuntime
-storage or higher-layer imports.
+**Active task:** KR-009 — Pipeline Runtime implementation
+**Repository baseline:** 3fba7a2dbce3b6b6842d67b65792f35dfa3755b1
+**Implementation authority:** O-01–O-05 approved; compile contract/registries before source edits.
 
-## Ownership and Precise Exception
+## Purpose and Approval Boundary
 
-| File | Owner / scope |
-| --- | --- |
-| src/kernel/runtime/pipeline.py | KR-009 immutable models; preserve schema |
-| src/kernel/runtime/manifest.py | KR-009 stateless graph validation |
-| src/kernel/runtime/executor.py | KR-009 sequential operations/snapshots/events |
-| src/kernel/runtime/orchestrator.py | KR-009 registration/bindings/preflight |
-| tests/kernel/test_pipeline.py | KR-011 canonical test ownership; active acceptance authorized |
-| src/kernel/runtime/bootstrap.py | KR-010; ONLY remove Executor import and use OrchestratorRuntime(event_bus) |
+Complete the exact implementation contract for ADR-004 P-03/P-04 without inventing
+a universal execute method, Runtime, layer, scope, provider or global registry.
+## Explicit Approval Record — 2026-10-06
 
-No other source, test, dependency or workflow file is authorized. Bootstrap remains
-KR-010-owned. Full scope cleanup/partial-startup integration remains KR-010.
+The Architecture Authority directly approved the complete decision:
 
-## Frozen Models and Retained Surface
+> Утверждаю ADR-007 полностью, включая O-01–O-05 и минимальную миграцию Bootstrap. дальше
 
-PipelineStage is frozen, keyword-only and slotted: stage_id: str,
-module_id: ModuleId, depends_on: tuple[str, ...]. Derived dependency_count: int
-and has_dependencies: bool remain. PipelineDefinition is frozen, keyword-only
-and slotted: pipeline_id: PipelineId, stages: tuple[PipelineStage, ...].
-Derived stage_count: int and is_empty: bool remain. Exactly five exported symbols:
-PipelineStage, PipelineDefinition, ManifestRuntime, ExecutorRuntime,
-OrchestratorRuntime. Each is exported only by its existing owner file.
+This supplies authority for O-01–O-05 and the precise two-line KR-010 caller
+migration. It is not an independent human code review or a claim of acceptance
+for an implementation not yet built. ADR-003 governs ordinary PR/merge handling.
 
-ManifestRuntime retains:
-validate(definition: PipelineDefinition) -> PipelineDefinition;
-validate_stage_ids(definition: PipelineDefinition) -> None;
-validate_dependencies(definition: PipelineDefinition) -> None;
-validate_dag(definition: PipelineDefinition) -> None.
-Orchestrator retains unregister_module(module_id: ModuleId) -> None,
-modules() -> tuple[RuntimeModuleManifest, ...], contains(module_id: ModuleId) -> bool,
-the two identity properties, async initialize/start/stop/shutdown and sync health.
-No new public member or compatibility alias is authorized.
+Before implementation: compile the exact KR-009 contract and reconcile affected
+Master entries. Then build one module, validate, publish and report. STOP before
+full KR-010. No other architecture change or cross-module repair is authorized.
+
+## Sources Actually Inspected
+
+- AGENTS.md; AB-00A, reconciliation and Build Protocol amendment; complete Wave 1 handoff.
+- Complete AB-00B/AB-00D, ADR-001 and ADR-004; relevant approved ADR-006 context behavior.
+- Complete M-00 navigation; KR-009 sections of M-01/M-03/M-03A/M-04/M-06/M-09.
+- M-05 pipeline event payloads/priorities, complete Pipeline Execution Timeline
+  section, pipeline validation ownership; M-07 Pipeline Constitution and M-08
+  pipeline exception propagation; PATCH_ERRATA.
+- Four KR-009 source files, canonical test_pipeline.py; Foundation types/exceptions,
+  RuntimeModuleManifest, EventBus/Publisher; read-only Bootstrap/RuntimeKernel and
+  their canonical startup tests/call sites.
+
+### Findings and Classification
+
+| ID | Observed evidence | Classification |
+| --- | --- | --- |
+| O-01 | M-03 says Executor implements RuntimeContract and exposes health; M-03A lists health; M-06/current source define a plain executor with no lifecycle or health. M-03/current source expose execution_order; M-06 calls it private. Detached stage/context snapshots also need an explicit permitted JSON transformation edge, not a private KR-008 helper or new Context owner. | Public Contract / Import Conflict |
+| O-02 | ADR-004 fixes operation binding and pipeline/context ID agreement but not all malformed input/module-dependency rules. Current validation is recursive and validates only the stage DAG; registration does not validate the manifest. Existing order for [A, B(dep A), C] is A, C, B; another stable topological algorithm would change observable order. | Missing Exact Public Boundary / Order Decision |
+| O-03 | M-05 mandates request/create/validate/queue phases and Manifest-produced events, a queue, DI resolution, scope creation and duration metrics; M-04 forbids Manifest/EventBus and Orchestrator/Container interaction; M-06/M-07 use the smaller start/stage/terminal sequence. ADR-004 assigns callbacks to composition and DI scope cleanup to KR-010. Cancellation and failure during terminal-event delivery need exact behavior to avoid double terminal events. | Architecture / Event Contract Conflict |
+| O-04 | Current execute_stage emits started/completed without executing work; register_module(..., operation=...) raises TypeError. Failure publication can mask the primary error; CancelledError has no handling; registry mutation/re-entrant execution are not guarded. Existing ADR-004 requirements need exact completion/error behavior consistent with O-03. | Confirmed Local Defects plus Public Error-policy Clarification |
+| O-05 | Approved ADR-004 P-03 requires OrchestratorRuntime(event_bus), but frozen KR-010 Bootstrap imports Executor and calls OrchestratorRuntime(ExecutorRuntime(event_bus)). Changing KR-009 alone would introduce a NEW KR-010 typing/construction failure. A compatibility shim would violate the approved composition decision. | Cross-module Scope / Migration Blocker |
+
+Already resolved, not reopened: operation registration signatures and None return,
+manifest/context/event schemas, async RuntimeContract, Publisher-only event factory,
+sequential execution, supplied trace propagation, detached JSON and terminal lifecycle
+status ownership. These do not require another Foundation/KR-004/KR-007/KR-008 edit.
+
+## Frozen Invariants
+
+- Exactly four existing KR-009 files and five existing exported classes/dataclasses.
+- Same PipelineStage (stage_id, module_id, depends_on) and PipelineDefinition
+  (pipeline_id, stages) fields and existing derived properties; no dataclass validator.
+- Same RuntimeModuleManifest five fields; no callables inside serializable models.
+- L0–L8, RuntimeStatus, EventPhase, EventPriority and DI scopes unchanged.
+- Manifest validates; Executor orders/awaits stages; Orchestrator owns module
+  registration, per-module bindings and execution coordination.
+- Publisher alone creates logical RuntimeEvents, via the existing EventBus facade.
+- No DI acquisition/disposal inside KR-009, service locator, universal execute,
+  runtime discovery, new identifier/exception/helper abstraction or higher-layer import.
+- Python 3.13, uv, strict typing, standard library only; in-memory sequential work,
+  no network, persistence, background task, mutable global state or new dependency.
 
 ## O-01 — Approved Exact Executor Surface and Snapshot Import Boundary
 
@@ -259,6 +283,21 @@ authorized by ADR-004 P-05. KR-009 must not import Container or claim that defer
 integration acceptance is already implemented. Existing bootstrap/startup regression
 tests must still pass; no outside failure is hidden or repaired.
 
+## Approved Authorized Files
+
+| File | Scope |
+| --- | --- |
+| src/kernel/runtime/pipeline.py | KR-009; unchanged schema, modify only if concretely needed |
+| src/kernel/runtime/manifest.py | KR-009 validation |
+| src/kernel/runtime/executor.py | KR-009 actual stage work/snapshots/events |
+| src/kernel/runtime/orchestrator.py | KR-009 binding registry/preflight/guards |
+| tests/kernel/test_pipeline.py | Canonical active KR-009 acceptance; KR-011 ownership |
+| src/kernel/runtime/bootstrap.py | KR-010; ONLY O-05's import removal and constructor expression |
+
+Architecture compilation may update ADR-007 approval, wave1/KR-009 contract and
+only affected M-01/M-02/M-03/M-03A/M-04/M-05/M-06/M-07/M-08/M-09 KR-009 entries
+and the directly affected Bootstrap composition edge. Unrelated clauses/modules,
+Foundation/contracts/KR-007/KR-008, dependencies, workflows and security remain frozen.
 
 ## Required Acceptance
 
@@ -284,11 +323,34 @@ tests must still pass; no outside failure is hidden or repaired.
   and required latest-head hosted CI. Report and stop at this module's review gate.
 - Do not certify KR-010 scope cleanup or the first usable Windows MVP as complete.
 
+## Actual Preflight Evidence — 2026-10-06
 
-## Definition of Done and Stop
+On the unchanged source/test baseline:
 
-All canonical acceptance and full regression discovered/passing, strict Windows/
-Linux Pyright and Ruff clean, 100% executable-line coverage on all four KR-009
-files without exclusions/skips/xfail, Kernel smoke and required latest-head CI.
-One module report with complete files, tests and integration notes; STOP before
-KR-010. No claim that the Windows MVP is usable.
+| Check | Result |
+| --- | --- |
+| uv run ruff check . | PASS |
+| uv run pyright | 0 errors, 0 warnings, 0 informations |
+| uv run pyright --pythonplatform Linux | 0 errors, 0 warnings, 0 informations |
+| uv run pytest -q | 873 passed |
+| uv run pytest tests/kernel/test_pipeline.py -q | 2 passed, graph validation only |
+| uv run python -m src.main | PASS, exit 0 |
+
+A read-only in-memory probe confirmed:
+- register_module(manifest, operation=...) raises TypeError.
+- A metadata-only registered module executes without error while business effects
+  remain zero; the existing executor does not invoke an operation.
+- Existing wavefront order is A, C, B for input A, B(dep A), C.
+- Orchestrator currently requires ExecutorRuntime, not EventBusRuntime.
+- Executor currently is not a RuntimeContract and has no health method.
+
+Green baseline regression does NOT demonstrate ADR-004's real work/error/snapshot
+acceptance. No source/test edit, commit, push, PR or merge was made in the historical
+preflight. The explicit approval recorded above now supplies O-01–O-05 authority;
+this historical evidence is not acceptance of the forthcoming implementation.
+
+## Next Authorized Action
+
+Compile the approved exact KR-009 contract and affected Master entries, implement
+only the authorized module plus O-05's caller migration, validate acceptance and
+regression, publish under ADR-003, report and stop before full KR-010.

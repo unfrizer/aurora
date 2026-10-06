@@ -7,7 +7,6 @@ from src.core.logger import get_logger
 from src.kernel.runtime.bus import EventBusRuntime
 from src.kernel.runtime.container import ContainerRuntime
 from src.kernel.runtime.context import ContextRuntime
-from src.kernel.runtime.executor import ExecutorRuntime
 from src.kernel.runtime.lifecycle import LifecycleRuntime
 from src.kernel.runtime.orchestrator import OrchestratorRuntime
 from src.kernel.runtime.runtime import RuntimeKernel
@@ -45,7 +44,7 @@ class BootstrapRuntime:
         return EventBusRuntime()
 
     def build_orchestrator(self, event_bus: EventBusRuntime) -> OrchestratorRuntime:
-        return OrchestratorRuntime(ExecutorRuntime(event_bus))
+        return OrchestratorRuntime(event_bus)
 
     def build_lifecycle(
         self,

@@ -1,58 +1,80 @@
-"""KR-009 pipeline manifest validation."""
+"""KR-009 stateless validation of immutable pipeline DAGs."""
 
 from __future__ import annotations
 
+from collections import deque
+from typing import cast
+from uuid import UUID
+
 from src.core.exceptions import InvalidManifestError, RuntimeDependencyError
-from src.kernel.runtime.pipeline import PipelineDefinition
+from src.kernel.runtime.pipeline import PipelineDefinition, PipelineStage
 
 
 class ManifestRuntime:
-    """Validate immutable pipeline definitions without executing them."""
+    """Validate existing contracts without changing their fields or identity."""
 
     def validate(self, definition: PipelineDefinition) -> PipelineDefinition:
-        if definition.is_empty:
-            raise InvalidManifestError("Pipeline must contain at least one stage")
-        self.validate_stage_ids(definition)
-        self.validate_dependencies(definition)
         self.validate_dag(definition)
         return definition
 
     def validate_stage_ids(self, definition: PipelineDefinition) -> None:
+        self._validate_shape(definition)
         stage_ids = tuple(stage.stage_id for stage in definition.stages)
-        if len(stage_ids) != len(set(stage_ids)) or any(not stage_id for stage_id in stage_ids):
-            raise InvalidManifestError("Pipeline stage identifiers must be unique and non-empty")
+        if len(stage_ids) != len(set(stage_ids)):
+            raise InvalidManifestError("Pipeline stage identifiers must be unique")
 
     def validate_dependencies(self, definition: PipelineDefinition) -> None:
+        self.validate_stage_ids(definition)
         stage_ids = {stage.stage_id for stage in definition.stages}
         for stage in definition.stages:
             for dependency in stage.depends_on:
                 if dependency == stage.stage_id or dependency not in stage_ids:
-                    raise InvalidManifestError(
-                        "Pipeline stage dependency is invalid",
-                        stage_id=stage.stage_id,
-                        dependency=dependency,
-                    )
+                    raise InvalidManifestError("Pipeline stage dependency is invalid")
 
     def validate_dag(self, definition: PipelineDefinition) -> None:
-        dependencies = {stage.stage_id: stage.depends_on for stage in definition.stages}
-        visiting: set[str] = set()
-        visited: set[str] = set()
+        self.validate_dependencies(definition)
+        remaining = {stage.stage_id: len(set(stage.depends_on)) for stage in definition.stages}
+        dependents: dict[str, list[str]] = {stage.stage_id: [] for stage in definition.stages}
+        for stage in definition.stages:
+            for dependency in set(stage.depends_on):
+                dependents[dependency].append(stage.stage_id)
+        ready = deque(stage_id for stage_id, count in remaining.items() if count == 0)
+        visited = 0
+        while ready:
+            stage_id = ready.popleft()
+            visited += 1
+            for dependent in dependents[stage_id]:
+                remaining[dependent] -= 1
+                if remaining[dependent] == 0:
+                    ready.append(dependent)
+        if visited != len(definition.stages):
+            raise RuntimeDependencyError("Pipeline dependency cycle detected")
 
-        def visit(stage_id: str) -> None:
-            if stage_id in visiting:
-                raise RuntimeDependencyError(
-                    "Pipeline dependency cycle detected", stage_id=stage_id
-                )
-            if stage_id in visited:
-                return
-            visiting.add(stage_id)
-            for dependency in dependencies[stage_id]:
-                visit(dependency)
-            visiting.remove(stage_id)
-            visited.add(stage_id)
+    @staticmethod
+    def _identifier(value: object) -> None:
+        if not isinstance(value, str) or not value:
+            raise InvalidManifestError("Pipeline identifiers must be non-empty strings")
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError:
+            raise InvalidManifestError("Pipeline identifiers must contain valid Unicode") from None
 
-        for stage_id in dependencies:
-            visit(stage_id)
+    def _validate_shape(self, definition: PipelineDefinition) -> None:
+        if not isinstance(cast(object, definition), PipelineDefinition):
+            raise InvalidManifestError("Pipeline definition contract is required")
+        if not isinstance(cast(object, definition.pipeline_id), UUID):
+            raise InvalidManifestError("Pipeline identifier must be a UUID")
+        if not isinstance(cast(object, definition.stages), tuple) or not definition.stages:
+            raise InvalidManifestError("Pipeline must contain a non-empty stage tuple")
+        for stage in definition.stages:
+            if not isinstance(cast(object, stage), PipelineStage):
+                raise InvalidManifestError("Pipeline stage contract is required")
+            self._identifier(stage.stage_id)
+            self._identifier(stage.module_id)
+            if not isinstance(cast(object, stage.depends_on), tuple):
+                raise InvalidManifestError("Stage dependencies must be a tuple")
+            for dependency in stage.depends_on:
+                self._identifier(dependency)
 
 
 __all__ = ["ManifestRuntime"]
