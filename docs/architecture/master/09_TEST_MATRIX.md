@@ -510,47 +510,29 @@ scope cleanup/Session composition/Main partial-startup remains KR-010, not this 
 
 ---
 
-# KR-010 Tests
+# KR-010 Tests — Approved ADR-008
 
-## tests/runtime/test_bootstrap.py
+**Status:** APPROVED — ADR-008 B-01–B-05, 2026-10-06.
+Exact contract: [KR-010](../wave1/KR-010_RUNNER_BOOTSTRAP.md).
+Authority: [ADR-008](../ADR-008_KR010_Bootstrap_Reconciliation_Proposal_v1.0.md).
 
-### Startup
+Canonical files only (KR-011 ownership, active KR-010 changes permitted):
 
-- Settings loaded.
-- Logger initialized.
-- Container built.
-- EventBus created.
-- Lifecycle initialized.
+- tests/kernel/test_bootstrap.py: exact graph/builders/properties/identity/health,
+  construction/participant order, config/errors, legal cleanup, guard and isolation.
+- tests/integration/test_runtime_startup.py: real Pipeline/Session DI release on
+  success/preflight/work/event failure/cancellation, scoped isolation, multi-error
+  causes, interrupted retry, Main partial-startup/stop/shutdown behavior and bounded smoke.
 
-### Shutdown
-
-- Reverse shutdown order.
-- Resource cleanup.
-- EventBus disposed.
-
-Coverage target:
-
-100%.
-
----
-
-## tests/runtime/test_runtime.py
-
-### Runtime
-
-- boot()
-- shutdown()
-- execute_pipeline()
-
-### Health
-
-- Healthy runtime.
-- Failed runtime.
-- Runtime restart forbidden.
-
-Coverage target:
-
-100%.
+Test all public APIs and B-01–B-05 acceptance, including rejection spanning cleanup
+without disposing a contender's resources, FAILED staying terminal, completed
+idempotency, preserved first exception object/prior cause and no secrets in logs.
+No live credentials/paid API, network/persistence/background server. Fresh in-memory
+instances; no skips/xfail or executable-source exclusions. Target 100% executable-line
+coverage PER bootstrap.py/runtime.py/main.py; not a branch-coverage claim.
+No obsolete tests/runtime/test_bootstrap.py/test_runtime.py, boot/execute_pipeline API
+or global fixtures added outside the approved two files. Ruff, strict Pyright both
+platform modes, full Pytest, Kernel smoke and latest-head required CI must pass.
 
 ---
 

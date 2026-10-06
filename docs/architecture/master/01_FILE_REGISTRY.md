@@ -2229,265 +2229,37 @@ scope cleanup/Session composition/Main partial-startup remains KR-010, not this 
 
 # KR-010 — Bootstrap Runtime Registry
 
-**Runtime Layer:** L0 Kernel
-
-Directory:
-
-```
-src/kernel/runtime/
-src/
-```
-
-Bootstrap Runtime is the only runtime responsible for constructing and destroying the runtime graph.
-
-Files:
-
-| File | Status | Public API |
-|------|--------|------------|
-| `bootstrap.py` | FROZEN | BootstrapRuntime |
-| `runtime.py` | FROZEN | RuntimeKernel |
-| `src/main.py` | FROZEN | Process entrypoint |
-
-Bootstrap Runtime never owns business logic.
-
----
-
-# Bootstrap Runtime Constitution
-
-Bootstrap Runtime owns:
-
-- runtime construction;
-- runtime wiring;
-- startup sequence;
-- shutdown sequence;
-- RuntimeKernel creation.
-
-Bootstrap Runtime never owns:
-
-- DI implementation;
-- EventBus implementation;
-- lifecycle state machine;
-- pipeline execution.
-
----
-
-## BOOTSTRAP-001 — src/kernel/runtime/bootstrap.py
-
-### Owner
-
-KR-010 Bootstrap Runtime
-
-### Responsibility
-
-Runtime graph construction.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-- src/main.py
-- RuntimeKernel tests
-
-### Public Exports
-
-#### Classes
-
-- BootstrapRuntime
-
-### Public Methods
-
-| Method | Purpose |
-|--------|---------|
-| build() | Build RuntimeKernel. |
-
-### Runtime Construction Order
-
-1. Settings.
-2. Logging.
-3. Context Runtime.
-4. Container Runtime.
-5. Event Bus Runtime.
-6. Orchestrator Runtime.
-7. Lifecycle Runtime.
-8. RuntimeKernel.
-
-Order is immutable.
-
-### Forbidden Responsibilities
-
-- runtime execution;
-- pipeline execution;
-- lifecycle transitions.
-
----
-
-## BOOTSTRAP-002 — src/kernel/runtime/runtime.py
-
-### Owner
-
-KR-010 Bootstrap Runtime
-
-### Responsibility
-
-Public runtime facade.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-- src/main.py
-- integration tests
-
-### Public Exports
-
-#### Classes
-
-- RuntimeKernel
-
-### Public Properties
-
-| Property | Type |
-|----------|------|
-| container | ContainerRuntime |
-| lifecycle | LifecycleRuntime |
-| event_bus | EventBusRuntime |
-| context | ContextRuntime |
-| orchestrator | OrchestratorRuntime |
-
-### Public Methods
-
-| Method | Purpose |
-|--------|---------|
-| initialize() | Initialize runtime graph. |
-| start() | Enter RUNNING state. |
-| stop() | Graceful runtime stop. |
-| shutdown() | Graceful runtime shutdown. |
-| health() | Aggregate runtime health. |
-
-### Health Ownership
-
-RuntimeKernel aggregates health only.
-
-Individual runtimes own health computation.
-
-### Forbidden Responsibilities
-
-- runtime creation;
-- service registration;
-- logging configuration.
-
----
-
-## BOOTSTRAP-003 — src/main.py
-
-### Owner
-
-KR-010 Bootstrap Runtime
-
-### Responsibility
-
-Process entrypoint.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-Process only.
-
-### Public Exports
-
-No public exports.
-
-### Public Functions
-
-| Function | Purpose |
-|----------|---------|
-| main() | Canonical async entrypoint. |
-
-### Entry Sequence
-
-1. BootstrapRuntime.build()
-2. RuntimeKernel.initialize()
-3. RuntimeKernel.start()
-4. Await shutdown signal.
-5. RuntimeKernel.stop()
-6. RuntimeKernel.shutdown()
-
-### Process Rules
-
-- asyncio.run(main())
-- exactly one entrypoint
-- graceful shutdown in finally block
-
-### Forbidden Responsibilities
-
-- business logic;
-- filesystem initialization;
-- configuration parsing;
-- service registration.
-
----
-
-# KR-010 Export Matrix
-
-| File | Public Symbols |
-|------|----------------|
-| bootstrap.py | BootstrapRuntime |
-| runtime.py | RuntimeKernel |
-| main.py | main |
-
----
-
-# KR-010 Dependency Matrix
-
-| File | Allowed Imports |
-|------|------------------|
-| bootstrap.py | Configuration, Logging, Container, Lifecycle, Context, EventBus, Orchestrator |
-| runtime.py | Bootstrap runtimes only |
-| main.py | BootstrapRuntime only |
-
-No reverse imports into Bootstrap Runtime.
-
----
-
-# KR-010 Ownership Matrix
-
-| Object | Owner |
-|--------|-------|
-| Runtime graph | BootstrapRuntime |
-| RuntimeKernel | runtime.py |
-| Process entrypoint | src/main.py |
-| Startup sequence | BootstrapRuntime |
-| Shutdown sequence | BootstrapRuntime |
-
----
-
-# KR-010 Validation Ownership
-
-| Runtime | Validates |
-|----------|-----------|
-| BootstrapRuntime | Runtime graph creation |
-| RuntimeKernel | Runtime health aggregation |
-| main.py | Startup/shutdown execution flow |
-
----
-
-# KR-010 Forbidden Patterns
-
-Bootstrap Runtime may never contain:
-
-- mutable runtime globals;
-- event handlers;
-- dependency registration outside ContainerRuntime;
-- lifecycle state mutation outside LifecycleRuntime.
-
-Bootstrap Runtime owns orchestration only.
+**Status:** APPROVED — ADR-008 B-01–B-05, 2026-10-06.
+Exact contract: [KR-010](../wave1/KR-010_RUNNER_BOOTSTRAP.md).
+Authority: [ADR-008](../ADR-008_KR010_Bootstrap_Reconciliation_Proposal_v1.0.md).
+
+Three production files only; same owners/exports. Canonical test ownership remains
+KR-011 with active-module adjustments explicitly approved by ADR-004/008.
+
+| File | Owner / export | Dependencies / responsibility |
+| --- | --- | --- |
+| src/kernel/runtime/bootstrap.py | KR-010 / BootstrapRuntime | Configuration, Logging, public Container/Lifecycle/EventBus/Context/Orchestrator, RuntimeKernel; narrow SessionRuntime construction exception |
+| src/kernel/runtime/runtime.py | KR-010 / RuntimeKernel | Existing Foundation/version and contracts, PipelineDefinition, five facades and explicit SessionRuntime reference; lifecycle/DI composition only |
+| src/main.py | KR-010 / main | asyncio, Bootstrap, existing Foundation vocabulary and optional Logger; bounded startup/finalization |
+
+Construction: Settings, Logging, Context, Session(context) storage collaborator,
+Container, EventBus, Orchestrator(event_bus), Lifecycle, Kernel. Build is async,
+returns a wired CREATED graph, never initializes/resolves/publishes/creates directories.
+Lifecycle registers Context, Container, EventBus, Orchestrator in forward order;
+stop/shutdown use reverse touched order. Bootstrap never constructs an Executor.
+
+Public builders retain current signatures; Kernel retains all existing properties
+and adds explicit required constructor session, read-only session and async
+remove_session(SessionId). Kernel implements existing RuntimeContract. No renamed
+entrypoints, new Runtime, moved ownership, business pipeline or dependency package.
+execute requires RUNNING and guarded finally Container.clear_pipeline; removal
+uses Container.clear_session then Session.remove; full admitted shutdown drains
+Session registry after Lifecycle, including failure/cancellation. First errors and
+legal terminal FAILED are preserved. main is bounded smoke, no signal wait/inputless execute.
+
+Canonical acceptance: tests/kernel/test_bootstrap.py and
+tests/integration/test_runtime_startup.py; all APIs and 100% executable-line target
+per three files, required gates/CI. Other module files and tests remain frozen.
 
 ---
 

@@ -1879,157 +1879,43 @@ KR-010 Bootstrap Runtime
 
 ## BootstrapRuntime
 
-| Field | Value |
-|-------|-------|
-| Category | RUNTIME_CLASS |
-| KR Owner | KR-010 |
-| Owner File | src/kernel/runtime/bootstrap.py |
-| Export Path | src.kernel.runtime.bootstrap.BootstrapRuntime |
-| API Registry | BOOTSTRAP-API-001 |
-| Module Spec | KR-010 BootstrapRuntime |
-| Test Owner | KR-010 Bootstrap Tests |
+**Status:** APPROVED — ADR-008 B-01–B-05, 2026-10-06.
+Exact contract: [KR-010](../wave1/KR-010_RUNNER_BOOTSTRAP.md).
+Authority: [ADR-008](../ADR-008_KR010_Bootstrap_Reconciliation_Proposal_v1.0.md).
 
-**Purpose**
-
-Constructs the RuntimeKernel graph.
-
-### Public Methods
-
-- build()
-- validate_environment()
-- build_context()
-- build_container()
-- build_event_bus()
-- build_orchestrator()
-- build_lifecycle()
-
-### Depends On
-
-- ContainerRuntime
-- LifecycleRuntime
-- EventBusRuntime
-- ContextRuntime
-- OrchestratorRuntime
-
-### Imported By
-
-- src/main.py
-- Integration Tests
-
----
+Owner/export: src/kernel/runtime/bootstrap.py / src.kernel.runtime.bootstrap.BootstrapRuntime.
+Existing seven public methods: build (async), validate_environment, build_context,
+build_container, build_event_bus, build_orchestrator(event_bus),
+build_lifecycle(container, event_bus, context, orchestrator). Exact signatures in KR-010.
+Dependencies: Configuration/Logging, public five collaborators, Kernel;
+SessionRuntime only explicit approved construction. Imported by Main/canonical tests.
 
 ## RuntimeKernel
 
-| Field | Value |
-|-------|-------|
-| Category | RUNTIME_CLASS |
-| KR Owner | KR-010 |
-| Owner File | src/kernel/runtime/runtime.py |
-| Export Path | src.kernel.runtime.runtime.RuntimeKernel |
-| API Registry | BOOTSTRAP-API-002 |
-| Module Spec | KR-010 RuntimeKernel |
-| Test Owner | KR-010 RuntimeKernel Tests |
-
-**Purpose**
-
-Public runtime facade for Wave 1.
-
-### Public Properties
-
-- container
-- lifecycle
-- event_bus
-- context
-- orchestrator
-- version
-- runtime_layer
-- architecture_version
-
-### Public Methods
-
-- initialize()
-- start()
-- stop()
-- shutdown()
-- execute()
-- status()
-- state()
-- health()
-- diagnostics()
-
-### Depends On
-
-- ContainerRuntime
-- LifecycleRuntime
-- EventBusRuntime
-- ContextRuntime
-- OrchestratorRuntime
-
-### Imported By
-
-- src/main.py
-- BootstrapRuntime
-
----
-
-# FUNCTION Registry
+Owner/export: src/kernel/runtime/runtime.py / src.kernel.runtime.runtime.RuntimeKernel.
+Implements existing RuntimeContract, not another protocol. Constructor explicitly
+requires six keyword-only references including session: SessionRuntime.
+Ten read-only properties: container, lifecycle, event_bus, context, orchestrator,
+session, runtime_name, runtime_layer, version, architecture_version.
+Ten public methods: async initialize/start/stop/shutdown/execute/remove_session;
+sync status/state/health/diagnostics. No new universal contract member/compatibility alias.
+Dependencies: Foundation/version/contracts, PipelineDefinition, five public facades
+and narrowly permitted Session composition. Imported by Bootstrap/canonical tests.
 
 ## main
 
-| Field | Value |
-|-------|-------|
-| Category | FUNCTION |
-| KR Owner | KR-010 |
-| Owner File | src/main.py |
-| Export Path | src.main.main |
-| API Registry | BOOTSTRAP-API-003 |
-| Module Spec | KR-010 Main Entrypoint |
-| Test Owner | KR-010 Integration Tests |
+Owner/export: src/main.py / src.main.main; async main() -> None.
+Build once, initialize, start, immediately bounded finally stop/shutdown through
+Kernel; no invented pipeline/inputless execute or signal server. Both cleanup
+attempts independent; first error/cancellation survives. Single asyncio.run entry.
+Dependencies: Bootstrap, Foundation vocabulary, optional existing Logger, asyncio.
 
-**Purpose**
+## KR-010 Ownership and Counts
 
-Canonical asynchronous process entrypoint.
-
-### Signature
-
-`async def main() -> None`
-
-### Execution Sequence
-
-1. BootstrapRuntime.build()
-2. RuntimeKernel.initialize()
-3. RuntimeKernel.start()
-4. RuntimeKernel.execute()
-5. RuntimeKernel.stop()
-6. RuntimeKernel.shutdown()
-
-### Imported By
-
-Python process only.
-
----
-
-# KR-010 Runtime Dependency Matrix
-
-| Runtime | Depends On |
-|---------|------------|
-| BootstrapRuntime | ContainerRuntime, LifecycleRuntime, EventBusRuntime, ContextRuntime, OrchestratorRuntime |
-| RuntimeKernel | All public runtime facades |
-| main() | BootstrapRuntime |
-
----
-
-# Runtime Kernel Ownership Matrix
-
-| Runtime Facade | Owned By |
-|---------------|----------|
-| ContainerRuntime | RuntimeKernel |
-| LifecycleRuntime | RuntimeKernel |
-| EventBusRuntime | RuntimeKernel |
-| ContextRuntime | RuntimeKernel |
-| OrchestratorRuntime | RuntimeKernel |
-
-RuntimeKernel owns references only, never implementations.
+Two existing runtime classes, one entry function; 17 domain/public methods across
+both classes (constructors excluded), ten Kernel properties. SessionRuntime remains
+KR-008's storage owner; Kernel only holds its explicit read-only reference/composes DI.
+All canonical acceptance is in the two KR-010 test files with KR-011 ownership.
 
 ---
 

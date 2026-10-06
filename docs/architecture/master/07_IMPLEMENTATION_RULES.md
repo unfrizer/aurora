@@ -1,5 +1,30 @@
 # AURORA ENGINEERING BIBLE v1.1
 
+## Approved KR-010 Implementation Rules — ADR-008
+
+**Status:** APPROVED — ADR-008 B-01–B-05, 2026-10-06.
+Exact contract: [KR-010](../wave1/KR-010_RUNNER_BOOTSTRAP.md).
+Authority: [ADR-008](../ADR-008_KR010_Bootstrap_Reconciliation_Proposal_v1.0.md).
+
+Use the exact linked contract, same three production/two canonical test paths.
+Retain public Bootstrap builders; async build returns CREATED, no initialization/
+root context/event/directory/service work. Existing immutable config/cache/logger
+owners unchanged; no configure_logging replacement or directory abstraction.
+Bootstrap alone constructs the existing Session(context) collaborator; Kernel's
+required session reference, read-only property and remove_session are B-02's exact
+approved exception, not permission for arbitrary internal-runtime imports.
+
+A Kernel-local guard spans mutation AND cleanup; RUNNING execution uses captured
+valid Pipeline ID and Container finally disposal. Session DI uses Container, not
+Session internals. Partial startup abort uses only legal Lifecycle FAILED transition;
+FAILED remains terminal. First failure/cancellation/prior cause preserved, safe
+logging only; no shield/task/wait loop/new vocabulary/recovery/compatibility API.
+Main is bounded startup/finalization through facade, two independent cleanup attempts.
+Canonical tests exercise every API with 100% executable-line target per source,
+no skips/xfail/exclusions; all required gates and latest-head CI, one report and STOP.
+This overrides only contradictory KR-010 constructor/lifetime/entrypoint/error
+examples in this document; other implementation/ownership rules stay unchanged.
+
 Document ID: M-07
 
 Document Name: Implementation Rules
