@@ -1632,176 +1632,33 @@ Lifecycle callback registry.
 
 # KR-007 Symbol Index
 
-**Directory**
+**Authority:** APPROVED ADR-005 E-01–E-04, ADR-004 P-04 and AB-00C/D (2026-10-06).
+The exact signatures and acceptance contract are `../wave1/KR-007_EVENT_BUS.md`.
+Only KR-007 entries are reconciled; other module contracts remain unchanged.
 
-`src/kernel/runtime/`
+| File | Export | Responsibility | Concrete dependencies |
+| --- | --- | --- | --- |
+| bus.py | EventBusRuntime | Public facade/composition | Publisher, Dispatcher, Subscriber |
+| publisher.py | PublisherRuntime | Sole new event factory, validation, publication | Dispatcher |
+| dispatcher.py | DispatcherRuntime | Sequential snapshot delivery | Subscriber |
+| subscriber.py | SubscriberRuntime | Instance-local registry | None |
 
-**Runtime Layer**
+Canonical exports are `src.kernel.runtime.<file>.<listed class>` for all four
+existing files. Category: RUNTIME_CLASS; owner: KR-007/L0. Test owner: KR-011,
+canonical path tests/kernel/test_event_bus.py (ADR-004/005 adjustment authority).
+API IDs: EVENT-API-001 Bus, 002 Publisher, 003 Dispatcher, 004 Subscriber.
 
-L0
+| Class | Exact method names |
+| --- | --- |
+| EventBusRuntime | subscribe, unsubscribe, async publish, async publish_many, create_for_runtime, handlers, contains, clear; async initialize/start/stop/shutdown, health; runtime_name/runtime_layer properties |
+| PublisherRuntime | create, validate, async publish, async publish_many |
+| DispatcherRuntime | async dispatch, async dispatch_many |
+| SubscriberRuntime | subscribe, unsubscribe, handlers, contains, clear |
 
-**Owner KR**
-
-KR-007 Event Bus Runtime
-
----
-
-# RUNTIME_CLASS Registry
-
-## EventBusRuntime
-
-| Field | Value |
-|-------|-------|
-| Category | RUNTIME_CLASS |
-| KR Owner | KR-007 |
-| Owner File | src/kernel/runtime/bus.py |
-| Export Path | src.kernel.runtime.bus.EventBusRuntime |
-| API Registry | EVENT-API-001 |
-| Module Spec | KR-007 EventBusRuntime |
-| Test Owner | KR-007 EventBus Tests |
-
-**Purpose**
-
-Canonical public Event Bus.
-
-**Public Methods**
-
-- initialize()
-- shutdown()
-- publish()
-- publish_many()
-- subscribe()
-- unsubscribe()
-- handlers()
-- health()
-
-**Depends On**
-
-- PublisherRuntime
-- DispatcherRuntime
-- SubscriberRuntime
-
-**Imported By**
-
-- RuntimeKernel
-- LifecycleRuntime
-- ExecutorRuntime
-- ContextRuntime
-
----
-
-## PublisherRuntime
-
-| Field | Value |
-|-------|-------|
-| Category | RUNTIME_CLASS |
-| KR Owner | KR-007 |
-| Owner File | src/kernel/runtime/publisher.py |
-| Export Path | src.kernel.runtime.publisher.PublisherRuntime |
-| API Registry | EVENT-API-002 |
-| Module Spec | KR-007 PublisherRuntime |
-| Test Owner | KR-007 Publisher Tests |
-
-**Purpose**
-
-Creates immutable RuntimeEvents.
-
-**Public Methods**
-
-- create()
-- publish()
-- publish_many()
-
-**Depends On**
-
-- RuntimeEvent
-- RuntimeContext
-
-**Imported By**
-
-- EventBusRuntime
-
----
-
-## DispatcherRuntime
-
-| Field | Value |
-|-------|-------|
-| Category | RUNTIME_CLASS |
-| KR Owner | KR-007 |
-| Owner File | src/kernel/runtime/dispatcher.py |
-| Export Path | src.kernel.runtime.dispatcher.DispatcherRuntime |
-| API Registry | EVENT-API-003 |
-| Module Spec | KR-007 DispatcherRuntime |
-| Test Owner | KR-007 Dispatcher Tests |
-
-**Purpose**
-
-Dispatches RuntimeEvents to handlers.
-
-**Public Methods**
-
-- dispatch()
-- dispatch_many()
-- dispatch_sync()
-- dispatch_async()
-
-**Depends On**
-
-- SubscriberRuntime
-- RuntimeEvent
-
-**Imported By**
-
-- EventBusRuntime
-
----
-
-## SubscriberRuntime
-
-| Field | Value |
-|-------|-------|
-| Category | RUNTIME_CLASS |
-| KR Owner | KR-007 |
-| Owner File | src/kernel/runtime/subscriber.py |
-| Export Path | src.kernel.runtime.subscriber.SubscriberRuntime |
-| API Registry | EVENT-API-004 |
-| Module Spec | KR-007 SubscriberRuntime |
-| Test Owner | KR-007 Subscriber Tests |
-
-**Purpose**
-
-Owns subscriber registry.
-
-**Public Methods**
-
-- subscribe()
-- unsubscribe()
-- handlers_for()
-- contains()
-- clear()
-
-**Depends On**
-
-- RuntimeEvent
-
-**Imported By**
-
-- DispatcherRuntime
-- EventBusRuntime
-
----
-
-# KR-007 Runtime Dependency Matrix
-
-| Runtime | Depends On |
-|---------|------------|
-| EventBusRuntime | PublisherRuntime, DispatcherRuntime, SubscriberRuntime |
-| PublisherRuntime | RuntimeEvent, RuntimeContext |
-| DispatcherRuntime | SubscriberRuntime, RuntimeEvent |
-| SubscriberRuntime | RuntimeEvent |
-
----
+Publisher depends on RuntimeEvent/RuntimeContext and Dispatcher; Dispatcher depends
+on Subscriber/RuntimeEvent; Subscriber on EventHandlerContract; Bus on all three.
+Dispatcher is consumed by Publisher/Bus/tests, never imports Publisher. Runtime
+consumers use the Bus facade. No handlers_for, dispatch_sync/async or new symbols.
 
 # Runtime Layer Ownership Matrix (KR-005 → KR-007)
 
