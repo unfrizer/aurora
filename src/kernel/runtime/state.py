@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import ClassVar
 
 from src.core.exceptions import RuntimeStateError
@@ -13,18 +15,22 @@ from src.kernel.contracts.lifecycle import LifecycleState
 class StateRuntime:
     """Own the single mutable RuntimeStatus source."""
 
-    _TRANSITIONS: ClassVar[dict[RuntimeStatus, frozenset[RuntimeStatus]]] = {
-        RuntimeStatus.CREATED: frozenset({RuntimeStatus.INITIALIZING}),
-        RuntimeStatus.INITIALIZING: frozenset({RuntimeStatus.READY, RuntimeStatus.FAILED}),
-        RuntimeStatus.READY: frozenset({RuntimeStatus.STARTING, RuntimeStatus.FAILED}),
-        RuntimeStatus.STARTING: frozenset({RuntimeStatus.RUNNING, RuntimeStatus.FAILED}),
-        RuntimeStatus.RUNNING: frozenset({RuntimeStatus.STOPPING, RuntimeStatus.FAILED}),
-        RuntimeStatus.STOPPING: frozenset({RuntimeStatus.STOPPED, RuntimeStatus.FAILED}),
-        RuntimeStatus.STOPPED: frozenset({RuntimeStatus.SHUTTING_DOWN}),
-        RuntimeStatus.SHUTTING_DOWN: frozenset({RuntimeStatus.TERMINATED, RuntimeStatus.FAILED}),
-        RuntimeStatus.TERMINATED: frozenset(),
-        RuntimeStatus.FAILED: frozenset(),
-    }
+    _TRANSITIONS: ClassVar[Mapping[RuntimeStatus, frozenset[RuntimeStatus]]] = MappingProxyType(
+        {
+            RuntimeStatus.CREATED: frozenset({RuntimeStatus.INITIALIZING}),
+            RuntimeStatus.INITIALIZING: frozenset({RuntimeStatus.READY, RuntimeStatus.FAILED}),
+            RuntimeStatus.READY: frozenset({RuntimeStatus.STARTING, RuntimeStatus.FAILED}),
+            RuntimeStatus.STARTING: frozenset({RuntimeStatus.RUNNING, RuntimeStatus.FAILED}),
+            RuntimeStatus.RUNNING: frozenset({RuntimeStatus.STOPPING, RuntimeStatus.FAILED}),
+            RuntimeStatus.STOPPING: frozenset({RuntimeStatus.STOPPED, RuntimeStatus.FAILED}),
+            RuntimeStatus.STOPPED: frozenset({RuntimeStatus.SHUTTING_DOWN}),
+            RuntimeStatus.SHUTTING_DOWN: frozenset(
+                {RuntimeStatus.TERMINATED, RuntimeStatus.FAILED}
+            ),
+            RuntimeStatus.TERMINATED: frozenset(),
+            RuntimeStatus.FAILED: frozenset(),
+        }
+    )
 
     def __init__(self) -> None:
         self._current = RuntimeStatus.CREATED
