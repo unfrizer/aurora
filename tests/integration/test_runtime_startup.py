@@ -22,6 +22,7 @@ from src.core.exceptions import (
     RuntimeStateError,
 )
 from src.core.logger import get_logger
+from src.core.settings import Settings
 from src.core.types import (
     DIScope,
     HealthStatus,
@@ -37,6 +38,10 @@ from src.kernel.contracts.events import EventHandlerContract, RuntimeEvent
 from src.kernel.contracts.module import RuntimeModuleManifest
 from src.kernel.contracts.service import ServiceContract, ServiceDescriptor
 from src.kernel.runtime.bootstrap import BootstrapRuntime
+from src.kernel.runtime.bus import EventBusRuntime
+from src.kernel.runtime.container import ContainerRuntime
+from src.kernel.runtime.lifecycle import LifecycleRuntime
+from src.kernel.runtime.orchestrator import OrchestratorRuntime
 from src.kernel.runtime.pipeline import PipelineDefinition, PipelineStage
 from src.kernel.runtime.runtime import RuntimeKernel
 
@@ -73,6 +78,129 @@ class LogCapture(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         self.messages.append(record.getMessage())
+
+
+@pytest.mark.parametrize("round_number", range(4))
+async def test_shared_fixtures_are_fresh_and_execute_real_bound_work(
+    settings: Settings,
+    trace_context: TraceContext,
+    runtime_context: RuntimeContext,
+    container: ContainerRuntime,
+    event_bus: EventBusRuntime,
+    lifecycle: LifecycleRuntime,
+    orchestrator: OrchestratorRuntime,
+    round_number: int,
+) -> None:
+    assert settings.environment == "development" and settings.log_level == "INFO"
+    assert lifecycle.status is RuntimeStatus.RUNNING
+    assert container.descriptors() == () and orchestrator.modules() == ()
+    assert not event_bus.contains("pipeline.completed")
+    assert runtime_context.trace is trace_context and runtime_context.metadata == {}
+    assert runtime_context.trace_id == trace_context.trace_id
+    assert runtime_context.session_id != runtime_context.pipeline_id
+    service_id = ServiceId("fixture.service")
+    container.register(
+        ServiceDescriptor(service_id=service_id, scope=DIScope.APPLICATION, implementation=Service)
+    )
+    service = await container.resolve(service_id)
+    assert isinstance(service, Service) and service.initializations == 1
+    collector = Collector()
+    event_bus.subscribe("pipeline.completed", collector)
+    effects: list[int] = []
+
+    async def operation(context: RuntimeContext) -> None:
+        assert context.session_id == runtime_context.session_id
+        assert await container.resolve(service_id) is service
+        effects.append(round_number)
+
+    module_id = ModuleId("fixture.module")
+    orchestrator.register_module(
+        RuntimeModuleManifest(
+            module_id=module_id,
+            runtime_layer=RuntimeLayer.L0_KERNEL,
+            depends_on=(),
+            provides=(),
+            version="fixture",
+        ),
+        operation=operation,
+    )
+    await orchestrator.execute(
+        PipelineDefinition(
+            pipeline_id=runtime_context.pipeline_id,
+            stages=(PipelineStage(stage_id="fixture.stage", module_id=module_id, depends_on=()),),
+        ),
+        context=runtime_context,
+    )
+    assert effects == [round_number]
+    assert [event.event_type for event in collector.events] == ["pipeline.completed"]
+    assert collector.events[0].trace == trace_context
+    assert runtime_context.metadata == {} and lifecycle.status is RuntimeStatus.RUNNING
+
+
+async def test_shared_fixture_teardown_completes_real_cleanup_in_dependency_order(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+    container: ContainerRuntime,
+    event_bus: EventBusRuntime,
+    lifecycle: LifecycleRuntime,
+    orchestrator: OrchestratorRuntime,
+) -> None:
+    assert settings.environment == "development"
+    service_id = ServiceId("fixture.cleanup")
+    container.register(
+        ServiceDescriptor(service_id=service_id, scope=DIScope.APPLICATION, implementation=Service)
+    )
+    service = await container.resolve(service_id)
+    assert isinstance(service, Service)
+    event_bus.subscribe("fixture.cleanup", Collector())
+    orchestrator.register_module(
+        RuntimeModuleManifest(
+            module_id=ModuleId("fixture.cleanup"),
+            runtime_layer=RuntimeLayer.L0_KERNEL,
+            depends_on=(),
+            provides=(),
+            version="fixture",
+        )
+    )
+    completed: list[str] = []
+    close_container, close_bus = container.shutdown, event_bus.shutdown
+    close_orchestrator, close_lifecycle = orchestrator.shutdown, lifecycle.shutdown
+
+    async def checked_orchestrator_shutdown() -> None:
+        await close_orchestrator()
+        assert orchestrator.modules() == ()
+        if "orchestrator" not in completed:
+            completed.append("orchestrator")
+
+    async def checked_bus_shutdown() -> None:
+        await close_bus()
+        assert event_bus.handlers("fixture.cleanup") == ()
+        if "event_bus" not in completed:
+            completed.append("event_bus")
+
+    async def checked_container_shutdown() -> None:
+        await close_container()
+        assert service.shutdowns == 1
+        assert container.contains(service_id)  # Descriptor observation survives shutdown.
+        with pytest.raises(RuntimeStateError):
+            await container.resolve(service_id)
+        if "container" not in completed:
+            completed.append("container")
+        else:
+            assert completed == ["orchestrator", "event_bus", "container", "lifecycle"]
+
+    async def checked_lifecycle_shutdown() -> None:
+        await close_lifecycle()
+        assert lifecycle.status is RuntimeStatus.TERMINATED
+        assert completed == ["orchestrator", "event_bus", "container"]
+        completed.append("lifecycle")
+
+    # monkeypatch is created first and restored last, after all fixture finalizers.
+    # Assertions run after actual awaited cleanup, not in shared fixture bodies.
+    monkeypatch.setattr(orchestrator, "shutdown", checked_orchestrator_shutdown)
+    monkeypatch.setattr(event_bus, "shutdown", checked_bus_shutdown)
+    monkeypatch.setattr(container, "shutdown", checked_container_shutdown)
+    monkeypatch.setattr(lifecycle, "shutdown", checked_lifecycle_shutdown)
 
 
 def traced_service(
