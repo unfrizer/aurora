@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import ast
+import importlib
 import inspect
 from abc import ABC
-from dataclasses import MISSING, FrozenInstanceError, fields, replace
+from dataclasses import MISSING, FrozenInstanceError, fields, is_dataclass, replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import get_type_hints
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -13,7 +16,10 @@ from src.core.types import (
     DIScope,
     EventId,
     EventPriority,
+    HealthStatus,
+    Metadata,
     ModuleId,
+    Payload,
     PipelineId,
     RuntimeLayer,
     RuntimeStatus,
@@ -334,3 +340,196 @@ def test_package_exports_unchanged() -> None:
         "ServiceDescriptor",
         "TraceContext",
     }
+
+
+@pytest.mark.parametrize(
+    ("contract", "annotations"),
+    [
+        (
+            TraceContext,
+            {"trace_id": TraceId, "parent_trace_id": TraceId | None, "correlation_id": UUID | None},
+        ),
+        (
+            RuntimeContext,
+            {
+                "session_id": SessionId,
+                "pipeline_id": PipelineId,
+                "runtime_layer": RuntimeLayer,
+                "trace": TraceContext,
+                "metadata": Metadata,
+                "created_at": datetime,
+                "expires_at": datetime | None,
+            },
+        ),
+        (
+            RuntimeEvent,
+            {
+                "event_id": EventId,
+                "event_type": str,
+                "session_id": SessionId,
+                "trace": TraceContext,
+                "priority": EventPriority,
+                "timestamp": datetime,
+                "payload": Payload,
+            },
+        ),
+        (
+            RuntimeModuleManifest,
+            {
+                "module_id": ModuleId,
+                "runtime_layer": RuntimeLayer,
+                "depends_on": tuple[ModuleId, ...],
+                "provides": tuple[str, ...],
+                "version": str,
+            },
+        ),
+        (
+            LifecycleState,
+            {
+                "current": RuntimeStatus,
+                "previous": RuntimeStatus | None,
+                "entered_at": datetime,
+                "transition_count": int,
+            },
+        ),
+        (
+            ServiceDescriptor,
+            {
+                "service_id": ServiceId,
+                "scope": DIScope,
+                "implementation": type[ServiceContract],
+                "eager": bool,
+                "dependencies": tuple[tuple[str, ServiceId], ...],
+            },
+        ),
+    ],
+)
+def test_exact_dataclass_annotations_and_default_order(
+    contract: type[object],
+    annotations: dict[str, object],
+) -> None:
+    assert get_type_hints(contract) == annotations
+    assert is_dataclass(contract)
+    default_seen = False
+    for item in fields(contract):
+        has_default = item.default is not MISSING or item.default_factory is not MISSING
+        assert not default_seen or has_default
+        default_seen |= has_default
+        assert item.kw_only
+        assert not isinstance(item.default, (dict, list, set))
+
+
+def test_all_dataclass_fields_are_frozen_not_only_selected_fields() -> None:
+    snapshots = (
+        _trace(),
+        _context(),
+        _event(),
+        _descriptor(),
+        RuntimeModuleManifest(
+            module_id=ModuleId("synthetic"),
+            runtime_layer=RuntimeLayer.L0_KERNEL,
+            depends_on=(),
+            provides=(),
+            version="1.0",
+        ),
+        LifecycleState(
+            current=RuntimeStatus.READY,
+            previous=RuntimeStatus.INITIALIZING,
+            entered_at=datetime.now(UTC),
+            transition_count=2,
+        ),
+    )
+    for snapshot in snapshots:
+        assert not hasattr(snapshot, "__dict__")
+        for item in fields(snapshot):
+            original = getattr(snapshot, item.name)
+            with pytest.raises(FrozenInstanceError):
+                setattr(snapshot, item.name, original)
+            assert getattr(snapshot, item.name) == original
+
+
+@pytest.mark.parametrize(
+    ("count", "timestamp", "message"),
+    [
+        (-1, datetime.now(UTC), "transition_count must be non-negative"),
+        (0, datetime(2026, 1, 1), "entered_at must be timezone-aware"),
+    ],
+)
+def test_lifecycle_snapshot_existing_invariants(
+    count: int,
+    timestamp: datetime,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        LifecycleState(
+            current=RuntimeStatus.CREATED,
+            previous=None,
+            entered_at=timestamp,
+            transition_count=count,
+        )
+
+
+def test_direct_contract_construction_does_not_validate_or_detach_json() -> None:
+    metadata: Metadata = {"nested": ["synthetic"]}
+    context = replace(_context(), metadata=metadata)
+    payload: Payload = {"nested": ["synthetic"]}
+    event = replace(_event(), payload=payload, event_type="")
+    assert context.metadata is metadata and event.payload is payload
+    assert event.event_type == ""
+    assert "__post_init__" not in vars(RuntimeContext)
+    assert "__post_init__" not in vars(RuntimeEvent)
+    assert "__post_init__" not in vars(ServiceDescriptor)
+    assert "__post_init__" not in vars(RuntimeModuleManifest)
+
+
+@pytest.mark.parametrize(
+    ("module", "exports"),
+    [
+        ("context", {"RuntimeContext", "TraceContext"}),
+        ("events", {"EventHandlerContract", "RuntimeEvent"}),
+        ("lifecycle", {"LifecycleContract", "LifecycleState"}),
+        ("module", {"RuntimeModuleManifest"}),
+        ("runtime", {"RuntimeContract"}),
+        ("service", {"ServiceContract", "ServiceDescriptor"}),
+    ],
+)
+def test_individual_contract_exports_and_downward_imports(module: str, exports: set[str]) -> None:
+    imported = importlib.import_module("src.kernel.contracts." + module)
+    assert set(imported.__all__) == exports
+    for name in exports:
+        assert getattr(imported, name) is getattr(contracts, name)
+    assert imported.__file__ is not None
+    tree = ast.parse(Path(imported.__file__).read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            assert node.module is not None and node.level == 0
+            assert node.module.startswith(("src.core.", "src.kernel.contracts.")) or (
+                node.module in {"__future__", "abc", "dataclasses", "datetime", "uuid"}
+            )
+        elif isinstance(node, ast.Import):
+            pytest.fail("Contract imports must retain their explicit downward boundary")
+
+
+def test_abstract_signatures_are_verified_without_invoking_stubs() -> None:
+    signatures: tuple[tuple[object, dict[str, object]], ...] = (
+        (ServiceContract.initialize, {"return": type(None)}),
+        (ServiceContract.shutdown, {"return": type(None)}),
+        (EventHandlerContract.handle, {"event": RuntimeEvent, "return": type(None)}),
+        (LifecycleContract.transition, {"target": RuntimeStatus, "return": type(None)}),
+        (LifecycleContract.state, {"return": LifecycleState}),
+        (RuntimeContract.initialize, {"return": type(None)}),
+        (RuntimeContract.start, {"return": type(None)}),
+        (RuntimeContract.stop, {"return": type(None)}),
+        (RuntimeContract.shutdown, {"return": type(None)}),
+        (RuntimeContract.health, {"return": HealthStatus}),
+    )
+    for method, hints in signatures:
+        assert get_type_hints(method) == hints
+        assert tuple(inspect.signature(method).parameters) == (
+            "self",
+            *(name for name in hints if name != "return"),
+        )
+    for name, annotation in (("runtime_name", str), ("runtime_layer", RuntimeLayer)):
+        descriptor = vars(RuntimeContract)[name]
+        assert isinstance(descriptor, property) and descriptor.fget is not None
+        assert get_type_hints(descriptor.fget) == {"return": annotation}
