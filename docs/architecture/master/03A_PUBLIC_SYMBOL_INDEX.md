@@ -1,5 +1,41 @@
 # AURORA ENGINEERING BIBLE v1.1
 
+## Approved core/test reconciliation — ADR-009
+
+**Status:** APPROVED — explicit T-01–T-05 approval and root-admission clarification,
+2026-10-07. Exact normative contracts:
+[KR-002](../wave1/KR-002_CONFIGURATION.md),
+[KR-003](../wave1/KR-003_LOGGING.md),
+[KR-011](../wave1/KR-011_KERNEL_TEST_SUITE.md).
+
+Only affected KR-002/KR-003/KR-011 declarations are superseded. Legacy duplicate
+summaries/counts/examples for those modules elsewhere in this document are NOT
+authority when they conflict with these exact contracts. Other module ownership,
+L0–L8, DI/event/lifecycle vocabularies and approved ADR-004–008 acceptance remain.
+
+KR-002: immutable BaseSettings, eight fields, Environment alias, three properties,
+two validators; get_settings and validate_configuration, lru_cache(maxsize=1).
+No reload_settings/clear_settings_cache/validate_settings, missing-.env error,
+provider fields, absolute/existing-path or timezone-database validation requirement.
+
+KR-003: get_logger(name, config=None), LOGGER; LoggingConfig (three fields, frozen/
+slotted, positional-compatible), RuntimeContextFilter, ConsoleFormatter, JsonFormatter,
+seven explicit correlation/session context functions and two default constants.
+No configure_logging/reset_logging/ContextFilter alias, root configuration or
+automatic trace/pipeline/runtime injection. Empty name and EXACT "root" plus invalid
+levels reject before registry access/mutation with existing InvalidConfigurationError
+and fixed safe messages. Keep cache and first-installed handlers. Foundation
+constants keep KR-001 ownership; logger -> logging_config/ Foundation is allowed,
+logging_config -> logger or concrete runtime is forbidden. No new import direction.
+
+KR-011: eleven executable test modules plus tests/conftest.py (seven named fresh
+function-scoped fixtures), exact paths and all public API/coverage gates in its
+linked contract. No tests/runtime or split Registry/Scope/Resolver/Executor files.
+Current narrow KR-003 changes only logger.py and test_logger.py; no other production,
+test, dependency or workflow edit. KR-011 is a separate subsequent reviewed task.
+Approved contract compilation is not a claim of implementation/test acceptance.
+
+
 Document ID: M-03A
 
 Document Name: Public Symbol Index
@@ -446,438 +482,70 @@ IN PROGRESS (Part 1 of 6)
 <!-- M-03A PART 2 — KR-002 + KR-003 Symbol Index -->
 <!-- ========================================================================= -->
 
-# KR-002 Symbol Index
+# KR-002 Symbol Index — APPROVED ADR-009
+
+| Symbol | Category | Owner file | Test owner |
+| --- | --- | --- | --- |
+| Environment | TYPE_ALIAS | src/core/settings.py | KR-011 test_settings.py |
+| Settings | BASE_SETTINGS | src/core/settings.py | KR-011 test_settings.py |
+| get_settings | FUNCTION | src/core/config.py | KR-011 test_settings.py |
+| validate_configuration | FUNCTION | src/core/config.py | KR-011 test_settings.py |
+
+Public fields/defaults and five members:
+| Field | Type | Default | Explicit alias |
+
+| --- | --- | --- | --- |
+| app_name | str | PROJECT_NAME | none |
+| environment | Environment | development | AURORA_ENV |
+| log_level | str | DEFAULT_LOG_LEVEL (INFO) | AURORA_LOG_LEVEL |
+| timezone | str | DEFAULT_TIMEZONE (UTC) | none |
+| config_path | Path | Path("config") | AURORA_CONFIG_PATH |
+| data_path | Path | Path("data") | none |
+| cache_path | Path | Path(".cache") | none |
+| logs_path | Path | Path("logs") | none |
+
+Exactly three read-only properties: is_development, is_testing, is_production,
+each returning bool. Existing public class validators are
+validate_log_level(cls, value: str) -> str and
+validate_path(cls, value: str | Path) -> Path. Log levels normalize by upper()
+and accept only DEBUG/INFO/WARNING/ERROR/CRITICAL. All four paths convert to Path;
+relative/nonexistent paths are valid and no directory is created. Timezone is a
+descriptive string; no timezone-database validation is promised. All fields have
+defaults: missing/empty .env and unknown extra keys are accepted.
+
+
+Exact [KR-002 contract](../wave1/KR-002_CONFIGURATION.md) defines signatures,
+construction, validation, cache and errors. Four module-owned symbols, not a
+dataclass/four-loader API. Imported vendor symbols are not AURORA-owned exports.
+
+# KR-003 Symbol Index — APPROVED ADR-009
+
+| Owner file | Public symbol |
+
+| --- | --- |
+| logger.py | get_logger(name: str, config: LoggingConfig \| None = None) -> logging.Logger |
+| logger.py | LOGGER: Final[logging.Logger] |
+| logging_config.py | LoggingConfig |
+| logging_config.py | RuntimeContextFilter.filter(record: logging.LogRecord) -> bool |
+| logging_config.py | ConsoleFormatter.format(record: logging.LogRecord) -> str |
+| logging_config.py | JsonFormatter.format(record: logging.LogRecord) -> str |
+| logging_config.py | set_correlation_id(correlation_id: str \| None) -> None |
+| logging_config.py | get_correlation_id() -> str \| None |
+| logging_config.py | clear_correlation_id() -> None |
+| logging_config.py | set_session_id(session_id: str \| None) -> None |
+| logging_config.py | get_session_id() -> str \| None |
+| logging_config.py | clear_session_id() -> None |
+| logging_config.py | clear_logging_context() -> None |
+| logging_config.py | DEFAULT_LOGGING_CONFIG: Final[LoggingConfig] |
+| logging_config.py | DEFAULT_CONTEXT_FILTER: Final[RuntimeContextFilter] |
+
+
+Eight functions, four classes and three constants: 15 module-owned symbols.
+Verify three formatter/filter member methods and LoggingConfig's exact field
+schema as member APIs too. Exact [KR-003 contract](../wave1/KR-003_LOGGING.md).
+Foundation constants remain KR-001, not logging-owned symbols. All legacy
+cumulative core counts/index duplicates are superseded by these scoped tables.
 
-**Directory**
-
-`src/core/`
-
-**Runtime Layer**
-
-L0
-
-**Owner KR**
-
-KR-002 Configuration Runtime
-
----
-
-# DATACLASS Registry
-
-## Settings
-
-| Field | Value |
-|-------|-------|
-| Category | DATACLASS |
-| KR Owner | KR-002 |
-| Owner File | src/core/settings.py |
-| Export Path | src.core.settings.Settings |
-| API Registry | CONFIG-001 |
-| Module Spec | CONFIG-001 |
-| Test Owner | KR-002 Settings Tests |
-
-**Purpose**
-
-Canonical immutable runtime configuration snapshot.
-
-**Public Fields**
-
-- project_name
-- project_version
-- architecture_version
-- environment
-- debug
-- log_level
-- timezone
-- locale
-- root_dir
-- src_dir
-- docs_dir
-- tests_dir
-- cache_dir
-- temp_dir
-- openrouter_api_key
-- openrouter_base_url
-- openrouter_timeout
-- default_language
-- default_pipeline_timeout
-- default_event_priority
-- metadata
-
----
-
-# FUNCTION Registry
-
-## get_settings
-
-| Field | Value |
-|-------|-------|
-| Category | FUNCTION |
-| KR Owner | KR-002 |
-| Owner File | src/core/config.py |
-| Export Path | src.core.config.get_settings |
-| API Registry | CONFIG-002 |
-| Module Spec | CONFIG-002 |
-| Test Owner | KR-002 Config Tests |
-
-**Returns**
-
-Settings
-
-**Behavior**
-
-Returns canonical immutable Settings snapshot.
-
----
-
-## reload_settings
-
-| Field | Value |
-|-------|-------|
-| Category | FUNCTION |
-| KR Owner | KR-002 |
-| Owner File | src/core/config.py |
-| Export Path | src.core.config.reload_settings |
-| API Registry | CONFIG-003 |
-| Module Spec | CONFIG-003 |
-| Test Owner | KR-002 Config Tests |
-
-**Returns**
-
-Settings
-
-**Behavior**
-
-Rebuilds immutable Settings snapshot from environment.
-
----
-
-## clear_settings_cache
-
-| Field | Value |
-|-------|-------|
-| Category | FUNCTION |
-| KR Owner | KR-002 |
-| Owner File | src/core/config.py |
-| Export Path | src.core.config.clear_settings_cache |
-| API Registry | CONFIG-004 |
-| Module Spec | CONFIG-004 |
-| Test Owner | KR-002 Config Tests |
-
-**Returns**
-
-None
-
-**Behavior**
-
-Testing helper that clears Settings cache.
-
----
-
-## validate_settings
-
-| Field | Value |
-|-------|-------|
-| Category | FUNCTION |
-| KR Owner | KR-002 |
-| Owner File | src/core/config.py |
-| Export Path | src.core.config.validate_settings |
-| API Registry | CONFIG-005 |
-| Module Spec | CONFIG-005 |
-| Test Owner | KR-002 Validation Tests |
-
-**Returns**
-
-None
-
-**Behavior**
-
-Validates immutable Settings snapshot.
-
----
-
-# KR-002 Symbol Statistics
-
-| Category | Count |
-|----------|------:|
-| Dataclasses | 1 |
-| Functions | 4 |
-| Total Symbols Indexed | 5 |
-
----
-
-# KR-003 Symbol Index
-
-**Directory**
-
-`src/core/`
-
-**Runtime Layer**
-
-L0
-
-**Owner KR**
-
-KR-003 Logging Runtime
-
----
-
-# FUNCTION Registry
-
-## get_logger
-
-| Field | Value |
-|-------|-------|
-| Category | FUNCTION |
-| KR Owner | KR-003 |
-| Owner File | src/core/logger.py |
-| Export Path | src.core.logger.get_logger |
-| API Registry | LOG-001 |
-| Module Spec | LOG-001 |
-| Test Owner | KR-003 Logger Tests |
-
-**Returns**
-
-logging.Logger
-
-**Behavior**
-
-Returns canonical cached logger instance.
-
----
-
-## configure_logging
-
-| Field | Value |
-|-------|-------|
-| Category | FUNCTION |
-| KR Owner | KR-003 |
-| Owner File | src/core/logging_config.py |
-| Export Path | src.core.logging_config.configure_logging |
-| API Registry | LOG-002 |
-| Module Spec | LOG-002 |
-| Test Owner | KR-003 Logging Config Tests |
-
-**Returns**
-
-None
-
-**Behavior**
-
-Initializes global logging runtime.
-
----
-
-## reset_logging
-
-| Field | Value |
-|-------|-------|
-| Category | FUNCTION |
-| KR Owner | KR-003 |
-| Owner File | src/core/logging_config.py |
-| Export Path | src.core.logging_config.reset_logging |
-| API Registry | LOG-003 |
-| Module Spec | LOG-003 |
-| Test Owner | KR-003 Logging Config Tests |
-
-**Returns**
-
-None
-
-**Behavior**
-
-Resets logging runtime (tests only).
-
----
-
-# UTILITY_CLASS Registry
-
-## ContextFilter
-
-| Field | Value |
-|-------|-------|
-| Category | UTILITY_CLASS |
-| KR Owner | KR-003 |
-| Owner File | src/core/logging_config.py |
-| Export Path | src.core.logging_config.ContextFilter |
-| API Registry | LOG-004 |
-| Module Spec | LOG-004 |
-| Test Owner | KR-003 Context Filter Tests |
-
-**Purpose**
-
-Injects RuntimeContext into log records.
-
-**Public Methods**
-
-- filter()
-
----
-
-## ConsoleFormatter
-
-| Field | Value |
-|-------|-------|
-| Category | UTILITY_CLASS |
-| KR Owner | KR-003 |
-| Owner File | src/core/logging_config.py |
-| Export Path | src.core.logging_config.ConsoleFormatter |
-| API Registry | LOG-005 |
-| Module Spec | LOG-005 |
-| Test Owner | KR-003 Formatter Tests |
-
-**Purpose**
-
-Canonical console formatter.
-
-**Public Methods**
-
-- format()
-
----
-
-## JsonFormatter
-
-| Field | Value |
-|-------|-------|
-| Category | UTILITY_CLASS |
-| KR Owner | KR-003 |
-| Owner File | src/core/logging_config.py |
-| Export Path | src.core.logging_config.JsonFormatter |
-| API Registry | LOG-006 |
-| Module Spec | LOG-006 |
-| Test Owner | KR-003 Formatter Tests |
-
-**Purpose**
-
-Canonical structured JSON formatter.
-
-**Public Methods**
-
-- format()
-
----
-
-# Logging Public Constants
-
-These constants are exported publicly from `src/core/constants.py`.
-
-## PROJECT_NAME
-
-| Field | Value |
-|-------|-------|
-| Category | CONSTANT |
-| KR Owner | KR-003 |
-| Owner File | src/core/constants.py |
-| Export Path | src.core.constants.PROJECT_NAME |
-| API Registry | CONSTANT-001 |
-| Module Spec | CONSTANT-001 |
-| Test Owner | KR-003 Constants Tests |
-
-**Purpose**
-
-Canonical repository name.
-
----
-
-## ARCHITECTURE_VERSION
-
-| Field | Value |
-|-------|-------|
-| Category | CONSTANT |
-| KR Owner | KR-003 |
-| Owner File | src/core/constants.py |
-| Export Path | src.core.constants.ARCHITECTURE_VERSION |
-| API Registry | CONSTANT-002 |
-| Module Spec | CONSTANT-002 |
-| Test Owner | KR-003 Constants Tests |
-
-**Purpose**
-
-Canonical Engineering Bible architecture version.
-
----
-
-## DEFAULT_LOG_LEVEL
-
-| Field | Value |
-|-------|-------|
-| Category | CONSTANT |
-| KR Owner | KR-003 |
-| Owner File | src/core/constants.py |
-| Export Path | src.core.constants.DEFAULT_LOG_LEVEL |
-| API Registry | CONSTANT-003 |
-| Module Spec | CONSTANT-003 |
-| Test Owner | KR-003 Constants Tests |
-
-**Purpose**
-
-Canonical runtime default log level.
-
----
-
-## DEFAULT_TIMEZONE
-
-| Field | Value |
-|-------|-------|
-| Category | CONSTANT |
-| KR Owner | KR-003 |
-| Owner File | src/core/constants.py |
-| Export Path | src.core.constants.DEFAULT_TIMEZONE |
-| API Registry | CONSTANT-004 |
-| Module Spec | CONSTANT-004 |
-| Test Owner | KR-003 Constants Tests |
-
-**Purpose**
-
-Canonical runtime timezone.
-
----
-
-## DEFAULT_LOCALE
-
-| Field | Value |
-|-------|-------|
-| Category | CONSTANT |
-| KR Owner | KR-003 |
-| Owner File | src/core/constants.py |
-| Export Path | src.core.constants.DEFAULT_LOCALE |
-| API Registry | CONSTANT-005 |
-| Module Spec | CONSTANT-005 |
-| Test Owner | KR-003 Constants Tests |
-
-**Purpose**
-
-Canonical runtime locale.
-
----
-
-# KR-003 Symbol Statistics
-
-| Category | Count |
-|----------|------:|
-| Functions | 3 |
-| Utility Classes | 3 |
-| Constants | 5 |
-| Total Symbols Indexed | 11 |
-
----
-
-# Cumulative Symbol Index Progress
-
-| KR | Indexed Symbols |
-|----|----------------:|
-| KR-001 | 17 |
-| KR-002 | 5 |
-| KR-003 | 11 |
-
-**Total Indexed So Far:** **33 public symbols**
-
----
-
-**Document Status:** IN PROGRESS (Part 2 of 6)
-
-<!-- ========================================================================= -->
 <!-- M-03A PART 3 — KR-004 Kernel Contracts Symbol Index -->
 <!-- ========================================================================= -->
 
@@ -2509,13 +2177,10 @@ Symbols are indexed alphabetically.
 
 | Symbol | Category | Owner File | KR |
 |--------|----------|------------|----|
-| ARCHITECTURE_VERSION | CONSTANT | src/core/constants.py | KR-003 |
+| ARCHITECTURE_VERSION | CONSTANT | src/core/version.py | KR-001 |
 | BootstrapRuntime | RUNTIME_CLASS | src/kernel/runtime/bootstrap.py | KR-010 |
-| clear_settings_cache | FUNCTION | src/core/config.py | KR-002 |
-| configure_logging | FUNCTION | src/core/logging_config.py | KR-003 |
 | ConsoleFormatter | UTILITY_CLASS | src/core/logging_config.py | KR-003 |
 | ContainerRuntime | RUNTIME_CLASS | src/kernel/runtime/container.py | KR-005 |
-| ContextFilter | UTILITY_CLASS | src/core/logging_config.py | KR-003 |
 | ContextRuntime | RUNTIME_CLASS | src/kernel/runtime/context.py | KR-008 |
 
 ---
@@ -2524,9 +2189,8 @@ Symbols are indexed alphabetically.
 
 | Symbol | Category | Owner File | KR |
 |--------|----------|------------|----|
-| DEFAULT_LOCALE | CONSTANT | src/core/constants.py | KR-003 |
-| DEFAULT_LOG_LEVEL | CONSTANT | src/core/constants.py | KR-003 |
-| DEFAULT_TIMEZONE | CONSTANT | src/core/constants.py | KR-003 |
+| DEFAULT_LOG_LEVEL | CONSTANT | src/core/constants.py | KR-001 |
+| DEFAULT_TIMEZONE | CONSTANT | src/core/constants.py | KR-001 |
 | DispatcherRuntime | RUNTIME_CLASS | src/kernel/runtime/dispatcher.py | KR-007 |
 | DIScope | ENUM | src/core/types.py | KR-001 |
 | EventId | TYPE_ALIAS | src/core/types.py | KR-001 |
@@ -2562,7 +2226,7 @@ Symbols are indexed alphabetically.
 | PipelineDefinition | DATACLASS | src/kernel/runtime/pipeline.py | KR-009 |
 | PipelineId | TYPE_ALIAS | src/core/types.py | KR-001 |
 | PipelineStage | DATACLASS | src/kernel/runtime/pipeline.py | KR-009 |
-| PROJECT_NAME | CONSTANT | src/core/constants.py | KR-003 |
+| PROJECT_NAME | CONSTANT | src/core/constants.py | KR-001 |
 | ProviderRuntime | RUNTIME_CLASS | src/kernel/runtime/provider.py | KR-005 |
 | PublisherRuntime | RUNTIME_CLASS | src/kernel/runtime/publisher.py | KR-007 |
 
@@ -2573,9 +2237,7 @@ Symbols are indexed alphabetically.
 | Symbol | Category | Owner File | KR |
 |--------|----------|------------|----|
 | RegistryRuntime | RUNTIME_CLASS | src/kernel/runtime/registry.py | KR-005 |
-| reload_settings | FUNCTION | src/core/config.py | KR-002 |
 | ResolverRuntime | RUNTIME_CLASS | src/kernel/runtime/resolver.py | KR-005 |
-| reset_logging | FUNCTION | src/core/logging_config.py | KR-003 |
 | RuntimeContext | DATACLASS | src/kernel/contracts/context.py | KR-004 |
 | RuntimeContract | PROTOCOL | src/kernel/contracts/runtime.py | KR-004 |
 | RuntimeEvent | DATACLASS | src/kernel/contracts/events.py | KR-004 |
@@ -2588,12 +2250,11 @@ Symbols are indexed alphabetically.
 | ServiceId | TYPE_ALIAS | src/core/types.py | KR-001 |
 | SessionId | TYPE_ALIAS | src/core/types.py | KR-001 |
 | SessionRuntime | RUNTIME_CLASS | src/kernel/runtime/session.py | KR-008 |
-| Settings | DATACLASS | src/core/settings.py | KR-002 |
+| Settings | BASE_SETTINGS | src/core/settings.py | KR-002 |
 | StateRuntime | RUNTIME_CLASS | src/kernel/runtime/state.py | KR-006 |
 | SubscriberRuntime | RUNTIME_CLASS | src/kernel/runtime/subscriber.py | KR-007 |
 | TraceContext | DATACLASS | src/kernel/contracts/context.py | KR-004 |
 | TraceId | TYPE_ALIAS | src/core/types.py | KR-001 |
-| validate_settings | FUNCTION | src/core/config.py | KR-002 |
 
 ---
 
@@ -2616,15 +2277,15 @@ Symbols are indexed alphabetically.
   </table-row>
   <table-row>
     <table-cell>`config.py`</table-cell>
-    <table-cell>get_settings, reload_settings, clear_settings_cache, validate_settings</table-cell>
+    <table-cell>get_settings, validate_configuration</table-cell>
   </table-row>
   <table-row>
     <table-cell>`logger.py`</table-cell>
-    <table-cell>get_logger</table-cell>
+    <table-cell>get_logger, LOGGER</table-cell>
   </table-row>
   <table-row>
     <table-cell>`logging_config.py`</table-cell>
-    <table-cell>configure_logging, reset_logging, ContextFilter, ConsoleFormatter, JsonFormatter</table-cell>
+    <table-cell>LoggingConfig, RuntimeContextFilter, ConsoleFormatter, JsonFormatter, seven context functions, DEFAULT_LOGGING_CONFIG, DEFAULT_CONTEXT_FILTER</table-cell>
   </table-row>
   <table-row>
     <table-cell>`constants.py`</table-cell>

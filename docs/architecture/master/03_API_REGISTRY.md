@@ -1,5 +1,41 @@
 # AURORA ENGINEERING BIBLE v1.1
 
+## Approved core/test reconciliation — ADR-009
+
+**Status:** APPROVED — explicit T-01–T-05 approval and root-admission clarification,
+2026-10-07. Exact normative contracts:
+[KR-002](../wave1/KR-002_CONFIGURATION.md),
+[KR-003](../wave1/KR-003_LOGGING.md),
+[KR-011](../wave1/KR-011_KERNEL_TEST_SUITE.md).
+
+Only affected KR-002/KR-003/KR-011 declarations are superseded. Legacy duplicate
+summaries/counts/examples for those modules elsewhere in this document are NOT
+authority when they conflict with these exact contracts. Other module ownership,
+L0–L8, DI/event/lifecycle vocabularies and approved ADR-004–008 acceptance remain.
+
+KR-002: immutable BaseSettings, eight fields, Environment alias, three properties,
+two validators; get_settings and validate_configuration, lru_cache(maxsize=1).
+No reload_settings/clear_settings_cache/validate_settings, missing-.env error,
+provider fields, absolute/existing-path or timezone-database validation requirement.
+
+KR-003: get_logger(name, config=None), LOGGER; LoggingConfig (three fields, frozen/
+slotted, positional-compatible), RuntimeContextFilter, ConsoleFormatter, JsonFormatter,
+seven explicit correlation/session context functions and two default constants.
+No configure_logging/reset_logging/ContextFilter alias, root configuration or
+automatic trace/pipeline/runtime injection. Empty name and EXACT "root" plus invalid
+levels reject before registry access/mutation with existing InvalidConfigurationError
+and fixed safe messages. Keep cache and first-installed handlers. Foundation
+constants keep KR-001 ownership; logger -> logging_config/ Foundation is allowed,
+logging_config -> logger or concrete runtime is forbidden. No new import direction.
+
+KR-011: eleven executable test modules plus tests/conftest.py (seven named fresh
+function-scoped fixtures), exact paths and all public API/coverage gates in its
+linked contract. No tests/runtime or split Registry/Scope/Resolver/Executor files.
+Current narrow KR-003 changes only logger.py and test_logger.py; no other production,
+test, dependency or workflow edit. KR-011 is a separate subsequent reviewed task.
+Approved contract compilation is not a claim of implementation/test acceptance.
+
+
 ## Approved KR-009 Precedence — ADR-007, 2026-10-06
 
 The compiled KR-009 section below and exact wave1/KR-009 contract supersede
@@ -540,983 +576,131 @@ IN PROGRESS (Part 1 of 12)
 
 # KR-002 Public API Registry
 
-**Directory**
+**Status:** APPROVED — ADR-009. Exact owner contract:
+[KR-002](../wave1/KR-002_CONFIGURATION.md). Four module-owned public symbols:
+Environment (alias), Settings (BaseSettings), get_settings, validate_configuration.
+Public class validators/properties are additionally counted as member APIs.
+
+## Exact public model
+
+
+`Environment = Literal["development", "testing", "production"]`.
+
+Settings remains Pydantic BaseSettings, not a dataclass. Its model_config is
+frozen=True, extra="ignore", case_sensitive=False, env_file=".env",
+env_file_encoding="utf-8". Existing environment > .env > default precedence
+and Pydantic construction compatibility remain unchanged.
+
+| Field | Type | Default | Explicit alias |
+| --- | --- | --- | --- |
+| app_name | str | PROJECT_NAME | none |
+| environment | Environment | development | AURORA_ENV |
+| log_level | str | DEFAULT_LOG_LEVEL (INFO) | AURORA_LOG_LEVEL |
+| timezone | str | DEFAULT_TIMEZONE (UTC) | none |
+| config_path | Path | Path("config") | AURORA_CONFIG_PATH |
+| data_path | Path | Path("data") | none |
+| cache_path | Path | Path(".cache") | none |
+| logs_path | Path | Path("logs") | none |
+
+Exactly three read-only properties: is_development, is_testing, is_production,
+each returning bool. Existing public class validators are
+validate_log_level(cls, value: str) -> str and
+validate_path(cls, value: str | Path) -> Path. Log levels normalize by upper()
+and accept only DEBUG/INFO/WARNING/ERROR/CRITICAL. All four paths convert to Path;
+relative/nonexistent paths are valid and no directory is created. Timezone is a
+descriptive string; no timezone-database validation is promised. All fields have
+defaults: missing/empty .env and unknown extra keys are accepted.
+
+## Exact loader API and lifetime
+
+`get_settings() -> Settings` uses lru_cache(maxsize=1).
+`validate_configuration() -> Settings` delegates to get_settings and returns
+the same cached validated immutable instance. No AURORA reload_settings,
+clear_settings_cache or validate_settings API exists. Tests may use the existing
+decorator's standard-library cache_clear for isolated setup/teardown; this is not
+a production reload contract or DI ownership transfer.
+
+Direct invalid environment construction raises pydantic.ValidationError.
+get_settings wraps that ValidationError in existing InvalidConfigurationError,
+preserving its cause and existing errors context. Invalid log_level raises
+InvalidConfigurationError from the existing validator. No mandatory missing-env,
+absolute/existing-directory, provider-key or new exception policy is introduced.
 
-`src/core/`
-
-**Runtime Layer**
-
-L0
-
-**Owner KR**
-
-KR-002 Configuration Runtime
-
----
-
-# Configuration Runtime Public API
-
-Configuration Runtime exposes exactly one public dataclass and four public functions.
-
-| Symbol | Category | Owner File |
-|--------|----------|------------|
-| Settings | Frozen Dataclass | settings.py |
-| get_settings | Public Function | config.py |
-| reload_settings | Public Function | config.py |
-| clear_settings_cache | Public Function | config.py |
-| validate_settings | Public Function | config.py |
-
-No additional public exports exist.
-
----
-
-# CONFIG-001 — Settings Dataclass
-
-**Owner File**
-
-`src/core/settings.py`
-
-**Category**
-
-Frozen Public Dataclass
-
-**Runtime Owner**
-
-Configuration Runtime
-
-**Mutability**
-
-Immutable (`frozen=True`).
-
----
-
-## Purpose
-
-Represents the canonical runtime configuration snapshot.
-
-Exactly one immutable `Settings` instance exists during runtime execution.
-
----
-
-## Construction Rules
-
-Settings are created:
-
-- once during bootstrap;
-- from environment variables;
-- after validation succeeds.
-
-Direct manual construction outside Configuration Runtime is forbidden.
-
----
-
-## Public Fields
-
-### Project Metadata
-
-| Field | Type | Required |
-|-------|------|----------|
-| project_name | str | Yes |
-| project_version | str | Yes |
-| architecture_version | str | Yes |
-| environment | str | Yes |
-
----
-
-### Runtime Environment
-
-| Field | Type | Required |
-|-------|------|----------|
-| debug | bool | Yes |
-| log_level | str | Yes |
-| timezone | str | Yes |
-| locale | str | Yes |
-
----
-
-### Filesystem
-
-| Field | Type |
-|-------|------|
-| root_dir | Path |
-| src_dir | Path |
-| docs_dir | Path |
-| tests_dir | Path |
-| cache_dir | Path |
-| temp_dir | Path |
-
-All paths are absolute.
-
----
-
-### OpenRouter
-
-| Field | Type |
-|-------|------|
-| openrouter_api_key | str \| None |
-| openrouter_base_url | str |
-| openrouter_timeout | int |
-
----
-
-### Runtime Defaults
-
-| Field | Type |
-|-------|------|
-| default_language | str |
-| default_pipeline_timeout | int |
-| default_event_priority | EventPriority |
-| metadata | Metadata |
-
----
-
-## Derived Properties
-
-### is_debug
-
-Returns runtime debug mode.
-
-### is_production
-
-Returns production environment flag.
-
-### has_openrouter_key
-
-Returns whether API key exists.
-
-Derived properties never mutate Settings.
-
----
-
-## Validation Rules
-
-Settings validates:
-
-- required environment variables;
-- directory existence;
-- timeout ranges;
-- log level vocabulary;
-- locale format.
-
-Validation occurs before RuntimeKernel initialization.
-
----
-
-## Raised Exceptions
-
-| Exception | Condition |
-|-----------|-----------|
-| ConfigurationError | Invalid configuration |
-| EnvironmentVariableError | Missing required environment variable |
-| DirectoryValidationError | Invalid repository path |
-
----
-
-## Imported By
-
-- BootstrapRuntime
-- Logging Runtime
-- RuntimeKernel
-- Tests
-
-Settings are imported read-only.
-
----
-
-# CONFIG-002 — get_settings()
-
-**Owner File**
-
-`src/core/config.py`
-
-**Category**
-
-Public Function
-
----
-
-## Signature
-
-```python
-def get_settings() -> Settings
-```
-
----
-
-## Purpose
-
-Returns the canonical immutable Settings instance.
-
----
-
-## Behavior
-
-1. Returns cached Settings.
-2. Loads Settings if cache empty.
-3. Never creates multiple instances.
-4. Thread-safe.
-
----
-
-## Return Type
-
-Settings
-
----
-
-## Side Effects
-
-None after cache initialization.
-
----
-
-## Raises
-
-- ConfigurationError
-- EnvironmentVariableError
-- DirectoryValidationError
-
----
-
-## Imported By
-
-Entire runtime.
-
----
-
-# CONFIG-003 — reload_settings()
-
-**Owner File**
-
-`src/core/config.py`
-
-**Category**
-
-Public Function
-
----
-
-## Signature
-
-```python
-def reload_settings() -> Settings
-```
-
----
-
-## Purpose
-
-Invalidates configuration cache and reloads environment.
-
----
-
-## Behavior
-
-1. Clears cached Settings.
-2. Reloads .env.
-3. Validates configuration.
-4. Returns new immutable Settings.
-
----
-
-## Usage Rules
-
-Allowed:
-
-- tests;
-- development reload.
-
-Forbidden:
-
-- production pipeline execution.
-
----
-
-## Raises
-
-Same exceptions as `get_settings()`.
-
----
-
-# CONFIG-004 — clear_settings_cache()
-
-**Owner File**
-
-`src/core/config.py`
-
-**Category**
-
-Public Function
-
----
-
-## Signature
-
-```python
-def clear_settings_cache() -> None
-```
-
----
-
-## Purpose
-
-Clears internal configuration cache.
-
----
-
-## Behavior
-
-- Removes cached Settings instance.
-- Does not reload configuration.
-- Used only by tests and reload_settings.
-
----
-
-## Imported By
-
-Tests only.
-
-Production runtime must not call this function.
-
----
-
-# CONFIG-005 — validate_settings()
-
-**Owner File**
-
-`src/core/config.py`
-
-**Category**
-
-Public Function
-
----
-
-## Signature
-
-```python
-def validate_settings(settings: Settings) -> None
-```
-
----
-
-## Purpose
-
-Performs canonical Settings validation.
-
----
-
-## Validation Coverage
-
-### Environment
-
-- project name
-- architecture version
-- runtime environment
-
-### Filesystem
-
-- repository root
-- docs directory
-- src directory
-- tests directory
-
-### Runtime Values
-
-- timeout greater than zero
-- supported locale
-- supported timezone
-- supported log level
-
-### Metadata
-
-- JSON compatibility
-- immutable snapshot
-
----
-
-## Return Value
-
-None.
-
-Validation succeeds silently.
-
----
-
-## Raises
-
-- ConfigurationError
-- EnvironmentVariableError
-- DirectoryValidationError
-
----
-
-# Configuration Cache API
-
-The configuration cache is private.
-
-## Private Runtime API
-
-| Symbol | Visibility |
-|--------|------------|
-| _settings_cache | Private |
-| _settings_lock | Private |
-| _load_environment | Private |
-| _build_settings | Private |
-
-Private symbols are forbidden outside config.py.
-
----
-
-# Configuration Import Matrix
-
-| Consumer | Allowed API |
-|----------|-------------|
-| BootstrapRuntime | get_settings |
-| Logging Runtime | get_settings |
-| RuntimeKernel | get_settings |
-| Tests | get_settings, reload_settings, clear_settings_cache |
-| Production Modules | get_settings only |
-
----
-
-# Configuration Lifecycle API
-
-```text
-BootstrapRuntime
-        │
-        ▼
-get_settings()
-        │
-        ▼
-Settings Cache
-        │
-        ▼
-Immutable Settings Snapshot
-```
-
-`reload_settings()` exists outside the production lifecycle.
-
----
-
-# Configuration Exception Matrix
-
-| Public API | Raises |
-|------------|--------|
-| Settings | ConfigurationError |
-| get_settings | ConfigurationError |
-| reload_settings | ConfigurationError |
-| clear_settings_cache | None |
-| validate_settings | ConfigurationError |
-
----
-
-# Configuration API Invariants
-
-Configuration Runtime guarantees:
-
-1. Settings are immutable.
-2. Exactly one cached Settings instance exists.
-3. Reload always creates a new immutable snapshot.
-4. Production runtime never mutates Settings.
-5. Configuration validation completes before runtime startup.
-6. All filesystem paths are absolute Path objects.
-
-Violating any invariant is an Architecture Conflict.
-
----
-
-# KR-002 API Summary
-
-| Category | Count |
-|----------|------:|
-| Public Dataclasses | 1 |
-| Public Functions | 4 |
-| Public Symbols | 5 |
-
-Configuration Runtime exports exactly five public API symbols.
-
----
-
-Document Status:
-
-**IN PROGRESS (Part 2 of 12)**
-
-<!-- ========================================================================= -->
-<!-- M-03 PART 3 — KR-003 Logging Runtime Public API -->
-<!-- ========================================================================= -->
 
 # KR-003 Public API Registry
 
-**Directory**
+**Status:** APPROVED — ADR-009 plus explicit root-name clarification.
+Exact owner contract: [KR-003](../wave1/KR-003_LOGGING.md).
+
+## Exact public surface
+
+
+| Owner file | Public symbol |
+| --- | --- |
+| logger.py | get_logger(name: str, config: LoggingConfig \| None = None) -> logging.Logger |
+| logger.py | LOGGER: Final[logging.Logger] |
+| logging_config.py | LoggingConfig |
+| logging_config.py | RuntimeContextFilter.filter(record: logging.LogRecord) -> bool |
+| logging_config.py | ConsoleFormatter.format(record: logging.LogRecord) -> str |
+| logging_config.py | JsonFormatter.format(record: logging.LogRecord) -> str |
+| logging_config.py | set_correlation_id(correlation_id: str \| None) -> None |
+| logging_config.py | get_correlation_id() -> str \| None |
+| logging_config.py | clear_correlation_id() -> None |
+| logging_config.py | set_session_id(session_id: str \| None) -> None |
+| logging_config.py | get_session_id() -> str \| None |
+| logging_config.py | clear_session_id() -> None |
+| logging_config.py | clear_logging_context() -> None |
+| logging_config.py | DEFAULT_LOGGING_CONFIG: Final[LoggingConfig] |
+| logging_config.py | DEFAULT_CONTEXT_FILTER: Final[RuntimeContextFilter] |
+
+Fifteen module-level symbols: eight functions, four classes and three constants.
+Class methods/properties are additionally verified as public API. Imported stdlib
+types are not newly owned AURORA exports. Foundation constants retain KR-001
+ownership; imported defaults are not KR-003-owned duplicates.
+
+LoggingConfig remains frozen=True, slots=True, NOT keyword-only; existing positional
+and keyword construction stays compatible. Exactly three fields, in order:
+logger_name: str = LOGGER_NAME, level: str = DEFAULT_LOG_LEVEL,
+json_logs: bool = False. No constructor validation or additional fields are added.
+The factory's name argument chooses the namespace; config.logger_name is not a
+replacement namespace. DEFAULT_LOGGING_CONFIG is LoggingConfig(); LOGGER uses
+LoggingConfig().logger_name. No configure_logging, reset_logging, ContextFilter
+alias, build_logging_config, trace/pipeline/runtime fields or live-reload API.
+
+## Factory guards, cache and handlers
+
+Before ANY logging.getLogger call or logger mutation:
+reject name == "" with existing InvalidConfigurationError and fixed safe message;
+reject EXACT name == "root" with InvalidConfigurationError before registry access,
+using a fixed safe message (explicit Authority clarification, 2026-10-07);
+reject unsupported config.level with that same exception and fixed safe message.
+Do not include arbitrary invalid input in error context or logs.
+Supported levels are exactly DEBUG/INFO/WARNING/ERROR/CRITICAL, normalized with
+upper() as before. NOTSET/WARN/FATAL/custom levels are not additions to vocabulary.
+Do not trim, rename or reject otherwise valid named namespaces.
+
+Preserve @cache and its existing argument-key semantics. A cache hit returns the
+cached object; standard-library logging owns namespace identity. A cache miss
+sets the normalized level and propagate=False. Install one StreamHandler with
+DEFAULT_CONTEXT_FILTER only when that namespace has no handlers; choose JSON
+when json_logs=True, otherwise Console. Existing handlers/formatters are never
+replaced by a later config. No root mutation, basicConfig or global reset.
+Tests must not claim a live-reconfiguration API from cache-miss behavior.
+
+## Context and formatting
+
+ContextVar stores explicitly supplied correlation_id and session_id per execution
+context. Set/get/clear functions preserve existing semantics; clear_logging_context
+clears both. RuntimeContextFilter writes both fields using "-" for missing/empty
+IDs and returns True. It does not infer TraceId, generate IDs or consult runtime.
+
+Console emits UTC "%Y-%m-%d %H:%M:%S", padded level, namespace, cid/sid and message,
+separated by " | "; missing record attributes use "-". No color/redaction promise.
+JSON emits in order timestamp (UTC ISO), logger, level, message, correlation_id,
+session_id, and optional exception when exc_info is supplied. Unfiltered missing
+IDs are None; filtered records use "-". Preserve Unicode (ensure_ascii=False)
+and standard-library exception formatting. No additional serialization schema.
 
-`src/core/`
-
-**Runtime Layer**
-
-L0
-
-**Owner KR**
-
-KR-003 Logging Runtime
-
----
-
-# Logging Runtime Public API
-
-Logging Runtime exposes exactly six public API symbols.
-
-| Symbol | Category | Owner File |
-|--------|----------|------------|
-| get_logger | Public Function | logger.py |
-| configure_logging | Public Function | logging_config.py |
-| reset_logging | Public Function | logging_config.py |
-| ContextFilter | Public Class | logging_config.py |
-| ConsoleFormatter | Public Class | logging_config.py |
-| JsonFormatter | Public Class | logging_config.py |
-
-No additional public logging exports exist.
-
----
-
-# LOG-001 — get_logger()
-
-### Owner File
-
-`src/core/logger.py`
-
-### Category
-
-Public Function
-
-### Signature
-
-```python
-def get_logger(name: str) -> logging.Logger
-```
-
-### Purpose
-
-Returns the canonical logger for a runtime module.
-
-### Behavior
-
-1. Returns cached logger if it already exists.
-2. Creates logger on first request.
-3. Applies canonical configuration automatically.
-4. Logger identity is stable for identical names.
-
-### Parameters
-
-| Parameter | Type | Required |
-|-----------|------|----------|
-| name | str | Yes |
-
-### Returns
-
-`logging.Logger`
-
-### Raises
-
-None.
-
-### Imported By
-
-Entire production repository.
-
-### Usage Rules
-
-Allowed:
-
-```python
-logger = get_logger(__name__)
-```
-
-Forbidden:
-
-```python
-logging.getLogger(...)
-```
-
-Production code always uses `get_logger()`.
-
----
-
-# LOG-002 — configure_logging()
-
-### Owner File
-
-`src/core/logging_config.py`
-
-### Category
-
-Public Function
-
-### Signature
-
-```python
-def configure_logging(settings: Settings) -> None
-```
-
-### Purpose
-
-Initializes the global logging system.
-
-### Responsibilities
-
-- configure root logger;
-- configure handlers;
-- configure formatters;
-- configure filters;
-- configure propagation policy.
-
-### Execution Rules
-
-Called exactly once during Bootstrap.
-
-Repeated execution is idempotent.
-
-### Parameters
-
-| Parameter | Type |
-|-----------|------|
-| settings | Settings |
-
-### Raises
-
-| Exception | Condition |
-|-----------|-----------|
-| LoggingConfigurationError | Invalid logging configuration. |
-
-### Imported By
-
-BootstrapRuntime only.
-
----
-
-# LOG-003 — reset_logging()
-
-### Owner File
-
-`src/core/logging_config.py`
-
-### Category
-
-Public Function
-
-### Signature
-
-```python
-def reset_logging() -> None
-```
-
-### Purpose
-
-Resets global logging state.
-
-### Intended Usage
-
-- tests;
-- development reload.
-
-### Production Usage
-
-Forbidden.
-
-### Behavior
-
-- removes handlers;
-- clears logger cache;
-- restores clean logging runtime.
-
-### Raises
-
-None.
-
----
-
-# LOG-004 — ContextFilter
-
-### Owner File
-
-`src/core/logging_config.py`
-
-### Category
-
-Public Class
-
-### Purpose
-
-Injects runtime context into log records.
-
-### Base Class
-
-```python
-logging.Filter
-```
-
-### Public Methods
-
-| Method | Signature |
-|--------|-----------|
-| filter | `(record: LogRecord) -> bool` |
-
-### Injected Fields
-
-| Field | Source |
-|-------|--------|
-| session_id | RuntimeContext |
-| pipeline_id | RuntimeContext |
-| trace_id | TraceContext |
-| runtime | RuntimeLayer |
-
-### Behavior
-
-Missing context produces empty values.
-
-Never raises exceptions.
-
-### Imported By
-
-`configure_logging()` only.
-
----
-
-# LOG-005 — ConsoleFormatter
-
-### Owner File
-
-`src/core/logging_config.py`
-
-### Category
-
-Public Class
-
-### Purpose
-
-Human-readable console formatter.
-
-### Base Class
-
-```python
-logging.Formatter
-```
-
-### Public Methods
-
-| Method | Signature |
-|--------|-----------|
-| format | `(record: LogRecord) -> str` |
-
-### Output Format
-
-Canonical console structure:
-
-```text
-[2026-09-12 21:04:15]
-INFO
-kernel.runtime.container
-Session=...
-Trace=...
-Message
-```
-
-### Rules
-
-- multiline safe;
-- UTF-8 output;
-- deterministic timestamp formatting.
-
-### Imported By
-
-`configure_logging()`.
-
----
-
-# LOG-006 — JsonFormatter
-
-### Owner File
-
-`src/core/logging_config.py`
-
-### Category
-
-Public Class
-
-### Purpose
-
-Structured JSON formatter.
-
-### Base Class
-
-```python
-logging.Formatter
-```
-
-### Public Methods
-
-| Method | Signature |
-|--------|-----------|
-| format | `(record: LogRecord) -> str` |
-
-### JSON Fields
-
-| Field | Type |
-|-------|------|
-| timestamp | str |
-| level | str |
-| logger | str |
-| runtime | str |
-| session_id | str \| null |
-| pipeline_id | str \| null |
-| trace_id | str \| null |
-| message | str |
-
-### Rules
-
-- valid JSON output;
-- deterministic field order;
-- UTF-8 encoded.
-
-### Imported By
-
-`configure_logging()`.
-
----
-
-# Logger Cache API
-
-The logger cache is private.
-
-### Private Symbols
-
-| Symbol | Visibility |
-|--------|------------|
-| _LOGGER_CACHE | Private |
-| _LOGGER_LOCK | Private |
-| _ROOT_CONFIGURED | Private |
-
-Private symbols never leave Logging Runtime.
-
----
-
-# Logging Configuration API
-
-### Root Logger Policy
-
-| Property | Value |
-|----------|-------|
-| propagate | False |
-| level | Settings.log_level |
-| handlers | Canonical handlers only |
-
-### Handler Policy
-
-| Handler | Purpose |
-|---------|---------|
-| ConsoleHandler | Development output |
-| JsonHandler | Structured runtime output (reserved) |
-
-Only canonical handlers may be registered.
-
----
-
-# Logging Context API
-
-Every log record contains runtime context fields.
-
-| Context Field | Source Runtime |
-|--------------|----------------|
-| session_id | ContextRuntime |
-| pipeline_id | ContextRuntime |
-| trace_id | ContextRuntime |
-| runtime | RuntimeLayer |
-
-Context injection is automatic.
-
----
-
-# Logging Import Matrix
-
-| Consumer | Allowed API |
-|----------|-------------|
-| BootstrapRuntime | configure_logging |
-| Production Modules | get_logger |
-| Tests | get_logger, reset_logging |
-| Logging Runtime | ContextFilter, Formatters |
-
-No production module imports formatter classes directly.
-
----
-
-# Logging Lifecycle API
-
-```text
-BootstrapRuntime
-        │
-        ▼
-configure_logging()
-        │
-        ▼
-Root Logger Configured
-        │
-        ▼
-get_logger(__name__)
-        │
-        ▼
-Cached Logger Returned
-```
-
-Logging is initialized before RuntimeKernel.
-
----
-
-# Logging Exception Matrix
-
-| API | Raises |
-|-----|--------|
-| get_logger | None |
-| configure_logging | LoggingConfigurationError |
-| reset_logging | None |
-| ContextFilter.filter | None |
-| ConsoleFormatter.format | None |
-| JsonFormatter.format | None |
-
-Logging failures never crash formatter execution.
-
----
-
-# Logging API Invariants
-
-Logging Runtime guarantees:
-
-1. Every production module uses `get_logger(__name__)`.
-2. Root logger is configured exactly once.
-3. Logger cache guarantees identity stability.
-4. Runtime context is injected automatically.
-5. No production code uses `print()`.
-6. Logging configuration occurs before runtime startup.
-7. Formatter output is deterministic.
-
-Violating any invariant is an Architecture Conflict.
-
----
-
-# KR-003 API Summary
-
-| Category | Count |
-|----------|------:|
-| Public Functions | 3 |
-| Public Classes | 3 |
-| Public Symbols | 6 |
-
-Logging Runtime exports exactly six public API symbols.
-
----
-
-**Document Status:** IN PROGRESS (Part 3 of 12)
-
-<!-- ========================================================================= -->
 <!-- M-03 PART 4 — KR-004 Kernel Contracts Public API (Context + Event Contracts) -->
 <!-- ========================================================================= -->
 # Runtime Filename Disambiguation
@@ -4566,21 +3750,18 @@ All type aliases and enums are compile-time immutable vocabulary.
 
 # KR-002 Behavioral Registry
 
-<table><table-section header><table-row header><table-cell header>API</table-cell><table-cell header>Purity</table-cell><table-cell header>Thread Safety</table-cell><table-cell header>Idempotent</table-cell><table-cell header>Async</table-cell></table-row></table-section><table-row><table-cell>get_settings()</table-cell><table-cell>CACHE_READ</table-cell><table-cell>GUARDED</table-cell><table-cell>YES</table-cell><table-cell>SYNC_ONLY</table-cell></table-row><table-row><table-cell>reload_settings()</table-cell><table-cell>CACHE_WRITE</table-cell><table-cell>GUARDED</table-cell><table-cell>NO</table-cell><table-cell>SYNC_ONLY</table-cell></table-row><table-row><table-cell>clear_settings_cache()</table-cell><table-cell>CACHE_WRITE</table-cell><table-cell>GUARDED</table-cell><table-cell>YES</table-cell><table-cell>SYNC_ONLY</table-cell></table-row><table-row><table-cell>validate_settings()</table-cell><table-cell>PURE</table-cell><table-cell>SAFE</table-cell><table-cell>YES</table-cell><table-cell>SYNC_ONLY</table-cell></table-row></table>
-
-### Behavioral Rules
-
-- `get_settings()` never mutates Settings.
-- `reload_settings()` always returns a new immutable snapshot.
-- `clear_settings_cache()` is forbidden during runtime execution.
-
----
+get_settings and validate_configuration are synchronous immutable cached access.
+Model construction owns env/.env parsing and validation; test-only stdlib
+cache_clear is not a public AURORA reload API. No invented exact-once concurrent
+factory/lock or path/timezone/provider validation guarantee. See exact T-02 contract.
 
 # KR-003 Behavioral Registry
 
-<table><table-section header><table-row header><table-cell header>API</table-cell><table-cell header>Purity</table-cell><table-cell header>Thread Safety</table-cell><table-cell header>Idempotent</table-cell><table-cell header>Async</table-cell></table-row></table-section><table-row><table-cell>get_logger()</table-cell><table-cell>CACHE_READ</table-cell><table-cell>GUARDED</table-cell><table-cell>YES</table-cell><table-cell>SYNC_ONLY</table-cell></table-row><table-row><table-cell>configure_logging()</table-cell><table-cell>IO_RUNTIME</table-cell><table-cell>SINGLE_THREAD</table-cell><table-cell>CONDITIONAL</table-cell><table-cell>SYNC_ONLY</table-cell></table-row><table-row><table-cell>reset_logging()</table-cell><table-cell>IO_RUNTIME</table-cell><table-cell>SINGLE_THREAD</table-cell><table-cell>YES</table-cell><table-cell>SYNC_ONLY</table-cell></table-row><table-row><table-cell>ContextFilter.filter()</table-cell><table-cell>CONTEXT_READ</table-cell><table-cell>SAFE</table-cell><table-cell>YES</table-cell><table-cell>SYNC_ONLY</table-cell></table-row><table-row><table-cell>ConsoleFormatter.format()</table-cell><table-cell>PURE</table-cell><table-cell>SAFE</table-cell><table-cell>YES</table-cell><table-cell>SYNC_ONLY</table-cell></table-row><table-row><table-cell>JsonFormatter.format()</table-cell><table-cell>PURE</table-cell><table-cell>SAFE</table-cell><table-cell>YES</table-cell><table-cell>SYNC_ONLY</table-cell></table-row></table>
-
----
+get_logger is synchronous cached named acquisition; argument cache hit is not
+live reconfiguration. Admission guards precede registry mutation, cache miss sets
+level/propagate and preserves existing handlers. Explicit ContextVar set/get/clear
+is execution-context-local; RuntimeContextFilter decorates records; formatters
+do not construct runtime or infer TraceId. See exact T-03 contract.
 
 # KR-004 Behavioral Registry
 

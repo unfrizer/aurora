@@ -16,6 +16,7 @@ from functools import cache
 from logging import Handler, Logger, StreamHandler
 from typing import Final
 
+from src.core.exceptions import InvalidConfigurationError
 from src.core.logging_config import (
     DEFAULT_CONTEXT_FILTER,
     ConsoleFormatter,
@@ -73,8 +74,17 @@ def get_logger(
 
     Logger instances are cached for the lifetime of the application.
     """
+    if not name:
+        raise InvalidConfigurationError("Logger name must not be empty.")
+
+    if name == "root":
+        raise InvalidConfigurationError("Root logger namespace is not allowed.")
+
     if config is None:
         config = LoggingConfig()
+
+    if config.level.upper() not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+        raise InvalidConfigurationError("Invalid log level.")
 
     return _configure_logger(name, config)
 

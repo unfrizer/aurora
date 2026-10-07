@@ -1,5 +1,41 @@
 # AURORA MASTER HANDOFF v1.0
 
+## Approved core/test reconciliation — ADR-009
+
+**Status:** APPROVED — explicit T-01–T-05 approval and root-admission clarification,
+2026-10-07. Exact normative contracts:
+[KR-002](../wave1/KR-002_CONFIGURATION.md),
+[KR-003](../wave1/KR-003_LOGGING.md),
+[KR-011](../wave1/KR-011_KERNEL_TEST_SUITE.md).
+
+Only affected KR-002/KR-003/KR-011 declarations are superseded. Legacy duplicate
+summaries/counts/examples for those modules elsewhere in this document are NOT
+authority when they conflict with these exact contracts. Other module ownership,
+L0–L8, DI/event/lifecycle vocabularies and approved ADR-004–008 acceptance remain.
+
+KR-002: immutable BaseSettings, eight fields, Environment alias, three properties,
+two validators; get_settings and validate_configuration, lru_cache(maxsize=1).
+No reload_settings/clear_settings_cache/validate_settings, missing-.env error,
+provider fields, absolute/existing-path or timezone-database validation requirement.
+
+KR-003: get_logger(name, config=None), LOGGER; LoggingConfig (three fields, frozen/
+slotted, positional-compatible), RuntimeContextFilter, ConsoleFormatter, JsonFormatter,
+seven explicit correlation/session context functions and two default constants.
+No configure_logging/reset_logging/ContextFilter alias, root configuration or
+automatic trace/pipeline/runtime injection. Empty name and EXACT "root" plus invalid
+levels reject before registry access/mutation with existing InvalidConfigurationError
+and fixed safe messages. Keep cache and first-installed handlers. Foundation
+constants keep KR-001 ownership; logger -> logging_config/ Foundation is allowed,
+logging_config -> logger or concrete runtime is forbidden. No new import direction.
+
+KR-011: eleven executable test modules plus tests/conftest.py (seven named fresh
+function-scoped fixtures), exact paths and all public API/coverage gates in its
+linked contract. No tests/runtime or split Registry/Scope/Resolver/Executor files.
+Current narrow KR-003 changes only logger.py and test_logger.py; no other production,
+test, dependency or workflow edit. KR-011 is a separate subsequent reviewed task.
+Approved contract compilation is not a claim of implementation/test acceptance.
+
+
 **Document ID:** M-10
 
 **Document Name:** Build Checklist
@@ -91,68 +127,23 @@ No later KR may continue until the active KR is green.
 
 ---
 
-# KR-002 — Configuration Runtime Checklist
+# KR-002 — Configuration Runtime Checklist — ADR-009
 
-## Files
+- [ ] Exact eight-field frozen BaseSettings / Environment / five public members.
+- [ ] get_settings and validate_configuration, immutable lru_cache(maxsize=1).
+- [ ] Default/env/.env/alias/extra and actual frozen assignment checks.
+- [ ] Relative Path conversion, descriptive timezone and exact error/cause policy.
+- [ ] Complete tests/core/test_settings.py, all APIs, 100% executable lines per file.
+- [ ] Required Ruff/format/Pyright/Pytest/smoke/latest-head CI green.
 
-- [ ] `settings.py`
-- [ ] `config.py`
+# KR-003 — Logging Runtime Checklist — ADR-009
 
-## Settings
-
-- [ ] Frozen model.
-- [ ] Environment validation.
-- [ ] Path validation.
-- [ ] Immutable values.
-
-## Config Loader
-
-- [ ] `get_settings()`
-- [ ] `reload_settings()`
-- [ ] Application cache only.
-
-## Validation
-
-- [ ] Missing env raises MissingConfigurationError.
-- [ ] Invalid env raises InvalidConfigurationError.
-- [ ] Ruff passes.
-- [ ] Pyright passes.
-- [ ] `test_settings.py` passes.
-
----
-
-# KR-003 — Logging Runtime Checklist
-
-## Files
-
-- [ ] `logging_config.py`
-- [ ] `logger.py`
-
-## LoggingConfig
-
-- [ ] JSON formatter.
-- [ ] Console formatter.
-- [ ] Context filter.
-
-## Logger API
-
-- [ ] `configure_logging()`
-- [ ] `get_logger()`
-
-## Logging Rules
-
-- [ ] No `print()`.
-- [ ] No `basicConfig()`.
-- [ ] Structured logging.
-- [ ] Correlation IDs.
-- [ ] Session IDs.
-- [ ] Trace IDs.
-
-## Validation
-
-- [ ] Ruff passes.
-- [ ] Pyright passes.
-- [ ] `test_logger.py` passes.
+- [ ] Exact LoggingConfig/15 symbols/filter/formatter/context API compatibility.
+- [ ] Empty/"root"/invalid level rejected before registry access or mutation.
+- [ ] No root interference, safe messages, first-installed handlers/cache preserved.
+- [ ] Complete tests/core/test_logger.py, all APIs, 100% executable lines per file.
+- [ ] Required Ruff/format/Pyright/Pytest/smoke/latest-head CI green.
+- [ ] Separate module report/Tech Lead review before KR-011; no cross-owner repair.
 
 ---
 
@@ -432,31 +423,28 @@ Freeze status:
 
 ---
 
-# KR-011 — Test Suite Checklist
+# KR-011 — Test Suite Checklist — APPROVED ADR-009
 
-## Core
+- [ ] tests/conftest.py
+- [ ] tests/core/test_types.py
+- [ ] tests/core/test_settings.py
+- [ ] tests/core/test_logger.py
+- [ ] tests/kernel/test_contracts.py
+- [ ] tests/kernel/test_container.py
+- [ ] tests/kernel/test_lifecycle.py
+- [ ] tests/kernel/test_event_bus.py
+- [ ] tests/kernel/test_context.py
+- [ ] tests/kernel/test_pipeline.py
+- [ ] tests/kernel/test_bootstrap.py
+- [ ] tests/integration/test_runtime_startup.py
 
-- [ ] test_types.py
-- [ ] test_settings.py
-- [ ] test_logger.py
-
-## Kernel
-
-- [ ] test_contracts.py
-- [ ] test_container.py
-- [ ] test_registry.py
-- [ ] test_scope.py
-- [ ] test_resolver.py
-- [ ] test_lifecycle.py
-- [ ] test_events.py
-
-## Runtime
-
-- [ ] test_context.py
-- [ ] test_pipeline.py
-- [ ] test_executor.py
-- [ ] test_bootstrap.py
-- [ ] test_runtime.py
+- [ ] Eleven executable modules plus seven fresh function-scoped shared fixtures.
+- [ ] Preserve every approved ADR-004–008/module acceptance, no skips/xfail/exclusions.
+- [ ] Exact T-02 configuration and T-03 logging assertions.
+- [ ] Exact T-04 API/per-file executable-line gates; separate line/API/branch evidence.
+- [ ] All local and latest-head hosted gates pass.
+- [ ] STOP/report any other-owner defect; no source/dependency/workflow/later-test edit.
+- [ ] Separate task after narrow KR-003 acceptance; completed module report and review.
 
 ---
 

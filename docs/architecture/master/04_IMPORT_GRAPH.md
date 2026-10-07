@@ -1,5 +1,41 @@
 # AURORA ENGINEERING BIBLE v1.1
 
+## Approved core/test reconciliation — ADR-009
+
+**Status:** APPROVED — explicit T-01–T-05 approval and root-admission clarification,
+2026-10-07. Exact normative contracts:
+[KR-002](../wave1/KR-002_CONFIGURATION.md),
+[KR-003](../wave1/KR-003_LOGGING.md),
+[KR-011](../wave1/KR-011_KERNEL_TEST_SUITE.md).
+
+Only affected KR-002/KR-003/KR-011 declarations are superseded. Legacy duplicate
+summaries/counts/examples for those modules elsewhere in this document are NOT
+authority when they conflict with these exact contracts. Other module ownership,
+L0–L8, DI/event/lifecycle vocabularies and approved ADR-004–008 acceptance remain.
+
+KR-002: immutable BaseSettings, eight fields, Environment alias, three properties,
+two validators; get_settings and validate_configuration, lru_cache(maxsize=1).
+No reload_settings/clear_settings_cache/validate_settings, missing-.env error,
+provider fields, absolute/existing-path or timezone-database validation requirement.
+
+KR-003: get_logger(name, config=None), LOGGER; LoggingConfig (three fields, frozen/
+slotted, positional-compatible), RuntimeContextFilter, ConsoleFormatter, JsonFormatter,
+seven explicit correlation/session context functions and two default constants.
+No configure_logging/reset_logging/ContextFilter alias, root configuration or
+automatic trace/pipeline/runtime injection. Empty name and EXACT "root" plus invalid
+levels reject before registry access/mutation with existing InvalidConfigurationError
+and fixed safe messages. Keep cache and first-installed handlers. Foundation
+constants keep KR-001 ownership; logger -> logging_config/ Foundation is allowed,
+logging_config -> logger or concrete runtime is forbidden. No new import direction.
+
+KR-011: eleven executable test modules plus tests/conftest.py (seven named fresh
+function-scoped fixtures), exact paths and all public API/coverage gates in its
+linked contract. No tests/runtime or split Registry/Scope/Resolver/Executor files.
+Current narrow KR-003 changes only logger.py and test_logger.py; no other production,
+test, dependency or workflow edit. KR-011 is a separate subsequent reviewed task.
+Approved contract compilation is not a claim of implementation/test acceptance.
+
+
 ## Approved KR-009 Precedence — ADR-007, 2026-10-06
 
 The compiled KR-009 section below and exact wave1/KR-009 contract supersede
@@ -1238,546 +1274,30 @@ Foundation Core is a directed acyclic graph.
 <!-- M-04 PART 3 — KR-002 Configuration Runtime + KR-003 Logging Import Graph -->
 <!-- ========================================================================= -->
 
-# KR-002 Import Graph
+# KR-002 Import Graph — APPROVED ADR-009
 
-**Directory**
+| Owner file | Project dependencies | Existing non-project imports |
+| --- | --- | --- |
+| settings.py | Foundation constants, InvalidConfigurationError | pathlib, typing, Pydantic Field/validators, BaseSettings/SettingsConfigDict |
+| config.py | Settings, Foundation InvalidConfigurationError | functools.lru_cache, pydantic.ValidationError |
 
-`src/core/`
+Settings never imports Config/Logging/contracts/runtime; Config never imports
+Logging/contracts/runtime. Environment/.env validation belongs in Settings;
+immutable loader/cache belongs in Config. No filesystem construction or DI.
 
-**Runtime Layer**
+# KR-003 Import Graph — APPROVED ADR-009
 
-L0
+| Owner file | Project dependencies | Standard library |
+| --- | --- | --- |
+| logging_config.py | Foundation constants DEFAULT_LOG_LEVEL/LOGGER_NAME | logging/json/ContextVar/dataclass/UTC/datetime/typing |
+| logger.py | sibling LoggingConfig/RuntimeContextFilter defaults/formatters; Foundation InvalidConfigurationError | logging/functools.cache/typing |
 
-**Owner KR**
+Factory -> logging primitives -> Foundation is canonical; the former prohibition
+of logger -> logging_config is superseded. No logging_config -> logger, Foundation/
+Configuration -> Logging, Context/Session/runtime/contract/higher-layer import.
+Approved dependency direction/ownership unchanged; no invented cache dict/lock
+or configuration requirement. Exact APIs/consumer boundaries in the linked contracts.
 
-KR-002 Configuration Runtime
-
----
-
-# Configuration Import Graph
-
-Configuration Runtime owns runtime configuration loading, validation and immutable Settings construction.
-
-Configuration Runtime depends only on Foundation Core.
-
----
-
-# Configuration Runtime Module Inventory
-
-| Module | Category | Public |
-|--------|----------|--------|
-| settings.py | Immutable Settings Dataclass | Yes |
-| config.py | Settings Loader Runtime | Yes |
-
----
-
-# CONFIG-IMPORT-001 — settings.py
-
-### Module Category
-
-Configuration Dataclass
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from pathlib import Path
-
-from src.core.constants import (
-    PROJECT_NAME,
-    PROJECT_VERSION,
-    ARCHITECTURE_VERSION,
-    DEFAULT_LOG_LEVEL,
-    DEFAULT_LOCALE,
-    DEFAULT_TIMEZONE,
-)
-
-from src.core.types import (
-    Metadata,
-    RuntimeLayer,
-    EventPriority,
-)
-```
-
-Imports only Foundation modules.
-
----
-
-## Public Export
-
-`Settings`
-
----
-
-## Forbidden Imports
-
-settings.py must never import:
-
-- config.py
-- logger.py
-- logging_config.py
-- kernel contracts
-- runtime implementations
-
-Settings must remain immutable and dependency-free.
-
----
-
-## Imported By
-
-| Importer | Purpose |
-|----------|---------|
-| config.py | Construct immutable Settings snapshot. |
-| RuntimeKernel | Read runtime metadata. |
-| Tests | Configuration assertions. |
-
----
-
-## Import Degree
-
-| Metric | Count |
-|--------|------:|
-| Incoming Imports | 3 |
-| Outgoing Imports | Foundation only |
-
----
-
-# CONFIG-IMPORT-002 — config.py
-
-### Module Category
-
-Configuration Runtime
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-import os
-from functools import lru_cache
-from pathlib import Path
-
-from src.core.constants import *
-from src.core.exceptions import (
-    ConfigurationError,
-    ValidationError,
-)
-from src.core.settings import Settings
-from src.core.types import Metadata
-```
-
-Configuration Runtime imports Foundation only.
-
----
-
-## Public Exports
-
-| Category | Symbols |
-|----------|---------|
-| Functions | get_settings, reload_settings, clear_settings_cache, validate_settings |
-
----
-
-## Forbidden Imports
-
-config.py must never import:
-
-- logger.py
-- logging_config.py
-- runtime modules
-- contracts
-- main.py
-
-Reason: configuration cannot depend on logging runtime.
-
----
-
-## Imported By
-
-| Importer | Purpose |
-|----------|---------|
-| logger.py | Read log configuration. |
-| logging_config.py | Configure handlers. |
-| BootstrapRuntime | Load runtime configuration. |
-| RuntimeKernel | Read Settings snapshot. |
-| Tests | Configuration runtime tests. |
-
----
-
-## Internal Dependency Rules
-
-config.py owns:
-
-- cache creation;
-- environment loading;
-- validation;
-- Settings construction.
-
-settings.py owns immutable Settings structure only.
-
----
-
-## Cache Ownership Rule
-
-Only config.py owns `_SETTINGS_CACHE`.
-
-settings.py never stores cache.
-
----
-
-# Configuration Runtime Dependency Graph
-
-```text
-types.py
-     │
-constants.py
-     │
-exceptions.py
-     │
-settings.py
-     │
-config.py
-```
-
-No reverse dependency exists.
-
----
-
-# Configuration Runtime Import Matrix
-
-| Module | May Import |
-|--------|------------|
-| settings.py | constants.py, types.py |
-| config.py | settings.py, constants.py, exceptions.py |
-
----
-
-# Configuration Runtime Reverse Import Matrix
-
-| Target Module | Allowed Importers |
-|--------------|-------------------|
-| settings.py | config.py, RuntimeKernel, tests |
-| config.py | logger.py, BootstrapRuntime, RuntimeKernel, tests |
-
----
-
-# Configuration Runtime Anti-Cycle Rules
-
-Forbidden dependency pairs:
-
-| Forbidden Pair | Reason |
-|----------------|--------|
-| settings.py ↔ config.py | Immutable dataclass must not depend on loader. |
-| config.py ↔ logger.py | Logging cannot configure configuration runtime. |
-| config.py ↔ runtime.py | Runtime construction happens after configuration. |
-
-These cycles are architecture violations.
-
----
-
-# KR-002 Import Statistics
-
-| Metric | Value |
-|--------|------:|
-| Modules | 2 |
-| Internal Dependencies | 1 |
-| Runtime Dependencies | 0 |
-| Contract Dependencies | 0 |
-| Cycles | 0 |
-
-Configuration Runtime remains acyclic.
-
----
-
-# KR-003 Import Graph
-
-**Directory**
-
-`src/core/`
-
-**Runtime Layer**
-
-L0
-
-**Owner KR**
-
-KR-003 Logging Runtime
-
----
-
-# Logging Import Graph
-
-Logging Runtime owns logger creation, formatter construction and RuntimeContext injection.
-
-Logging Runtime depends on Configuration Runtime.
-
-Configuration Runtime never depends on Logging Runtime.
-
----
-
-# Logging Runtime Module Inventory
-
-| Module | Category | Public |
-|--------|----------|--------|
-| logger.py | Logger Factory | Yes |
-| logging_config.py | Logging Runtime | Yes |
-
----
-
-# LOG-IMPORT-001 — logger.py
-
-### Module Category
-
-Logger Factory
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-import logging
-
-from src.core.config import get_settings
-from src.core.constants import PROJECT_NAME
-```
-
-Imports configuration only.
-
----
-
-## Public Export
-
-`get_logger`
-
----
-
-## Forbidden Imports
-
-logger.py must never import:
-
-- logging_config.py
-- runtime modules
-- contracts
-- ContextRuntime
-
-Logger factory cannot initialize runtime logging.
-
----
-
-## Imported By
-
-Entire repository imports `get_logger()`.
-
----
-
-## Logger Cache Rule
-
-logger.py owns `_LOGGER_CACHE`.
-
-No other module mutates logger cache.
-
----
-
-# LOG-IMPORT-002 — logging_config.py
-
-### Module Category
-
-Logging Runtime
-
-### Runtime Layer
-
-L0
-
----
-
-## Allowed Imports
-
-```python
-from __future__ import annotations
-
-import logging
-import json
-
-from src.core.config import get_settings
-from src.core.constants import DEFAULT_LOG_LEVEL
-from src.core.types import Metadata
-```
-
-Logging Runtime imports Configuration Runtime and Foundation only.
-
----
-
-## Public Exports
-
-### Functions
-
-- configure_logging
-- reset_logging
-
-### Classes
-
-- ContextFilter
-- ConsoleFormatter
-- JsonFormatter
-
----
-
-## Forbidden Imports
-
-logging_config.py must never import:
-
-- logger.py
-- RuntimeKernel
-- LifecycleRuntime
-- EventBusRuntime
-- ContextRuntime implementation
-
-Context information arrives through ContextFilter interface only.
-
----
-
-## Imported By
-
-| Importer | Purpose |
-|----------|---------|
-| BootstrapRuntime | Initialize logging runtime. |
-| RuntimeKernel | Startup logging configuration. |
-| Tests | Logging runtime tests. |
-
----
-
-## Formatter Ownership Rules
-
-ContextFilter injects runtime metadata.
-
-ConsoleFormatter owns console formatting.
-
-JsonFormatter owns structured formatting.
-
-No formatter owns logger creation.
-
----
-
-# Logging Runtime Dependency Graph
-
-```text
-Foundation
-    │
-settings.py
-    │
-config.py
-   ├──────► logger.py
-   │
-   └──────► logging_config.py
-```
-
-logger.py and logging_config.py never import each other.
-
----
-
-# Logging Runtime Import Matrix
-
-| Module | May Import |
-|--------|------------|
-| logger.py | config.py, constants.py |
-| logging_config.py | config.py, constants.py, types.py |
-
----
-
-# Logging Runtime Reverse Import Matrix
-
-| Target Module | Allowed Importers |
-|--------------|-------------------|
-| logger.py | Entire repository |
-| logging_config.py | BootstrapRuntime, RuntimeKernel, tests |
-
----
-
-# Logging Runtime Anti-Cycle Rules
-
-Forbidden dependency pairs:
-
-| Forbidden Pair | Reason |
-|----------------|--------|
-| logger.py ↔ logging_config.py | Factory/runtime separation. |
-| logging_config.py ↔ ContextRuntime | Runtime abstraction boundary. |
-| logger.py ↔ RuntimeKernel | Logger available before runtime construction. |
-
-All logging dependencies remain one-directional.
-
----
-
-# Core Runtime Dependency DAG
-
-```text
-types.py
-    │
-constants.py
-    │
-exceptions.py
-    │
-settings.py
-    │
-config.py
-   ├────────► logger.py
-   │
-   └────────► logging_config.py
-```
-
-Every edge is directed downward.
-
----
-
-# Core Layer Import Integrity Rules
-
-Core layer guarantees:
-
-1. Foundation has no runtime imports.
-2. Settings never imports config.
-3. Config never imports logger.
-4. Logger never imports logging runtime.
-5. Logging runtime never imports runtime implementations.
-6. Runtime metadata enters logging only through ContextFilter.
-7. Core dependency graph contains zero cycles.
-
-Violating any rule is an Architecture Conflict.
-
----
-
-# KR-002 + KR-003 Import Statistics
-
-| Runtime | Modules | Internal Edges | Cycles |
-|---------|--------:|---------------:|-------:|
-| Configuration Runtime | 2 | 1 | 0 |
-| Logging Runtime | 2 | 2 | 0 |
-
-Entire `src/core/` remains a directed acyclic graph.
-
----
-
-**Document Status:** IN PROGRESS (Part 3 of 10)
-
-<!-- ========================================================================= -->
 <!-- M-04 PART 4 — KR-004 Kernel Contracts Import Graph -->
 <!-- ========================================================================= -->
 
@@ -3688,7 +3208,8 @@ Configuration Runtime may import Foundation only.
 
 # Logging Runtime Violations
 
-Logging Runtime depends on Configuration Runtime only.
+Logging Runtime depends on Foundation and sibling logging primitives; Configuration
+is allowed only when required by an approved contract, not required here.
 
 ## Forbidden Imports
 
@@ -3698,8 +3219,8 @@ Logging Runtime depends on Configuration Runtime only.
     <table-cell>**Reason**</table-cell>
   </table-row>
   <table-row>
-    <table-cell>`logger.py → logging_config.py`</table-cell>
-    <table-cell>Factory/runtime separation.</table-cell>
+    <table-cell>`logging_config.py → logger.py`</table-cell>
+    <table-cell>Factory depends on primitives, never the reverse.</table-cell>
   </table-row>
   <table-row>
     <table-cell>`logging_config.py → logger.py`</table-cell>
