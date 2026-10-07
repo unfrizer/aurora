@@ -1,5 +1,41 @@
 # AURORA ENGINEERING BIBLE v1.1
 
+## Approved core/test reconciliation — ADR-009
+
+**Status:** APPROVED — explicit T-01–T-05 approval and root-admission clarification,
+2026-10-07. Exact normative contracts:
+[KR-002](../wave1/KR-002_CONFIGURATION.md),
+[KR-003](../wave1/KR-003_LOGGING.md),
+[KR-011](../wave1/KR-011_KERNEL_TEST_SUITE.md).
+
+Only affected KR-002/KR-003/KR-011 declarations are superseded. Legacy duplicate
+summaries/counts/examples for those modules elsewhere in this document are NOT
+authority when they conflict with these exact contracts. Other module ownership,
+L0–L8, DI/event/lifecycle vocabularies and approved ADR-004–008 acceptance remain.
+
+KR-002: immutable BaseSettings, eight fields, Environment alias, three properties,
+two validators; get_settings and validate_configuration, lru_cache(maxsize=1).
+No reload_settings/clear_settings_cache/validate_settings, missing-.env error,
+provider fields, absolute/existing-path or timezone-database validation requirement.
+
+KR-003: get_logger(name, config=None), LOGGER; LoggingConfig (three fields, frozen/
+slotted, positional-compatible), RuntimeContextFilter, ConsoleFormatter, JsonFormatter,
+seven explicit correlation/session context functions and two default constants.
+No configure_logging/reset_logging/ContextFilter alias, root configuration or
+automatic trace/pipeline/runtime injection. Empty name and EXACT "root" plus invalid
+levels reject before registry access/mutation with existing InvalidConfigurationError
+and fixed safe messages. Keep cache and first-installed handlers. Foundation
+constants keep KR-001 ownership; logger -> logging_config/ Foundation is allowed,
+logging_config -> logger or concrete runtime is forbidden. No new import direction.
+
+KR-011: eleven executable test modules plus tests/conftest.py (seven named fresh
+function-scoped fixtures), exact paths and all public API/coverage gates in its
+linked contract. No tests/runtime or split Registry/Scope/Resolver/Executor files.
+Current narrow KR-003 changes only logger.py and test_logger.py; no other production,
+test, dependency or workflow edit. KR-011 is a separate subsequent reviewed task.
+Approved contract compilation is not a claim of implementation/test acceptance.
+
+
 Document ID: M-01
 
 Document Name: File Registry
@@ -404,371 +440,35 @@ No duplicate literal values anywhere else.
 
 # KR-002 — Configuration Runtime Registry
 
-**Runtime Layer:** L0 Kernel
-
-Directory:
-
-```
-src/core/
-```
-
-Files:
-
-| File | Status | Public API |
-|------|--------|-----------|
-| `settings.py` | FROZEN | Immutable Settings model |
-| `config.py` | FROZEN | Configuration runtime API |
-
-Configuration Runtime owns **all environment configuration**.
-
-No other KR may read environment variables directly.
-
----
-
-## CONFIG-001 — src/core/settings.py
-
-### Owner
-
-KR-002 Configuration Runtime
-
-### Responsibility
-
-Immutable runtime configuration model.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-- BootstrapRuntime
-- ContainerRuntime
-- LoggingRuntime
-- RuntimeKernel
-- Tests
-
-### Public Exports
-
-#### Classes
-
-- `Settings`
-
-#### Type Aliases
-
-- `EnvironmentName`
-
-### Public Configuration Groups
-
-#### Runtime
-
-- app_name
-- app_environment
-- debug
-- log_level
-
-#### Directories
-
-- project_root
-- config_directory
-- cache_directory
-- data_directory
-- log_directory
-
-#### Event Runtime
-
-- event_version
-- trace_root_id
-
-#### Container Runtime
-
-- application_scope_cache_enabled
-
-#### Logging Runtime
-
-- console_logging_enabled
-- json_logging_enabled
-
-### Configuration Sources
-
-Order is immutable.
-
-1. Environment variables.
-2. `.env`
-3. Pydantic defaults.
-
-### Validation Owner
-
-Settings validates:
-
-- directory paths;
-- log level;
-- environment name;
-- required variables.
-
-### Forbidden Responsibilities
-
-- filesystem creation;
-- logging configuration;
-- dependency injection;
-- runtime initialization.
-
----
-
-## CONFIG-002 — src/core/config.py
-
-### Owner
-
-KR-002 Configuration Runtime
-
-### Responsibility
-
-Runtime configuration access API.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-Entire runtime.
-
-### Public Functions
-
-| Function | Purpose |
-|----------|---------|
-| `get_settings()` | Returns immutable cached Settings instance. |
-| `reload_settings()` | Invalidates cache and rebuilds Settings. |
-
-### Cache Ownership
-
-Owns exactly one immutable application cache.
-
-Allowed cache:
-
-```
-functools.cache
-```
-
-No mutable cache.
-
-### Dependency Owner
-
-Uses only:
-
-- settings.py
-- functools
-- pathlib
-- pydantic-settings
-
-### Forbidden Responsibilities
-
-- environment parsing outside Settings;
-- runtime state;
-- global mutable configuration.
-
----
-
-# KR-002 Ownership Matrix
-
-| Object | Owner |
-|--------|-------|
-| Settings instance | config.py |
-| Environment parsing | settings.py |
-| Validation | settings.py |
-| Cache invalidation | config.py |
-
-No shared ownership.
-
----
+APPROVED exact schema/API/validation: [KR-002](../wave1/KR-002_CONFIGURATION.md).
+
+| File | Owner / L0 responsibility | Public surface |
+| --- | --- | --- |
+| src/core/settings.py | KR-002 environment/.env parsing, frozen BaseSettings validation | Environment; Settings; eight fields, three properties, two validators |
+| src/core/config.py | KR-002 immutable Application-wide loader/cache | get_settings; validate_configuration |
+
+Settings -> Foundation constants/exceptions + existing Pydantic. Config -> Settings/
+Foundation exception + lru_cache/Pydantic ValidationError. No logging/DI/runtime
+import or file/directory creation. Defaults/relative paths accepted; test-only
+decorator cache_clear is not a new public loader contract.
 
 # KR-003 — Logging Runtime Registry
 
-**Runtime Layer:** L0 Kernel
+APPROVED exact surface/behavior: [KR-003](../wave1/KR-003_LOGGING.md).
+
+| File | Owner / L0 responsibility | Public surface |
+| --- | --- | --- |
+| src/core/logging_config.py | KR-003 frozen config, ContextVars/filter/formatters | LoggingConfig; RuntimeContextFilter; ConsoleFormatter; JsonFormatter; seven context functions; DEFAULT_LOGGING_CONFIG; DEFAULT_CONTEXT_FILTER |
+| src/core/logger.py | KR-003 named logger acquisition/cache and handler construction | get_logger; LOGGER |
+
+Factory -> sibling config/filter/formatters and existing Foundation exception.
+Logging primitives -> Foundation constants, never reverse or higher runtime.
+Reject empty/"root"/invalid level before logger acquisition/mutation. No root
+configuration/reset or automatic runtime trace fields. Keep handler/cache
+semantics, fixed errors and infrastructure exception to hidden-runtime-state rule.
+Only logger.py and canonical test_logger.py are reopened in the narrow task.
+Test ownership remains KR-011; shared fixtures wait for its separate task.
 
-Directory:
-
-```
-src/core/
-```
-
-Files:
-
-| File | Status | Public API |
-|------|--------|-----------|
-| `logging_config.py` | FROZEN | Logging configuration runtime |
-| `logger.py` | FROZEN | Logger factory API |
-
-Logging Runtime owns every logging object.
-
-No production file imports `logging` directly.
-
----
-
-## LOGGING-001 — src/core/logging_config.py
-
-### Owner
-
-KR-003 Logging Runtime
-
-### Responsibility
-
-Logging configuration runtime.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-BootstrapRuntime only.
-
-### Public Classes
-
-| Class | Purpose |
-|-------|---------|
-| `LoggingConfig` | Immutable logging configuration. |
-| `ContextFilter` | Injects runtime context into log records. |
-| `JsonFormatter` | Structured JSON formatter. |
-| `ConsoleFormatter` | Human-readable formatter. |
-
-### Public Functions
-
-| Function | Purpose |
-|----------|---------|
-| `build_logging_config()` | Returns canonical logging configuration. |
-
-### Runtime Ownership
-
-Owns:
-
-- formatter construction;
-- filter construction;
-- handler construction.
-
-Does NOT own logger instances.
-
-### Context Injection Fields
-
-Injected automatically:
-
-- trace_id
-- session_id
-- pipeline_id
-- module_id
-
-### Forbidden Responsibilities
-
-- logger caching;
-- logger retrieval;
-- runtime initialization.
-
----
-
-## LOGGING-002 — src/core/logger.py
-
-### Owner
-
-KR-003 Logging Runtime
-
-### Responsibility
-
-Canonical logger API.
-
-### Runtime Layer
-
-L0
-
-### Imported By
-
-Entire repository.
-
-### Public Functions
-
-| Function | Purpose |
-|----------|---------|
-| `get_logger(name)` | Returns configured logger instance. |
-| `configure_logging()` | Installs repository logging configuration. |
-| `reset_logging()` | Clears logging configuration (tests only). |
-
-### Logger Cache
-
-Owns immutable logger cache.
-
-Cache key:
-
-```
-module.__name__
-```
-
-### Logging Rules
-
-Returns configured logger only.
-
-Never returns root logger.
-
-Never exposes logging configuration internals.
-
-### Forbidden Responsibilities
-
-- custom handlers;
-- environment parsing;
-- runtime context mutation.
-
----
-
-# KR-003 Ownership Matrix
-
-| Object | Owner |
-|--------|-------|
-| Logger cache | logger.py |
-| Formatter objects | logging_config.py |
-| Logging handlers | logging_config.py |
-| Context filter | logging_config.py |
-| Logger retrieval | logger.py |
-
-No duplicate logger owners.
-
----
-
-# KR-002 / KR-003 Dependency Summary
-
-```
-settings.py
-      │
-config.py
-      │
-logging_config.py
-      │
-logger.py
-```
-
-Allowed import direction only.
-
----
-
-# KR-002 Validation Ownership
-
-Configuration Runtime validates:
-
-- `.env` loading.
-- Environment defaults.
-- Directory paths.
-- Immutable Settings construction.
-
----
-
-# KR-003 Validation Ownership
-
-Logging Runtime validates:
-
-- formatter creation;
-- handler creation;
-- logger retrieval;
-- context injection.
-
-Validation does not emit logs during configuration.
-
-<!-- ========================================================================= -->
 <!-- M-01 PART 3 — KR-004 Kernel Contracts Registry -->
 <!-- ========================================================================= -->
 
@@ -2364,9 +2064,10 @@ Validate Configuration Runtime.
 
 - .env loading.
 - immutable Settings.
-- reload_settings().
-- directory validation.
-- cache invalidation.
+- get_settings / validate_configuration and all T-02 fields/helpers/validators.
+- default/env/.env/alias/extra/frozen/error policies.
+- relative Path conversion without filesystem creation.
+- isolated stdlib cache identity/invalidation.
 
 ---
 

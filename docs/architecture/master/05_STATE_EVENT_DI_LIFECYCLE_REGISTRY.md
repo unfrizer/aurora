@@ -1,4 +1,40 @@
 <!-- ========================================================================= -->
+
+## Approved core/test reconciliation — ADR-009
+
+**Status:** APPROVED — explicit T-01–T-05 approval and root-admission clarification,
+2026-10-07. Exact normative contracts:
+[KR-002](../wave1/KR-002_CONFIGURATION.md),
+[KR-003](../wave1/KR-003_LOGGING.md),
+[KR-011](../wave1/KR-011_KERNEL_TEST_SUITE.md).
+
+Only affected KR-002/KR-003/KR-011 declarations are superseded. Legacy duplicate
+summaries/counts/examples for those modules elsewhere in this document are NOT
+authority when they conflict with these exact contracts. Other module ownership,
+L0–L8, DI/event/lifecycle vocabularies and approved ADR-004–008 acceptance remain.
+
+KR-002: immutable BaseSettings, eight fields, Environment alias, three properties,
+two validators; get_settings and validate_configuration, lru_cache(maxsize=1).
+No reload_settings/clear_settings_cache/validate_settings, missing-.env error,
+provider fields, absolute/existing-path or timezone-database validation requirement.
+
+KR-003: get_logger(name, config=None), LOGGER; LoggingConfig (three fields, frozen/
+slotted, positional-compatible), RuntimeContextFilter, ConsoleFormatter, JsonFormatter,
+seven explicit correlation/session context functions and two default constants.
+No configure_logging/reset_logging/ContextFilter alias, root configuration or
+automatic trace/pipeline/runtime injection. Empty name and EXACT "root" plus invalid
+levels reject before registry access/mutation with existing InvalidConfigurationError
+and fixed safe messages. Keep cache and first-installed handlers. Foundation
+constants keep KR-001 ownership; logger -> logging_config/ Foundation is allowed,
+logging_config -> logger or concrete runtime is forbidden. No new import direction.
+
+KR-011: eleven executable test modules plus tests/conftest.py (seven named fresh
+function-scoped fixtures), exact paths and all public API/coverage gates in its
+linked contract. No tests/runtime or split Registry/Scope/Resolver/Executor files.
+Current narrow KR-003 changes only logger.py and test_logger.py; no other production,
+test, dependency or workflow edit. KR-011 is a separate subsequent reviewed task.
+Approved contract compilation is not a claim of implementation/test acceptance.
+
 <!-- AURORA ENGINEERING BIBLE -->
 <!-- DOCUMENT M-05 — STATE / EVENT / DI / LIFECYCLE REGISTRY -->
 <!-- FILE: 05_STATE_EVENT_DI_LIFECYCLE_REGISTRY.md -->
@@ -3964,7 +4000,7 @@ Trace correlation fields appear in:
 | System | Required Fields |
 |--------|-----------------|
 | RuntimeEvent | trace_id, session_id |
-| Logger | trace_id, session_id, pipeline_id |
+| Logger | explicit correlation_id, session_id (ADR-009; no automatic trace/pipeline fields) |
 | Diagnostics | trace_id |
 | Exceptions | trace_id |
 | Metrics | trace_id |
@@ -3973,24 +4009,14 @@ Correlation identifiers are consistent everywhere.
 
 ---
 
-# Logging Correlation Rules
+# Logging Correlation Rules — APPROVED ADR-009
 
-Every runtime log record contains:
-
-<table columnSizing="equal">
-  <table-row>
-    <table-cell>**Field**</table-cell>
-    <table-cell>**Required**</table-cell>
-  </table-row>
-  <table-row><table-cell>trace_id</table-cell><table-cell>Yes</table-cell></table-row>
-  <table-row><table-cell>session_id</table-cell><table-cell>Yes</table-cell></table-row>
-  <table-row><table-cell>pipeline_id</table-cell><table-cell>Optional</table-cell></table-row>
-  <table-row><table-cell>module_id</table-cell><table-cell>Optional</table-cell></table-row>
-</table>
-
-Logger never generates correlation identifiers.
-
----
+RuntimeContextFilter supplies explicit ContextVar correlation_id/session_id, "-"
+for missing/empty values; unfiltered JSON missing attributes are None. Console and
+JSON retain exact T-03 schemas. No inferred TraceId, pipeline/module/runtime fields,
+identifier generation or RuntimeContext/SessionRuntime import. Logger cache/registry/
+module-level LOGGER/ContextVars are infrastructure, not authoritative mutable
+AURORA state. Settings remain immutable lru_cache(maxsize=1) Configuration ownership.
 
 # Exception Correlation Rules
 
@@ -4031,7 +4057,8 @@ Wave 1 guarantees:
 4. RuntimeEvents inherit RuntimeContext.
 5. Sessions isolate RuntimeContext.
 6. Pipelines enrich RuntimeContext without mutation.
-7. Logging uses RuntimeContext for correlation.
+7. Logging uses explicit execution-local correlation/session ContextVars (ADR-009),
+   without importing RuntimeContext or inferring TraceId.
 8. Exceptions carry trace identifiers.
 9. RuntimeContext serialization is deterministic.
 10. Metadata updates remain shallow and removal is permitted through MetadataRuntime.

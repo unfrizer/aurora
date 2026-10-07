@@ -1,5 +1,41 @@
 # AURORA MASTER HANDOFF v1.0
 
+## Approved core/test reconciliation — ADR-009
+
+**Status:** APPROVED — explicit T-01–T-05 approval and root-admission clarification,
+2026-10-07. Exact normative contracts:
+[KR-002](../wave1/KR-002_CONFIGURATION.md),
+[KR-003](../wave1/KR-003_LOGGING.md),
+[KR-011](../wave1/KR-011_KERNEL_TEST_SUITE.md).
+
+Only affected KR-002/KR-003/KR-011 declarations are superseded. Legacy duplicate
+summaries/counts/examples for those modules elsewhere in this document are NOT
+authority when they conflict with these exact contracts. Other module ownership,
+L0–L8, DI/event/lifecycle vocabularies and approved ADR-004–008 acceptance remain.
+
+KR-002: immutable BaseSettings, eight fields, Environment alias, three properties,
+two validators; get_settings and validate_configuration, lru_cache(maxsize=1).
+No reload_settings/clear_settings_cache/validate_settings, missing-.env error,
+provider fields, absolute/existing-path or timezone-database validation requirement.
+
+KR-003: get_logger(name, config=None), LOGGER; LoggingConfig (three fields, frozen/
+slotted, positional-compatible), RuntimeContextFilter, ConsoleFormatter, JsonFormatter,
+seven explicit correlation/session context functions and two default constants.
+No configure_logging/reset_logging/ContextFilter alias, root configuration or
+automatic trace/pipeline/runtime injection. Empty name and EXACT "root" plus invalid
+levels reject before registry access/mutation with existing InvalidConfigurationError
+and fixed safe messages. Keep cache and first-installed handlers. Foundation
+constants keep KR-001 ownership; logger -> logging_config/ Foundation is allowed,
+logging_config -> logger or concrete runtime is forbidden. No new import direction.
+
+KR-011: eleven executable test modules plus tests/conftest.py (seven named fresh
+function-scoped fixtures), exact paths and all public API/coverage gates in its
+linked contract. No tests/runtime or split Registry/Scope/Resolver/Executor files.
+Current narrow KR-003 changes only logger.py and test_logger.py; no other production,
+test, dependency or workflow edit. KR-011 is a separate subsequent reviewed task.
+Approved contract compilation is not a claim of implementation/test acceptance.
+
+
 **Document ID:** M-09
 
 **Document Name:** Test Matrix
@@ -43,29 +79,27 @@ Every public API defined in M-03 must have executable tests.
 
 ---
 
-# Test Directory Structure
+# Test Directory Structure — APPROVED ADR-009
 
-tests/
-├── core/
-│   ├── test_types.py
-│   ├── test_settings.py
-│   └── test_logger.py
-│
-├── kernel/
-│   ├── test_contracts.py
-│   ├── test_container.py
-│   ├── test_registry.py
-│   ├── test_scope.py
-│   ├── test_resolver.py
-│   ├── test_lifecycle.py
-│   └── test_event_bus.py
-│
-└── runtime/
-    ├── test_context.py
-    ├── test_pipeline.py
-    ├── test_executor.py
-    ├── test_bootstrap.py
-    └── test_runtime.py
+```text
+tests/conftest.py
+tests/core/test_types.py
+tests/core/test_settings.py
+tests/core/test_logger.py
+tests/kernel/test_contracts.py
+tests/kernel/test_container.py
+tests/kernel/test_lifecycle.py
+tests/kernel/test_event_bus.py
+tests/kernel/test_context.py
+tests/kernel/test_pipeline.py
+tests/kernel/test_bootstrap.py
+tests/integration/test_runtime_startup.py
+```
+
+Eleven executable modules and one shared-fixture file; exact authority/fixtures/
+acceptance in [KR-011](../wave1/KR-011_KERNEL_TEST_SUITE.md). Registry/Scope/
+Resolver/Provider cases belong to test_container.py; Executor to test_pipeline.py;
+Kernel/Main to test_bootstrap.py plus integration/test_runtime_startup.py.
 
 ---
 
@@ -101,54 +135,23 @@ Validate canonical Foundation types.
 
 # KR-002 Tests
 
-## tests/core/test_settings.py
-
-### Required Cases
-
-- Load .env successfully.
-- Missing environment variable raises MissingConfigurationError.
-- Invalid APP_ENV raises InvalidConfigurationError.
-- Invalid LOG_LEVEL rejected.
-- Path validation succeeds.
-- reload_settings returns new immutable object.
-
-### Edge Cases
-
-- Empty .env.
-- Invalid timezone.
-- Unknown environment profile.
-
-Coverage target:
-
-100%.
-
----
+tests/core/test_settings.py must cover the complete APPROVED
+[KR-002 contract](../wave1/KR-002_CONFIGURATION.md): eight fields, aliases/default/
+env/.env/extra rules, helper/validator APIs, actual frozen-assignment rejection,
+relative paths without I/O, descriptive timezone, cache identity/test-isolated
+invalidation and exact error/cause boundaries. No obsolete reload/missing-env/
+directory/timezone/provider requirement. 100% executable lines PER owned file,
+all public APIs, report lines separately from API assertions/branches.
 
 # KR-003 Tests
 
-## tests/core/test_logger.py
-
-### Required Cases
-
-- Logger factory returns Logger.
-- Logger name preserved.
-- JSON formatter enabled.
-- Console formatter enabled.
-- Correlation ID injected.
-- Trace ID injected.
-- Session ID injected.
-
-### Edge Cases
-
-- Multiple calls return cached logger.
-- Unknown logger name.
-- Missing context values.
-
-Coverage target:
-
-100%.
-
----
+tests/core/test_logger.py must cover the complete APPROVED
+[KR-003 contract](../wave1/KR-003_LOGGING.md): all 15 symbols/three formatter-filter
+methods/config schema/constructor, named/default/cache/root boundary, exact
+empty/"root"/invalid-level pre-access safe rejection, preserved first handlers,
+both formatter schemas/exception/fallback/context APIs/isolated execution contexts.
+No configure_logging/reset/automatic-trace fiction. 100% executable lines PER
+owned file and all public API assertions, not a branch-coverage claim.
 
 # KR-004 Tests
 
@@ -215,7 +218,7 @@ same-ID replacement, and re-entrancy rejection. Legacy sync-only examples below
 are superseded for KR-005. Do not create or modify other test files in this task.
 
 
-## tests/kernel/test_registry.py
+## tests/kernel/test_container.py — Registry cases
 
 ### Registry Cases
 
@@ -226,7 +229,7 @@ are superseded for KR-005. Do not create or modify other test files in this task
 
 ---
 
-## tests/kernel/test_scope.py
+## tests/kernel/test_container.py — Scope cases
 
 ### Scope Cases
 
@@ -243,7 +246,7 @@ are superseded for KR-005. Do not create or modify other test files in this task
 
 ---
 
-## tests/kernel/test_resolver.py
+## tests/kernel/test_container.py — Resolver cases
 
 ### Resolver Cases
 
@@ -536,24 +539,22 @@ platform modes, full Pytest, Kernel smoke and latest-head required CI must pass.
 
 ---
 
-# Integration Matrix
+# Integration Matrix — APPROVED ADR-009
 
-| Runtime Component | Test File |
-|-------------------|-----------|
-| Foundation Types | test_types.py |
-| Configuration | test_settings.py |
-| Logger | test_logger.py |
-| Contracts | test_contracts.py |
-| Registry | test_registry.py |
-| Resolver | test_resolver.py |
-| Container | test_container.py |
-| Lifecycle | test_lifecycle.py |
-| Event Bus | test_event_bus.py |
-| Context | test_context.py |
-| Pipeline | test_pipeline.py |
-| Executor | test_executor.py |
-| Bootstrap | test_bootstrap.py |
-| Runtime | test_runtime.py |
+| Component | Canonical test path |
+| --- | --- |
+| Foundation types/constants/version/exports/exceptions | tests/core/test_types.py |
+| Configuration | tests/core/test_settings.py |
+| Logging | tests/core/test_logger.py |
+| Contracts | tests/kernel/test_contracts.py |
+| Registry/Scope/Resolver/Provider/Container | tests/kernel/test_container.py |
+| Lifecycle/hooks/state | tests/kernel/test_lifecycle.py |
+| Event Bus | tests/kernel/test_event_bus.py |
+| Context/Metadata/Session | tests/kernel/test_context.py |
+| Pipeline/Manifest/Executor/Orchestrator | tests/kernel/test_pipeline.py |
+| Bootstrap/Kernel facade | tests/kernel/test_bootstrap.py |
+| Kernel/Main integration | tests/integration/test_runtime_startup.py |
+| Seven fresh shared fixtures | tests/conftest.py |
 
 ---
 
@@ -599,6 +600,12 @@ Do not continue to the next KR.
 
 # Coverage Targets
 
+ADR-009: KR-001/004 are public-symbol/API contract verification; KR-002/003 are
+100% executable lines PER owned file plus API assertions. KR-005/006/008 require
+at least 95% lines PER file; KR-007/009/010 require 100% PER file. Every required
+API covered, overall >=97% public API. No line-to-branch coverage inference.
+
+
 | Runtime | Minimum Coverage |
 |----------|-----------------:|
 | KR-001 | 100% |
@@ -607,10 +614,10 @@ Do not continue to the next KR.
 | KR-004 | 100% |
 | KR-005 | 95% |
 | KR-006 | 95% |
-| KR-007 | 95% |
+| KR-007 | 100% executable lines per file |
 | KR-008 | 95% |
-| KR-009 | 95% |
-| KR-010 | 95% |
+| KR-009 | 100% executable lines per file |
+| KR-010 | 100% executable lines per file |
 
 Overall Wave 1 coverage target:
 

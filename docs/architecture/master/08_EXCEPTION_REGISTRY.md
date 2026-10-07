@@ -1,5 +1,41 @@
 # AURORA MASTER HANDOFF v1.0
 
+## Approved core/test reconciliation — ADR-009
+
+**Status:** APPROVED — explicit T-01–T-05 approval and root-admission clarification,
+2026-10-07. Exact normative contracts:
+[KR-002](../wave1/KR-002_CONFIGURATION.md),
+[KR-003](../wave1/KR-003_LOGGING.md),
+[KR-011](../wave1/KR-011_KERNEL_TEST_SUITE.md).
+
+Only affected KR-002/KR-003/KR-011 declarations are superseded. Legacy duplicate
+summaries/counts/examples for those modules elsewhere in this document are NOT
+authority when they conflict with these exact contracts. Other module ownership,
+L0–L8, DI/event/lifecycle vocabularies and approved ADR-004–008 acceptance remain.
+
+KR-002: immutable BaseSettings, eight fields, Environment alias, three properties,
+two validators; get_settings and validate_configuration, lru_cache(maxsize=1).
+No reload_settings/clear_settings_cache/validate_settings, missing-.env error,
+provider fields, absolute/existing-path or timezone-database validation requirement.
+
+KR-003: get_logger(name, config=None), LOGGER; LoggingConfig (three fields, frozen/
+slotted, positional-compatible), RuntimeContextFilter, ConsoleFormatter, JsonFormatter,
+seven explicit correlation/session context functions and two default constants.
+No configure_logging/reset_logging/ContextFilter alias, root configuration or
+automatic trace/pipeline/runtime injection. Empty name and EXACT "root" plus invalid
+levels reject before registry access/mutation with existing InvalidConfigurationError
+and fixed safe messages. Keep cache and first-installed handlers. Foundation
+constants keep KR-001 ownership; logger -> logging_config/ Foundation is allowed,
+logging_config -> logger or concrete runtime is forbidden. No new import direction.
+
+KR-011: eleven executable test modules plus tests/conftest.py (seven named fresh
+function-scoped fixtures), exact paths and all public API/coverage gates in its
+linked contract. No tests/runtime or split Registry/Scope/Resolver/Executor files.
+Current narrow KR-003 changes only logger.py and test_logger.py; no other production,
+test, dependency or workflow edit. KR-011 is a separate subsequent reviewed task.
+Approved contract compilation is not a claim of implementation/test acceptance.
+
+
 ## Approved KR-010 Error Mapping — ADR-008
 
 **Status:** APPROVED — ADR-008 B-01–B-05, 2026-10-06.
@@ -218,30 +254,19 @@ Terminates Runtime startup.
 
 ## MissingConfigurationError
 
-Raised when required ENV variable is absent.
-
-Examples
-
-- OPENROUTER_API_KEY missing.
-- APP_ENV missing.
-
-Caught by:
-
-Configuration loader.
-
-Propagated to Bootstrap.
-
----
+Existing Foundation class retained; current KR-002 has defaults for all fields
+and does not require this exception for a missing/empty .env or absent provider key.
+No mandatory OpenRouter/API-key or missing-env policy is introduced by Wave 1.
 
 ## InvalidConfigurationError
 
-Raised when ENV value is invalid.
-
-Examples
-
-- Invalid log level.
-- Invalid timezone.
-- Invalid directory path.
+KR-002 rejects invalid log levels through its validator; direct invalid environment
+construction raises Pydantic ValidationError, which get_settings wraps with cause.
+Paths convert to Path without existence/absolute checks; timezone is descriptive.
+KR-003 uses this same existing Foundation exception for empty name, EXACT "root"
+or unsupported level BEFORE logger acquisition/mutation, with fixed safe messages
+and no arbitrary supplied input in error context. No LoggingConfigurationError
+or new exception is required. Other owner-specific exceptions are unchanged.
 
 ---
 

@@ -1,5 +1,41 @@
 # AURORA MASTER HANDOFF v1.1
 
+## Approved core/test reconciliation — ADR-009
+
+**Status:** APPROVED — explicit T-01–T-05 approval and root-admission clarification,
+2026-10-07. Exact normative contracts:
+[KR-002](../wave1/KR-002_CONFIGURATION.md),
+[KR-003](../wave1/KR-003_LOGGING.md),
+[KR-011](../wave1/KR-011_KERNEL_TEST_SUITE.md).
+
+Only affected KR-002/KR-003/KR-011 declarations are superseded. Legacy duplicate
+summaries/counts/examples for those modules elsewhere in this document are NOT
+authority when they conflict with these exact contracts. Other module ownership,
+L0–L8, DI/event/lifecycle vocabularies and approved ADR-004–008 acceptance remain.
+
+KR-002: immutable BaseSettings, eight fields, Environment alias, three properties,
+two validators; get_settings and validate_configuration, lru_cache(maxsize=1).
+No reload_settings/clear_settings_cache/validate_settings, missing-.env error,
+provider fields, absolute/existing-path or timezone-database validation requirement.
+
+KR-003: get_logger(name, config=None), LOGGER; LoggingConfig (three fields, frozen/
+slotted, positional-compatible), RuntimeContextFilter, ConsoleFormatter, JsonFormatter,
+seven explicit correlation/session context functions and two default constants.
+No configure_logging/reset_logging/ContextFilter alias, root configuration or
+automatic trace/pipeline/runtime injection. Empty name and EXACT "root" plus invalid
+levels reject before registry access/mutation with existing InvalidConfigurationError
+and fixed safe messages. Keep cache and first-installed handlers. Foundation
+constants keep KR-001 ownership; logger -> logging_config/ Foundation is allowed,
+logging_config -> logger or concrete runtime is forbidden. No new import direction.
+
+KR-011: eleven executable test modules plus tests/conftest.py (seven named fresh
+function-scoped fixtures), exact paths and all public API/coverage gates in its
+linked contract. No tests/runtime or split Registry/Scope/Resolver/Executor files.
+Current narrow KR-003 changes only logger.py and test_logger.py; no other production,
+test, dependency or workflow edit. KR-011 is a separate subsequent reviewed task.
+Approved contract compilation is not a claim of implementation/test acceptance.
+
+
 **Document ID:** M-06
 
 **Document Name:** Module Specifications
@@ -406,654 +442,29 @@ Never raises.
 <!-- M-06 PART 2 — KR-002 Configuration Runtime + KR-003 Logging Runtime -->
 <!-- ========================================================================= -->
 
-# KR-002 — Configuration Runtime
-
-**Runtime Layer:** L0 Kernel
-
-Configuration Runtime is the only owner of application configuration loading.
-
-It is responsible for:
-
-- loading `.env`;
-- validating configuration;
-- exposing immutable runtime settings.
-
-It never owns runtime state beyond immutable configuration.
-
----
-
-## CONFIG-001 — src/core/settings.py
-
-### Owner
-
-KR-002 Configuration Runtime
-
-### Purpose
-
-Immutable validated application configuration model.
-
----
-
-### File Blueprint
-
-```
-settings.py
-├── imports
-├── Environment type alias
-├── Settings class
-├── validators
-└── __all__
-```
-
----
-
-### Imports
-
-```python
-from __future__ import annotations
-
-from pathlib import Path
-from typing import Literal
-
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
-from src.core.constants import (...)
-from src.core.exceptions import (...)
-```
-
-No logging imports.
-
-No runtime imports.
-
-No DI imports.
-
----
-
-### Public Types
-
-```python
-Environment = Literal[
-    "development",
-    "testing",
-    "production",
-]
-```
-
-Frozen vocabulary.
-
----
-
-### Public Class
-
-```python
-class Settings(BaseSettings):
-```
-
-Configuration:
-
-| Property | Value |
-|----------|-------|
-| frozen | True |
-| validate_assignment | False |
-| extra | forbid |
-| env_file | `.env` |
-| env_prefix | empty |
-| case_sensitive | False |
-
----
-
-### Public Fields
-
-<table><table-row><table-cell width="220">**Field**</table-cell><table-cell width="180">**Type**</table-cell><table-cell>**Description**</table-cell></table-row><table-row><table-cell>`app_env`</table-cell><table-cell>`Environment`</table-cell><table-cell>Runtime environment.</table-cell></table-row><table-row><table-cell>`log_level`</table-cell><table-cell>`str`</table-cell><table-cell>Logging level.</table-cell></table-row><table-row><table-cell>`config_path`</table-cell><table-cell>`Path`</table-cell><table-cell>Root configuration directory.</table-cell></table-row><table-row><table-cell>`cache_directory`</table-cell><table-cell>`Path`</table-cell><table-cell>Cache directory.</table-cell></table-row><table-row><table-cell>`data_directory`</table-cell><table-cell>`Path`</table-cell><table-cell>Runtime data directory.</table-cell></table-row><table-row><table-cell>`timezone`</table-cell><table-cell>`str`</table-cell><table-cell>Default runtime timezone.</table-cell></table-row></table>
-
-All fields are required.
-
----
-
-### Validators
-
-#### validate_environment
-
-```python
-@field_validator("app_env")
-def validate_environment(cls, value: Environment) -> Environment
-```
-
-Rules:
-
-- must be one of Environment values;
-- raises InvalidConfigurationError otherwise.
-
----
-
-#### validate_directory
-
-```python
-@field_validator(
-    "config_path",
-    "cache_directory",
-    "data_directory",
-)
-def validate_directory(cls, value: Path) -> Path
-```
-
-Rules:
-
-- absolute path;
-- existing parent directory;
-- normalized path.
-
----
-
-### Public API
-
-No public methods besides validators.
-
----
-
-### Raises
-
-<table><table-row><table-cell width="260">**Exception**</table-cell><table-cell>**When**</table-cell></table-row><table-row><table-cell>MissingConfigurationError</table-cell><table-cell>Required environment variable missing.</table-cell></table-row><table-row><table-cell>InvalidConfigurationError</table-cell><table-cell>Invalid value or invalid directory.</table-cell></table-row></table>
-
----
-
-### Imported By
-
-- config.py
-- bootstrap.py
-- logger.py
-- container.py
-
----
-
-### __all__
-
-```python
-__all__ = [
-    "Environment",
-    "Settings",
-]
-```
-
----
-
-### Validation Rules
-
-- Frozen model.
-- No mutable defaults.
-- No runtime methods.
-- Ruff clean.
-- Pyright strict clean.
-
----
-
-## CONFIG-002 — src/core/config.py
-
-### Owner
-
-KR-002 Configuration Runtime
-
-### Purpose
-
-Immutable settings loader.
-
-Single application owner of Settings lifecycle.
-
----
-
-### File Blueprint
-
-```
-config.py
-├── imports
-├── _load_settings()
-├── get_settings()
-├── reload_settings()
-└── __all__
-```
-
----
-
-### Imports
-
-```python
-from __future__ import annotations
-
-from functools import cache
-
-from src.core.settings import Settings
-from src.core.exceptions import (...)
-```
-
-No logging.
-
-No runtime.
-
-No container.
-
----
-
-### Private Functions
-
-#### _load_settings
-
-```python
-def _load_settings() -> Settings
-```
-
-Responsibilities:
-
-- instantiate Settings;
-- validate configuration;
-- wrap pydantic validation errors.
-
-Not exported.
-
----
-
-### Public Functions
-
-#### get_settings
-
-```python
-@cache
-def get_settings() -> Settings
-```
-
-Returns immutable Application-scoped Settings instance.
-
-Cache policy:
-
-- process-local;
-- immutable;
-- recreated only by reload_settings.
-
----
-
-#### reload_settings
-
-```python
-def reload_settings() -> Settings
-```
-
-Responsibilities:
-
-1. clear cache;
-2. reload Settings;
-3. return new immutable instance.
-
----
-
-### Raises
-
-<table><table-row><table-cell width="260">**Exception**</table-cell><table-cell>**When**</table-cell></table-row><table-row><table-cell>MissingConfigurationError</table-cell><table-cell>Environment variable missing.</table-cell></table-row><table-row><table-cell>InvalidConfigurationError</table-cell><table-cell>Configuration invalid.</table-cell></table-row></table>
-
----
-
-### Imported By
-
-- logger.py
-- bootstrap.py
-- container.py
-
----
-
-### __all__
-
-```python
-__all__ = [
-    "get_settings",
-    "reload_settings",
-]
-```
-
----
-
-### Validation Rules
-
-- Only immutable cache.
-- No mutable globals.
-- No runtime ownership.
-- Ruff clean.
-- Pyright strict clean.
-
----
-
-# KR-003 — Logging Runtime
-
-**Runtime Layer:** L0 Kernel
-
-Logging Runtime owns logging configuration only.
-
-It never owns runtime lifecycle.
-
----
-
-## LOG-001 — src/core/logging_config.py
-
-### Owner
-
-KR-003 Logging Runtime
-
-### Purpose
-
-Logging configuration primitives.
-
----
-
-### File Blueprint
-
-```
-logging_config.py
-├── imports
-├── LoggingConfig
-├── ContextFilter
-├── JsonFormatter
-├── ConsoleFormatter
-└── __all__
-```
-
----
-
-### Imports
-
-```python
-from __future__ import annotations
-
-import json
-import logging
-from contextvars import ContextVar
-from dataclasses import dataclass
-```
-
-No container imports.
-
-No runtime imports.
-
----
-
-### Public Dataclass
-
-#### LoggingConfig
-
-```python
-@dataclass(slots=True, frozen=True, kw_only=True)
-class LoggingConfig
-```
-
-Fields:
-
-<table><table-row><table-cell width="220">**Field**</table-cell><table-cell width="180">**Type**</table-cell><table-cell>**Default**</table-cell></table-row><table-row><table-cell>`level`</table-cell><table-cell>`str`</table-cell><table-cell>DEFAULT_LOG_LEVEL</table-cell></table-row><table-row><table-cell>`json_logs`</table-cell><table-cell>`bool`</table-cell><table-cell>False</table-cell></table-row><table-row><table-cell>`console_logs`</table-cell><table-cell>`bool`</table-cell><table-cell>True</table-cell></table-row><table-row><table-cell>`include_trace`</table-cell><table-cell>`bool`</table-cell><table-cell>True</table-cell></table-row><table-row><table-cell>`include_session`</table-cell><table-cell>`bool`</table-cell><table-cell>True</table-cell></table-row></table>
-
-Immutable.
-
----
-
-### Public Classes
-
-#### ContextFilter(logging.Filter)
-
-Responsibilities:
-
-Inject:
-
-- trace_id
-- session_id
-- pipeline_id
-
-Public method:
-
-```python
-def filter(self, record: logging.LogRecord) -> bool
-```
-
-Returns boolean only.
-
----
-
-#### JsonFormatter(logging.Formatter)
-
-Public API:
-
-```python
-def format(self, record: logging.LogRecord) -> str
-```
-
-Produces canonical JSON log.
-
-Required keys:
-
-- timestamp
-- level
-- logger
-- message
-- trace_id
-- session_id
-- pipeline_id
-
----
-
-#### ConsoleFormatter(logging.Formatter)
-
-Public API:
-
-```python
-def format(self, record: logging.LogRecord) -> str
-```
-
-Produces human-readable colored log.
-
-No JSON.
-
----
-
-### Private Runtime State
-
-Only ContextVar objects.
-
-Never exported.
-
----
-
-### __all__
-
-```python
-__all__ = [
-    "LoggingConfig",
-    "ContextFilter",
-    "JsonFormatter",
-    "ConsoleFormatter",
-]
-```
-
----
-
-### Imported By
-
-- logger.py
-
----
-
-### Validation Rules
-
-- No print().
-- No basicConfig().
-- Immutable configuration.
-- Ruff clean.
-- Pyright strict clean.
-
----
-
-## LOG-002 — src/core/logger.py
-
-### Owner
-
-KR-003 Logging Runtime
-
-### Purpose
-
-Canonical logger factory.
-
----
-
-### File Blueprint
-
-```
-logger.py
-├── imports
-├── _build_logger()
-├── _create_console_handler()
-├── _create_json_handler()
-├── configure_logging()
-├── get_logger()
-└── __all__
-```
-
----
-
-### Imports
-
-```python
-from __future__ import annotations
-
-import logging
-from functools import cache
-
-from src.core.logging_config import (...)
-```
-
-No container imports.
-
----
-
-### Private Functions
-
-#### _create_console_handler
-
-```python
-def _create_console_handler(
-    config: LoggingConfig,
-) -> logging.Handler
-```
-
----
-
-#### _create_json_handler
-
-```python
-def _create_json_handler(
-    config: LoggingConfig,
-) -> logging.Handler
-```
-
----
-
-#### _build_logger
-
-```python
-def _build_logger(
-    name: str,
-    config: LoggingConfig,
-) -> logging.Logger
-```
-
-Private only.
-
----
-
-### Public Functions
-
-#### configure_logging
-
-```python
-def configure_logging(
-    config: LoggingConfig,
-) -> None
-```
-
-Responsibilities:
-
-- configure handlers;
-- configure formatters;
-- install ContextFilter.
-
-May be called once during bootstrap.
-
----
-
-#### get_logger
-
-```python
-@cache
-def get_logger(
-    name: str,
-) -> logging.Logger
-```
-
-Returns Application-scoped logger instance.
-
-Never returns root logger.
-
----
-
-### Raises
-
-<table><table-row><table-cell width="260">**Exception**</table-cell><table-cell>**When**</table-cell></table-row><table-row><table-cell>InvalidConfigurationError</table-cell><table-cell>Logging configuration invalid.</table-cell></table-row></table>
-
----
-
-### Imported By
-
-- container.py
-- lifecycle.py
-- event_bus.py
-- bootstrap.py
-- runtime.py
-
----
-
-### __all__
-
-```python
-__all__ = [
-    "configure_logging",
-    "get_logger",
-]
-```
-
----
-
-### Validation Rules
-
-- Logger cache only.
-- No mutable exported globals.
-- Structured logging only.
-- Ruff clean.
-- Pyright strict clean.
-
----
+# KR-002 — Configuration Runtime — APPROVED ADR-009
+
+The exact [KR-002 contract](../wave1/KR-002_CONFIGURATION.md) is normative for
+the two owned files, complete fields/defaults/aliases/properties/validators,
+signatures, imports, error boundaries and acceptance. Retain BaseSettings and
+lru_cache(maxsize=1); no production edit in this reconciliation.
+
+# KR-003 — Logging Runtime — APPROVED ADR-009
+
+The exact [KR-003 contract](../wave1/KR-003_LOGGING.md) is normative for the two
+owned files, public symbols, constructor compatibility, imports, cache/handler
+behavior, context/formatters, safe admission errors and complete acceptance.
+In this narrow task edit only logger.py and canonical test_logger.py; preserve
+logging_config.py. Empty name, EXACT "root" and invalid levels reject before access.
+No legacy configure_logging/reset_logging/ContextFilter/automatic-trace contract.
 
 # KR-002 / KR-003 Definition of Done
 
-KR-002 is GREEN only if:
+All exact owner-contract APIs/behavior/acceptance and required gates must pass;
+configuration/logging require measured 100% executable lines per owned file and
+all public APIs asserted. Green regression alone is not acceptance. Current
+KR-003 repair remains a separate reviewed task before KR-011.
 
-- immutable Settings model exists;
-- configuration validation passes;
-- get_settings cache works;
-- reload_settings recreates immutable settings;
-- tests pass.
-
-KR-003 is GREEN only if:
-
-- configure_logging configures runtime logging;
-- get_logger returns cached named logger;
-- JSON formatter works;
-- Console formatter works;
-- Context filter injects runtime context;
-- tests pass.
-
-<!-- ========================================================================= -->
 <!-- M-06 PART 3 — KR-004 Kernel Contracts -->
 <!-- ========================================================================= -->
 
@@ -4020,7 +3431,7 @@ tests/
 └── conftest.py
 ```
 
-Exactly ten executable test files.
+Exactly eleven executable test modules plus one shared-fixture file (ADR-009).
 
 ---
 
@@ -4050,36 +3461,17 @@ Validate Foundation Core typing contracts.
 
 # TEST-002 — tests/core/test_settings.py
 
-### Purpose
-
-Validate immutable Settings model.
-
-### Required Tests
-
-- loads `.env`;
-- validates environment values;
-- validates directories;
-- immutable model (`frozen=True`);
-- reload_settings recreates settings;
-- cache invalidation works.
-
----
+All exact T-02 [KR-002 acceptance](../wave1/KR-002_CONFIGURATION.md):
+isolated defaults/env/.env/aliases/extras, immutable assignment rejection,
+relative Path conversion without I/O, helpers/validators, cache identity and
+test-isolated invalidation, ValidationError/InvalidConfigurationError boundaries.
 
 # TEST-003 — tests/core/test_logger.py
 
-### Purpose
-
-Validate Logging Runtime.
-
-### Required Tests
-
-- logger caching;
-- configure_logging installs handlers;
-- JSON formatter output;
-- Console formatter output;
-- Context filter injects trace/session IDs.
-
----
+All exact T-03 [KR-003 acceptance](../wave1/KR-003_LOGGING.md): valid named
+factory/cache/default/schema/constructor, empty/root/invalid-level pre-access
+guards, root non-interference, first-installed handler/filter/formatters and
+exception/missing-context branches, seven explicit context APIs and isolation.
 
 # TEST-004 — tests/kernel/test_contracts.py
 
@@ -4153,7 +3545,7 @@ Validate KR-007 Event Runtime.
 - publish event;
 - publish_many;
 - dispatch ordering;
-- handler priority ordering;
+- event priority ordering and insertion-ordered handlers (ADR-005);
 - handler failure propagation;
 - invalid event rejection.
 
