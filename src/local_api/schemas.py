@@ -19,6 +19,11 @@ class SaveProjectBody(RequestBody):
     expected_updated_at: str
 
 
+class SaveEditorBody(RequestBody):
+    editor: dict[str, JsonValue]
+    expected_updated_at: str
+
+
 class CredentialBody(RequestBody):
     secret: SecretStr = Field(repr=False)
 

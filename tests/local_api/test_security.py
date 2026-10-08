@@ -137,7 +137,9 @@ def test_oversized_body_is_rejected_before_project_creation(tmp_path: Path) -> N
 
 def test_p6_imports_only_approved_application_gateways() -> None:
     allowed = {
+        "src.core.exceptions",
         "src.credentials",
+        "src.editor",
         "src.generation",
         "src.local_api",
         "src.local_api.app",
