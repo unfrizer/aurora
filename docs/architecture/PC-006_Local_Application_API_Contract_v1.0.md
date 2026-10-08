@@ -88,3 +88,7 @@ raster Content-Type; every existing JSON route retains this contract's
 signature, error envelope, same-origin/Host protection and app-local
 locking remain unchanged. P6-002 does not approve P4/P5 imports,
 site build/export/deploy routes, new dependencies or another Runtime.
+The Architecture Authority subsequently approved one test-admission
+correction: `tests/local_api/test_security.py` may add only
+`"src.editor"` to its approved-import set while preserving every
+other AST rule. PC-009 lists the exact implementation file boundary.

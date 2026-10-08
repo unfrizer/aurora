@@ -29,9 +29,12 @@ checkout; this ADR does not claim to replace either authority.
 P6-002 would modify only `src/local_api/app.py` and
 `src/local_api/schemas.py`, and add
 `tests/local_api/test_editor_assets.py` and
-`tests/integration/test_local_editor_assets.py`. No existing test,
-other production file, dependency declaration or public Python gateway
-changes. `create_app` retains its exact P6-001 signature.
+`tests/integration/test_local_editor_assets.py`. The sole existing-test
+exception is `tests/local_api/test_security.py`: add only
+`"src.editor"` to its approved-import set, preserving all other AST
+checks. No other existing test, production file, dependency declaration
+or public Python gateway changes. `create_app` retains its exact
+P6-001 signature.
 
 P6 may additionally import only the public `src.editor` gateway. It
 continues to import P1 through the public `src.projects` gateway and
@@ -144,3 +147,11 @@ narrowly amended, PC-009 may compile this decision, and P6-002 may
 begin as a separate module task with its own validation and Tech Lead
 review. A different upload format, route shape, security limit, error
 mapping or owner requires a new decision.
+
+After the P6-001 import-guard test exposed a conflict with EA-01's
+original prohibition on existing-test edits, the Architecture
+Authority explicitly approved this single test-admission correction
+on 2026-10-08. It permits adding only `"src.editor"` to
+`tests/local_api/test_security.py`'s allowed-import set; it does not
+weaken any other test rule or expand production imports. PC-009
+records the same narrow exception.

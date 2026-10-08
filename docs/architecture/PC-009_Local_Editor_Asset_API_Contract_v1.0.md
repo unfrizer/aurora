@@ -12,8 +12,11 @@ This is a separate implementation task extending the existing P6
 FastAPI application-composition owner. It may modify only
 `src/local_api/app.py` and `src/local_api/schemas.py`, and create
 `tests/local_api/test_editor_assets.py` and
-`tests/integration/test_local_editor_assets.py`. No P1/P7/P4/P5
-production file, existing test, dependency, public `src.local_api`
+`tests/integration/test_local_editor_assets.py`. The one authorized
+existing-test adjustment is to add `"src.editor"` to the
+`allowed` import set in `tests/local_api/test_security.py`,
+without changing another assertion or import rule. No P1/P7/P4/P5
+production file, other existing test, dependency, public `src.local_api`
 gateway, Runtime or frontend file may change. The public Python
 `create_app(*, project_root, credential_store, allowed_origin)`
 signature and inert construction behavior are unchanged.
