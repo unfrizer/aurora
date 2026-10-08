@@ -13,7 +13,8 @@ FastAPI application-composition owner. It may modify only
 `src/local_api/app.py` and `src/local_api/schemas.py`, and create
 `tests/local_api/test_editor_assets.py` and
 `tests/integration/test_local_editor_assets.py`. The one authorized
-existing-test adjustment is to add `"src.editor"` to the
+existing-test adjustment is to add `"src.editor"` and
+`"src.core.exceptions"` to the
 `allowed` import set in `tests/local_api/test_security.py`,
 without changing another assertion or import rule. No P1/P7/P4/P5
 production file, other existing test, dependency, public `src.local_api`
@@ -23,7 +24,9 @@ signature and inert construction behavior are unchanged.
 
 P6-002 may import standard library, FastAPI/Pydantic, and public
 `src.projects`, `src.editor`, `src.credentials` and
-`src.generation` gateways. It may not import private P1/P7
+`src.generation` gateways, plus only `ValidationError` from
+`src.core.exceptions` for P1 validation-to-400 translation. It may
+not import private P1/P7
 implementations, P4/P5, concrete Kernel/Platform Runtimes or a
 frontend module. No lower owner imports P6. Use the existing
 per-app-instance project lock for editor and asset mutations.

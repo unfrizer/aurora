@@ -31,12 +31,16 @@ P6-002 would modify only `src/local_api/app.py` and
 `tests/local_api/test_editor_assets.py` and
 `tests/integration/test_local_editor_assets.py`. The sole existing-test
 exception is `tests/local_api/test_security.py`: add only
-`"src.editor"` to its approved-import set, preserving all other AST
+`"src.editor"` and `"src.core.exceptions"` to its approved-import
+set, preserving all other AST
 checks. No other existing test, production file, dependency declaration
 or public Python gateway changes. `create_app` retains its exact
 P6-001 signature.
 
-P6 may additionally import only the public `src.editor` gateway. It
+P6 may additionally import the public `src.editor` gateway and
+Foundation `ValidationError` from `src.core.exceptions` solely to
+map P1 validation failures to HTTP 400 without catching unrelated
+failures. It
 continues to import P1 through the public `src.projects` gateway and
 does not import private P1/P7 files, P4/P5, Kernel/Platform Runtime
 implementations or frontend code. Lower owners never import P6. The
@@ -155,3 +159,11 @@ on 2026-10-08. It permits adding only `"src.editor"` to
 `tests/local_api/test_security.py`'s allowed-import set; it does not
 weaken any other test rule or expand production imports. PC-009
 records the same narrow exception.
+
+The Architecture Authority subsequently approved the second
+test-admission correction on 2026-10-08: P6-002 may import
+`ValidationError` from `src.core.exceptions` only for the
+approved P1-to-HTTP error mapping, and the same test's allowed-import
+set may additionally contain only `"src.core.exceptions"`. This
+does not authorize any other Foundation import, generic exception
+mapping, or test-rule weakening.
