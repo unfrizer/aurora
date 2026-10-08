@@ -15,6 +15,20 @@ PC-005 compiles their implementation contract; P5 implementation and Tech
 Lead acceptance remain separate. This record does not claim a live Netlify
 deploy, independent human review, passing hosted CI, or a usable Windows MVP.
 
+### Approved PC-004 consumer-test clarification — 2026-10-08
+
+During P5 validation, `tests/site_export/test_models.py` rejected every
+`src.site_export` import outside its own package, including P5's approved
+public-gateway import. The Authority explicitly approved a narrow correction
+(`утверждаю, продолжай`) in response to the request to permit approved
+application consumers while retaining the lower-Runtime prohibition. This
+overrides N-01/N-05's no-P4-test-change rule **only** for that one test and
+the corresponding PC-004/PC-005 contract clarification. The test may permit
+`src/deployment/netlify.py` to import the public `src.site_export` gateway;
+it must still reject imports by all other unapproved production modules and
+imports of P4's private modules. No PC-004 production source, public API,
+Runtime ownership, dependency direction, or other test is changed.
+
 ADR-002 approves Netlify as the only integrated MVP deploy target and requires
 build → ZIP → API deploy → poll until ready → public URL. It also requires a
 separate approved adapter contract before implementation. PC-002 owns the

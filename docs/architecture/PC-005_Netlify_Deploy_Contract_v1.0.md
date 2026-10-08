@@ -31,7 +31,10 @@ contract's implementation/testing task.
 | `tests/integration/test_netlify_deploy.py` | Real P4 build/export to fake Netlify flow |
 
 Only these seven implementation/acceptance files plus this contract and the
-ADR approval record may change in P5. The package gateway exports exactly
+ADR approval record may change in P5, with one later explicitly approved
+exception: `tests/site_export/test_models.py` and the corresponding PC-004
+contract clarification may change only to recognize P5's public-gateway
+import. No other P4 file may change. The package gateway exports exactly
 `NetlifyDeployer`, `NetlifyDeployment`, `NetlifyDeployError`. Standard library
 and PC-004 public build/export API are the only production dependencies.
 `models.py` does not import the client; the client imports models and PC-004.

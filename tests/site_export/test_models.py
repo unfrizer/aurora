@@ -160,6 +160,25 @@ def test_import_dag_and_no_higher_or_lower_owner_changes() -> None:
                     assert path.name != "models.py"
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 assert node.func.id != "print"
+    approved_app_consumer = root / "src" / "deployment" / "netlify.py"
     for path in (root / "src").rglob("*.py"):
-        if package not in path.parents:
-            assert "src.site_export" not in path.read_text(encoding="utf-8")
+        if package in path.parents:
+            continue
+        source = path.read_text(encoding="utf-8")
+        if path != approved_app_consumer:
+            assert "src.site_export" not in source
+            continue
+        tree = ast.parse(source)
+        public_gateway_import = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module.startswith("src.site_export"):
+                    assert module == "src.site_export"
+                    public_gateway_import = True
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith("src.site_export"):
+                        assert alias.name == "src.site_export"
+                        public_gateway_import = True
+        assert public_gateway_import
