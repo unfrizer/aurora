@@ -1,7 +1,7 @@
 # AURORA — Local Application API Proposal v1.0
 
 **Document ID:** ADR-012
-**Status:** DRAFT — A-01–A-06 require Architecture Authority approval
+**Status:** APPROVED — A-01–A-06 explicitly approved by Architecture Authority
 **Date:** 2026-10-08
 **Target module:** P6-001 — Local FastAPI Application API Foundation
 **Repository baseline:** `43765401b933a7dfcd34d0cdcb693ce8fcb23e4f`
@@ -15,15 +15,15 @@ build/export, and Netlify deployment. AB-00K makes L7 PlatformRuntime an
 in-memory descriptor owner, not an HTTP server. P6 would be application
 composition above those owners, never a new L0–L8 Runtime.
 
-The Authority's 2026-10-08 “утверждаю” authorizes preparation of the next-stage
-proposal after P5. It does **not** approve previously unspecified HTTP routes,
-security policy, dependency additions, or behavior below. This DRAFT is not
-implementation authority. No P6 source or test may be created until the
-decisions are approved and compiled into PC-006.
+The Authority first approved preparation of this proposal after P5, then
+explicitly replied “утверждаю, дальше” to the request to approve A-01–A-06
+on 2026-10-08. This approves the specified HTTP routes, security policy,
+dependency additions and deferred boundaries without claiming implementation
+or product acceptance. PC-006 compiles the exact P6 implementation contract.
 
-## A-01 — Ownership and import boundary (proposed)
+## A-01 — Ownership and import boundary (approved)
 
-Proposed owned files:
+Approved owned files:
 
 ```text
 src/local_api/__init__.py
@@ -37,7 +37,7 @@ pyproject.toml                 # P6 dependency declarations only
 uv.lock                        # matching lock update
 ```
 
-The sole public Python gateway would be `create_app(*, project_root: Path,
+The sole public Python gateway is `create_app(*, project_root: Path,
 credential_store: WindowsCredentialStore, allowed_origin: str) -> FastAPI`.
 Construction registers routes and app-local coordination only; it does not
 touch files, read secrets, contact providers, launch a browser, or start a
@@ -51,7 +51,7 @@ another provider. Lower layers never import P6. P6-001 does not import P4/P5:
 there is no approved typed projection from opaque `ProjectDocument.state` to
 `StaticSiteDocument`; a build/deploy route would invent that editor schema.
 
-## A-02 — Versioned HTTP surface (proposed)
+## A-02 — Versioned HTTP surface (approved)
 
 All P6 routes use `/api/v1`; JSON except empty `204` responses.
 
@@ -84,9 +84,9 @@ Runtime DI scope or process-global registry. Known P2 credential field names
 are rejected recursively in opaque project state. Arbitrary secrets cannot
 be inferred, so callers must also keep them out of state.
 
-These route shapes are new public behavior requiring explicit approval.
+These route shapes are the approved P6-001 public HTTP behavior.
 
-## A-03 — Loopback browser security (proposed)
+## A-03 — Loopback browser security (approved)
 
 The later launcher must bind only `127.0.0.1`. P6 validates
 `allowed_origin` as exactly `http://127.0.0.1:<port>`, accepts only that
@@ -108,14 +108,14 @@ FastAPI's [strict Content-Type](https://fastapi.tiangolo.com/advanced/strict-con
 and [CORS](https://fastapi.tiangolo.com/tutorial/cors/) guidance,
 Starlette's [TrustedHostMiddleware](https://www.starlette.io/middleware/),
 and [OWASP CSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
-inform this proposal; they do not constitute AURORA approval.
+inform the security decision; the approval comes from the Architecture Authority.
 
-## A-04 — Errors and data exposure (proposed)
+## A-04 — Errors and data exposure (approved)
 
 Failures use a fixed sanitized JSON error envelope with stable code. Never
 include Python traceback, native error text, local path, credential, prompt,
 provider response body, or project state in errors or normal request logs.
-Proposed mappings: invalid input `400`, missing project `404`, stale save
+Approved mappings: invalid input `400`, missing project `404`, stale save
 or missing OpenAI credential `409`, native credential failure `503`,
 project I/O or unexpected internal failure `500`. P3's sanitized terminal
 failure stays a `200` job with `status="failed"`. Framework validation
@@ -123,7 +123,7 @@ responses must also be sanitized because request data can contain secrets.
 Project state is not interpreted as site, Runtime context, or Render node.
 Deletion is an explicit user operation; tests only delete temporary projects.
 
-## A-05 — Dependencies and launch boundary (proposed)
+## A-05 — Dependencies and launch boundary (approved)
 
 ADR-002 expressly selects FastAPI. P6 adds FastAPI at runtime and HTTPX only
 to the dev/test group for FastAPI `TestClient`; `uv.lock` is updated using
@@ -133,7 +133,7 @@ or browser launcher. Server startup, ephemeral port, same-origin static UI
 serving, and browser opening require a later launcher/UI contract. P6 is a
 testable API foundation, **not** yet a launchable Windows application.
 
-## A-06 — Acceptance and publication (proposed)
+## A-06 — Acceptance and publication (approved)
 
 Tests use `tmp_path`, fake credential/native behavior, and fake P3 network;
 no real user project, secret, paid OpenAI call, Netlify deploy, or browser.
@@ -144,7 +144,7 @@ No skipped/xfail acceptance tests. Run Ruff, Windows/Linux strict Pyright,
 full discovered Pytest and latest-head hosted CI before routine publication.
 Produce one P6 module report and stop for Tech Lead review.
 
-## Deferred contracts and decision requested
+## Deferred contracts and approval record
 
 P6-001 does **not** deliver typed editor state, one-prompt business workflow,
 structured/image generation, autosave, preview, build/export/deploy HTTP,
@@ -152,8 +152,8 @@ settings persistence, UI hosting, server lifecycle, onboarding, or RU/EN UI.
 Each needs a separate owned approved contract. Passing P6 tests cannot be
 reported as ADR-002 usable-Windows acceptance.
 
-The Authority must approve or amend **A-01–A-06**, specifically the limited
-routes, local security posture, FastAPI/HTTPX dependencies and deferred
-launcher/editor/site behavior. Only then may Codex compile PC-006 and start
-P6-001 as a separate module task. Approval to prepare this proposal alone is
-not approval of its new public behavior.
+The Authority approved **A-01–A-06** in full, specifically the limited route
+set, same-origin local security posture, FastAPI/HTTPX dependencies and
+deferral of launcher/editor/site behavior. PC-006 may be compiled and P6-001
+built as a separate module task. This approval does not certify a live server,
+an actual OpenAI call or a usable Windows application.
