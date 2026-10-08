@@ -4,8 +4,8 @@
 **Module:** P1-001 Project Domain & Persistence  
 **Authority:** ADR-001 and ADR-002
 
-P1-001 is an application service, not an L0–L8 Runtime. It owns portable project
-directories and atomic JSON persistence only. It may create:
+P1-001 is an application service, not an L0–L8 Runtime. Its initial scope
+owns portable project directories and atomic JSON persistence. It may create:
 
 ```text
 src/projects/__init__.py
@@ -45,3 +45,20 @@ interruption between replacements may leave newer state with older metadata.
 Multi-file transactions, concurrent writers and recovery journals are not
 implemented by this contract. Opaque state cannot identify arbitrary secret values;
 callers must keep credentials outside project state as required by ADR-002.
+
+## Approved P1-002 Extension
+
+ADR-014 AS-01–AS-05 explicitly approves a narrow raster-asset extension
+of the existing P1 project-directory owner. PC-008 is the canonical
+implementation contract for that separate module task. P1-002 may extend
+`ProjectRepository` in `src/projects/repository.py` with exactly
+`write_asset`, `read_asset` and `delete_asset`, and add
+`tests/projects/test_assets.py` and
+`tests/integration/test_project_assets.py`. Its methods persist
+content-addressed raster bytes within the already-created project
+`assets/` child. This amendment does not alter P1-001's existing
+constructor, JSON methods, metadata schema, project naming, public
+gateway, JSON ownership or atomicity limitations. Asset writes have
+their own bounded publication and validation semantics in PC-008; they
+do not make state and assets a cross-file transaction. P1-002 does not
+authorize changes to other owners, other existing tests or the Runtime.

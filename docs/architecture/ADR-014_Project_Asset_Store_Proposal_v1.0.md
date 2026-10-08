@@ -1,7 +1,7 @@
 # AURORA — Project Asset Store Proposal v1.0
 
 **Document ID:** ADR-014
-**Status:** DRAFT — Architecture Authority decision required
+**Status:** APPROVED — AS-01–AS-05
 **Date:** 2026-10-08
 **Target module:** P1-002 — Project Raster Asset Store
 **Repository baseline:** `a5a8441acc2c109c694e78ed737d550c2fb20890`
@@ -19,8 +19,8 @@ saved project reference into bytes for P4.
 This proposal extends the **existing project-directory owner** rather than
 creating a second path resolver or giving L8 Render/P4 filesystem ownership.
 It changes no L0–L8 Runtime, provider integration, P7 schema, or P4 builder.
-The decisions below are new public behavior and require explicit approval;
-this DRAFT is not implementation authority.
+The decisions below are approved public behavior. PC-008 is the compiled
+implementation authority for P1-002.
 
 ## AS-01 — Ownership and bounded P1 extension
 
@@ -138,11 +138,11 @@ implement upload HTTP, OpenAI image generation, preview, asset garbage
 collection, a Windows launcher or React UI. Passing it would close the
 filesystem-to-typed-build bridge, not ADR-002 usable-Windows acceptance.
 
-## Decision requested
+## Approval record
 
-Architecture Authority approval is requested for **AS-01–AS-05 together**.
-Only then may PC-001 be narrowly amended, PC-008 compiled, and P1-002
-implemented in a separate module branch/task. If the product instead
-requires different asset naming, limits, deletion semantics or a distinct
-filesystem owner, that is a new decision rather than an implementation
-assumption.
+On 2026-10-08, the Architecture Authority explicitly approved ADR-014
+**AS-01–AS-05 in full** in the project conversation. PC-001 may be narrowly
+amended and PC-008 compiled. P1-002 implementation remains a separate
+module branch/task with its own validation and Tech Lead review. Different
+asset naming, limits, deletion semantics or filesystem ownership would
+require a new decision.
