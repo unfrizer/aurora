@@ -1,20 +1,22 @@
 # AURORA — Local Static-Site Preview Proposal v1.0
 
 Document ID: ADR-016
-Status: DRAFT — Architecture Authority decision required
+Status: APPROVED — SP-01–SP-05 explicitly approved by Architecture Authority
 Date: 2026-10-08
 Proposed module: P6-003 — Local Static-Site Preview API
 Repository baseline: 38c9442c4a5f951f810564454d144c4c15502733
 
 ## Decision boundary
 
-This is a proposal, not implementation authority. No PC-010 contract is
-approved by this document, and no source or test change is authorized until
-the Architecture Authority decides SP-01–SP-05. Architecture Freeze v1.0,
-Master Pack v1.1, ADR-002 and all approved PC-series contracts remain in
-force. The frozen L0–L8 ownership and dependency direction are unchanged.
+The Architecture Authority explicitly approved SP-01–SP-05 in full in the
+project conversation on 2026-10-08. This decision authorizes compiling
+PC-010 and a separate P6-003 implementation task under that contract; it
+does not waive the module acceptance gate or Tech Lead review.
+Architecture Freeze v1.0, Master Pack v1.1, ADR-002 and all approved
+PC-series contracts remain in force. The frozen L0–L8 ownership and
+dependency direction are unchanged.
 The full Freeze and Master Pack are not present in this checkout; this
-draft does not claim to replace them or certify an unverified conflict away.
+ADR does not claim to replace them or certify an unverified conflict away.
 
 P1 owns project and verified asset bytes. P7 owns the editor payload and
 its pure projection to a typed P4 document. P4 owns compilation to a
@@ -45,8 +47,8 @@ The test corrections are limited to:
    consumer in tests/site_export/test_models.py, retaining the existing
    P5 and P7 consumers and all private-P4/lower-layer prohibitions.
 
-If approved, PC-010 must record this file/import boundary and PC-004
-and PC-006 must receive only corresponding narrow clarifications.
+PC-010 records this file/import boundary. PC-004 and PC-006 receive
+only the corresponding narrow clarifications.
 
 ## SP-02 — Read-only same-origin preview
 
@@ -127,9 +129,12 @@ image generation, one-prompt structured generation, React/Vite client
 or Windows launcher. Those need separate approved contracts. The
 ADR-002 usable-Windows acceptance path remains incomplete.
 
-## Decision requested
+## Approval record and next gate
 
-The Architecture Authority must approve, revise or reject SP-01–SP-05
-before PC-010 is compiled or P6-003 code begins. This draft is not
-APPROVED and does not infer the new public route or error behavior
-from existing source.
+The Architecture Authority replied "утвеждаю полностью, продолжай" to
+the explicit request to approve SP-01–SP-05 together. PC-010 may compile
+this decision without changing its proposed route, error mapping or file
+ownership. P6-003 code may begin only in its separate module task after
+PC-010 is approved and available on the implementation baseline. A
+different route, security policy, owner or response mapping needs a new
+decision; source code cannot supply that authority.

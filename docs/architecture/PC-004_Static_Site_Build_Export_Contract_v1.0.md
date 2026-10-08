@@ -95,3 +95,16 @@ Future application composition supplies a detached typed projection from an
 approved editor/generation contract; raw opaque project JSON or RenderNode.kind
 is never interpreted here. UI, preview server, image generation, Netlify,
 deployment, autosave and usable Windows acceptance remain separate tasks.
+
+## Approved P6-003 public-gateway consumer admission
+
+ADR-016 SP-01–SP-05 explicitly authorizes the later P6-003 local preview
+task to import only the public src.site_export gateway for
+StaticSiteAsset, StaticSiteBuilder and SiteValidationError. PC-010 is
+the exact implementation contract. P6 does not change any P4 production
+file, public API, builder/exporter behavior or ownership. The only P4
+test change allowed in P6-003 is a narrow adjustment to
+tests/site_export/test_models.py admitting src/local_api/app.py as one
+additional public-gateway consumer, while preserving the P5/P7
+consumers and every private-P4/lower-owner prohibition. This does not
+authorize export HTTP or another P4 consumer.

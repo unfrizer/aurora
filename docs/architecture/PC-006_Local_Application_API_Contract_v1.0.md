@@ -94,3 +94,19 @@ corrections: `tests/local_api/test_security.py` may add only
 set while preserving every other AST rule. The latter permits only
 Foundation `ValidationError` for P1 validation-to-400 translation.
 PC-009 lists the exact implementation file boundary.
+
+## Approved P6-003 read-only preview extension
+
+ADR-016 SP-01–SP-05 approves a separate P6-003 task for one GET
+static-site preview route, compiled exactly in PC-010. P6 may
+additionally import only the public src.site_export gateway for
+StaticSiteAsset, StaticSiteBuilder and SiteValidationError. Its
+existing create_app signature, routes, fixed error envelope,
+loopback/Host controls, mutation Origin/header rules and body limits
+remain unchanged. Preview is read-only and rebuilds from saved P1
+state through P7 and P4 without an artifact cache or project write.
+The only P6 test-guard correction is adding "src.site_export" to
+tests/local_api/test_security.py's allowed-import set while retaining
+all other assertions. PC-010 names the complete implementation scope.
+This approval does not include export/deploy HTTP, a frontend or a
+Windows launcher.
