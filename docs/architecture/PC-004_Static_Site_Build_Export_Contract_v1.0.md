@@ -32,7 +32,15 @@ file/API/import/test registry, not a new Runtime or amendment of lower owners.
 | tests/integration/test_static_site_export.py | Real builder → folder/ZIP → reopen; immutable projection preservation |
 
 Only these nine source/test files plus this contract, ADR approval record and
-module report may change. No old tests/conftest, dependency/workflow, Kernel,
+module report could change in the original P4 build. A later explicit
+2026-10-08 Architecture Authority clarification in ADR-011 permits the P5
+task to update **only** `tests/site_export/test_models.py` so its import-DAG
+assertion recognizes `src/deployment/netlify.py` as an approved application
+consumer of the public `src.site_export` gateway. Imports from P4 private
+modules and all other unapproved production consumers remain forbidden;
+lower Runtime layers must never import site_export. This is a test-boundary
+correction, not a P4 production/API or Runtime ownership change.
+No old tests/conftest, dependency/workflow, Kernel,
 project storage, credential, AI generation, Render or other production edits.
 
 ## Exact API/import registry
