@@ -2,7 +2,7 @@
 
 **Document ID:** ADR-010
 
-**Status:** DRAFT — EXPLICIT AUTHORITY DECISION REQUIRED
+**Status:** APPROVED — S-01–S-05 explicitly approved by Architecture Authority
 
 **Date:** 2026-10-07
 
@@ -12,17 +12,24 @@
 
 ## Approval boundary
 
-This is a proposal prepared under ADR-001, not an APPROVED implementation
-contract. The Authority's current message, "утверждаю и разрешаю, продолжай",
-approves the completed KR-011 report and the requested merge of PR #25. It does
-not constitute approval of S-01–S-05, which did not exist when that message was
-sent. No independent human review or usable Windows MVP acceptance is claimed.
+The Architecture Authority explicitly approved this entire ADR on 2026-10-07:
+"Утверждаю ADR-010 полностью, включая S-01–S-05, дальше".
+This records approval of the decisions below, without changing their values.
+The exact implementation contract is PC-004; implementation and acceptance
+remain a separate P4-001 task. No independent human review, completed
+implementation, hosted CI success or usable Windows MVP acceptance is claimed
+by this approval record. ADR-003 does not replace mandatory safety confirmations.
 
-AGENTS and the Build Protocol require STOP when missing requirements would
-change public behavior. Therefore no P4 source or tests are implemented here.
-An explicit decision on S-01–S-05 is required before compiling PC-004 and
-starting its separate implementation task. ADR-003 merge permission cannot
-replace an architecture/contract decision.
+### Approved test-discovery clarification — 2026-10-08
+
+After the P4 build reported the default-pytest import-name collision with the
+existing tests/projects/test_models.py, the Authority answered "утверждаю, дальше"
+to the explicit request to add tests/site_export/__init__.py and record this
+clarification in ADR-010/PC-004. This authorizes exactly one additional package
+marker, making nine owned implementation/acceptance files. It adds no fixtures,
+production API, runtime behavior, dependency or pytest-configuration change.
+Existing project tests and hosted workflow commands remain unchanged.
+All other S-01–S-05 decisions and the module-review gate remain unchanged.
 
 ## Sources and verified state
 
@@ -64,7 +71,7 @@ from arbitrary project JSON or a RenderNode.kind string.
 
 ## S-01 — Application ownership and exact scope
 
-**Proposed decision — requires approval.**
+**Approved decision — explicit S-01 authority.**
 
 P4-001 is an application compiler/export service, like the existing PC-series
 application modules. It is not RenderRuntime, a tenth Runtime layer, or a
@@ -81,10 +88,11 @@ src/site_export/exporter.py
 tests/site_export/test_models.py
 tests/site_export/test_builder.py
 tests/site_export/test_exporter.py
+tests/site_export/__init__.py
 tests/integration/test_static_site_export.py
 ```
 
-Only these eight implementation/acceptance files may change in the subsequent
+Only these nine implementation/acceptance files may change in the subsequent
 P4 task, plus its PC-004 contract/report record. No generic helpers or utilities,
 changes to existing tests/conftest.py, dependencies or other production files.
 
@@ -97,7 +105,7 @@ may call the service; P4 does not create a ServiceDescriptor or manifest.
 
 ## S-02 — Typed build projection, not a new saved-project schema
 
-**Proposed decision — requires approval.**
+**Approved decision — explicit S-02 authority.**
 
 Define the following frozen, slotted, keyword-only dataclasses. All listed
 fields are required unless an explicit default is shown. Collection values
@@ -131,7 +139,7 @@ they do not extend the frozen core exception hierarchy or runtime vocabulary.
 
 ## S-03 — Deterministic self-contained compilation
 
-**Proposed decision — requires approval.**
+**Approved decision — explicit S-03 authority.**
 
 Public builder API:
 
@@ -161,7 +169,7 @@ network request. The same document produces exactly the same bytes.
 - No layout/motion/interaction/runtime tree reinterpretation. This is a minimal
   semantic static site, not a browser-side implementation of the Runtime Engine.
 
-Validation policy proposed for approval:
+Approved validation policy:
 
 - Non-empty brand name, page title/heading and section heading; bodies, tagline
   and meta description may be empty but must be valid UTF-8 text without NUL.
@@ -180,12 +188,12 @@ Validation policy proposed for approval:
 - Invalid input raises a fixed, sanitized SiteValidationError without echoing
   text, asset bytes or arbitrary supplied paths. It causes no output mutation.
 
-The numeric limits and exact mapping above are proposed public behavior, not
-facts already mandated by ADR-002. Approval or replacement is needed.
+The numeric limits and exact mapping above are approved public behavior under
+ADR-010 S-03; they are not requirements inferred from ADR-002.
 
 ## S-04 — Explicit, non-overwriting folder and ZIP exports
 
-**Proposed decision — requires approval.**
+**Approved decision — explicit S-04 authority.**
 
 Public exporter API:
 
@@ -242,13 +250,13 @@ out of site projections. P4 never reads the credential store or project files.
 
 ## S-05 — Acceptance, compilation and phased authorization
 
-**Proposed decision — requires approval.**
+**Approved decision — explicit S-05 authority.**
 
 After an explicit approval of S-01–S-05:
 
 1. Record the exact Authority decision in this ADR and compile PC-004 from it.
    Do not silently change these proposed values while recording approval.
-2. Implement P4-001 in one separate branch/task, only its eight owned files.
+2. Implement P4-001 in one separate branch/task, only its nine owned files.
 3. Preserve all 1293 baseline tests; run the entire discovered suite plus the
    new canonical P4 tests. Do not weaken a lower module to make export green.
 4. Run Ruff, scoped formatter check, strict Windows/Linux Pyright, Pytest,
@@ -286,10 +294,10 @@ remain separate approved-contract tasks. Successful synthetic P4 acceptance
 would establish a builder/export building block, not the full one-prompt
 Windows usability path.
 
-**Current gate: DRAFT DECISIONS; P4 SOURCE/TEST IMPLEMENTATION BLOCKED.**
+**Current gate: DECISIONS APPROVED; PC-004 IMPLEMENTATION/ACCEPTANCE REQUIRED.**
 
-Requested decision: approve ADR-010 completely, including S-01–S-05, or state
-the exact changes to the proposed input schema, mapping, limits and export policy.
+The approval above authorizes compiling PC-004 and the separate P4-001 build;
+the module report and Tech Lead review remain required before another module.
 
 ## Preflight validation — not P4 acceptance
 
