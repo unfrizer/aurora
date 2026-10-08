@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import asdict, replace
 from pathlib import Path
 from threading import RLock
-from typing import cast
+from typing import Literal, cast
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -17,7 +17,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import JsonValue
 
+from src.core.exceptions import ValidationError
 from src.credentials import CredentialStoreError, SecretName, WindowsCredentialStore
+from src.editor import EditorStateError, load_editor_state, save_editor_state
 from src.generation import (
     GenerationConfigurationError,
     GenerationJob,
@@ -27,6 +29,7 @@ from src.generation import (
 from src.local_api.schemas import (
     CreateProjectBody,
     CredentialBody,
+    SaveEditorBody,
     SaveProjectBody,
     TextGenerationBody,
 )
@@ -34,6 +37,15 @@ from src.projects import ProjectDocument, ProjectRepository
 
 _ORIGIN = re.compile(r"http://127\.0\.0\.1:([1-9][0-9]{0,4})\Z")
 _MAX_BODY_BYTES = 2 * 1024 * 1024
+_MAX_ASSET_BODY_BYTES = 16 * 1024 * 1024
+_ASSET_UPLOAD = re.compile(r"/api/v1/projects/[^/]+/assets\Z")
+_ASSET_MEDIA: dict[str, str] = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+}
+type _RasterMediaType = Literal["image/png", "image/jpeg", "image/gif", "image/webp"]
 _SECRET_NAMES = frozenset({"openai_api_key", "netlify_token"})
 _MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
@@ -140,19 +152,36 @@ def create_app(
             ):
                 return _error(400)
             if request.method in _BODY_METHODS:
-                media_type = request.headers.get("content-type", "").split(";", 1)[0].strip()
-                if media_type.lower() != "application/json":
-                    return _error(400)
-                length = request.headers.get("content-length")
-                if length is not None:
-                    try:
-                        if int(length) > _MAX_BODY_BYTES:
-                            return _error(400)
-                    except ValueError:
+                if request.method == "POST" and _ASSET_UPLOAD.fullmatch(request.url.path):
+                    media_type = request.headers.get("content-type")
+                    if media_type not in _ASSET_MEDIA.values():
                         return _error(400)
-                body = await request.body()
-                if len(body) > _MAX_BODY_BYTES:
-                    return _error(400)
+                    length = request.headers.get("content-length")
+                    if length is not None and (
+                        not length.isdecimal() or int(length) > _MAX_ASSET_BODY_BYTES
+                    ):
+                        return _error(400)
+                    body = bytearray()
+                    async for chunk in request.stream():
+                        if len(chunk) > _MAX_ASSET_BODY_BYTES - len(body):
+                            return _error(400)
+                        body.extend(chunk)
+                    request.state.asset_data = bytes(body)
+                    del body
+                else:
+                    media_type = request.headers.get("content-type", "").split(";", 1)[0].strip()
+                    if media_type.lower() != "application/json":
+                        return _error(400)
+                    length = request.headers.get("content-length")
+                    if length is not None:
+                        try:
+                            if int(length) > _MAX_BODY_BYTES:
+                                return _error(400)
+                        except ValueError:
+                            return _error(400)
+                    body_json = await request.body()
+                    if len(body_json) > _MAX_BODY_BYTES:
+                        return _error(400)
         response = await call_next(request)
         return _error(response.status_code) if response.status_code >= 400 else response
 
@@ -207,6 +236,78 @@ def create_app(
             metadata = replace(current.metadata, name=name)
             return _project(repository.save(ProjectDocument(metadata=metadata, state=state)))
 
+    def save_editor(project_id: str, body: SaveEditorBody) -> dict[str, object]:
+        identifier = _project_id(project_id)
+        with project_lock:
+            repository = ProjectRepository(project_root)
+            try:
+                current = repository.load(identifier)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            if current.metadata.updated_at != body.expected_updated_at:
+                raise HTTPException(status_code=409)
+            try:
+                editor = load_editor_state({"editor": body.editor})
+                if editor is None:
+                    raise HTTPException(status_code=400)
+                state = save_editor_state(current.state, editor)
+                _state(state)
+                return _project(
+                    repository.save(ProjectDocument(metadata=current.metadata, state=state))
+                )
+            except (EditorStateError, ValidationError):
+                raise HTTPException(status_code=400) from None
+
+    async def upload_asset(project_id: str, request: Request) -> dict[str, str]:
+        identifier = _project_id(project_id)
+        data = cast(bytes, request.state.asset_data)
+        media_type = cast(_RasterMediaType, request.headers["content-type"])
+        with project_lock:
+            try:
+                path = ProjectRepository(project_root).write_asset(identifier, data, media_type)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            except ValidationError:
+                raise HTTPException(status_code=400) from None
+        return {"path": path}
+
+    def read_asset(project_id: str, asset_name: str) -> Response:
+        identifier = _project_id(project_id)
+        with project_lock:
+            try:
+                data = ProjectRepository(project_root).read_asset(
+                    identifier, f"assets/{asset_name}"
+                )
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            except ValidationError:
+                raise HTTPException(status_code=400) from None
+        media_type = _ASSET_MEDIA[asset_name.rsplit(".", 1)[-1]]
+        return Response(
+            content=data,
+            media_type=media_type,
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Cross-Origin-Resource-Policy": "same-origin",
+            },
+        )
+
+    def delete_asset(project_id: str, asset_name: str) -> Response:
+        identifier = _project_id(project_id)
+        with project_lock:
+            try:
+                removed = ProjectRepository(project_root).delete_asset(
+                    identifier, f"assets/{asset_name}"
+                )
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            except ValidationError:
+                raise HTTPException(status_code=400) from None
+        if not removed:
+            raise HTTPException(status_code=404)
+        return Response(status_code=204)
+
     def delete_project(project_id: str) -> Response:
         with project_lock:
             try:
@@ -248,6 +349,19 @@ def create_app(
     app.add_api_route("/api/v1/projects", create_project, methods=["POST"], status_code=201)
     app.add_api_route("/api/v1/projects/{project_id}", load_project, methods=["GET"])
     app.add_api_route("/api/v1/projects/{project_id}", save_project, methods=["PUT"])
+    app.add_api_route("/api/v1/projects/{project_id}/editor", save_editor, methods=["PUT"])
+    app.add_api_route(
+        "/api/v1/projects/{project_id}/assets", upload_asset, methods=["POST"], status_code=201
+    )
+    app.add_api_route(
+        "/api/v1/projects/{project_id}/assets/{asset_name}", read_asset, methods=["GET"]
+    )
+    app.add_api_route(
+        "/api/v1/projects/{project_id}/assets/{asset_name}",
+        delete_asset,
+        methods=["DELETE"],
+        status_code=204,
+    )
     app.add_api_route(
         "/api/v1/projects/{project_id}", delete_project, methods=["DELETE"], status_code=204
     )

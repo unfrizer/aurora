@@ -29,13 +29,15 @@ checkout; this ADR does not claim to replace either authority.
 P6-002 would modify only `src/local_api/app.py` and
 `src/local_api/schemas.py`, and add
 `tests/local_api/test_editor_assets.py` and
-`tests/integration/test_local_editor_assets.py`. The sole existing-test
-exception is `tests/local_api/test_security.py`: add only
-`"src.editor"` and `"src.core.exceptions"` to its approved-import
-set, preserving all other AST
-checks. No other existing test, production file, dependency declaration
-or public Python gateway changes. `create_app` retains its exact
-P6-001 signature.
+`tests/integration/test_local_editor_assets.py`. Existing-test
+exceptions are limited to `tests/local_api/test_security.py`
+(add only `"src.editor"` and `"src.core.exceptions"` to its
+approved-import set) and `tests/editor/test_models.py` (admit only
+`src/local_api/app.py` as a public `src.editor` consumer while
+preserving the prohibition for every other production file and
+private P7 imports). No other existing test, production file,
+dependency declaration or public Python gateway changes.
+`create_app` retains its exact P6-001 signature.
 
 P6 may additionally import the public `src.editor` gateway and
 Foundation `ValidationError` from `src.core.exceptions` solely to
@@ -167,3 +169,11 @@ approved P1-to-HTTP error mapping, and the same test's allowed-import
 set may additionally contain only `"src.core.exceptions"`. This
 does not authorize any other Foundation import, generic exception
 mapping, or test-rule weakening.
+
+The Architecture Authority explicitly approved the third narrow
+test-admission correction on 2026-10-08 after the full P6 suite
+identified P7's blanket consumer ban. Only
+`tests/editor/test_models.py` may be adjusted to admit
+`src/local_api/app.py` importing the public `src.editor` gateway.
+All other production consumers and private P7 imports remain
+forbidden. No P7 production code or public surface changes.

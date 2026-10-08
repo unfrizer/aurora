@@ -122,7 +122,26 @@ def test_production_imports_stay_inside_approved_application_boundary() -> None:
                     assert module in allowed[path.name]
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 assert node.func.id != "print"
+    approved_consumer = root / "src" / "local_api" / "app.py"
     for path in (root / "src").rglob("*.py"):
         if package in path.parents:
             continue
-        assert "src.editor" not in path.read_text(encoding="utf-8")
+        source = path.read_text(encoding="utf-8")
+        if path == approved_consumer:
+            assert source.count("src.editor") == 1
+            tree = ast.parse(source)
+            imports = [
+                node.module
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom)
+                and node.module is not None
+                and node.module.startswith("src.editor")
+            ]
+            assert imports == ["src.editor"]
+            assert not any(
+                isinstance(node, ast.Import)
+                and any(alias.name.startswith("src.editor") for alias in node.names)
+                for node in ast.walk(tree)
+            )
+        else:
+            assert "src.editor" not in source
