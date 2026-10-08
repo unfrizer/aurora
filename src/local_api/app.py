@@ -1,4 +1,4 @@
-"""Application-owned, loopback-only HTTP translation for approved P1-P3 APIs."""
+"""Application-owned, loopback-only HTTP translation for approved product APIs."""
 
 from __future__ import annotations
 
@@ -19,7 +19,12 @@ from pydantic import JsonValue
 
 from src.core.exceptions import ValidationError
 from src.credentials import CredentialStoreError, SecretName, WindowsCredentialStore
-from src.editor import EditorStateError, load_editor_state, save_editor_state
+from src.editor import (
+    EditorStateError,
+    load_editor_state,
+    save_editor_state,
+    to_static_site_document,
+)
 from src.generation import (
     GenerationConfigurationError,
     GenerationJob,
@@ -34,6 +39,7 @@ from src.local_api.schemas import (
     TextGenerationBody,
 )
 from src.projects import ProjectDocument, ProjectRepository
+from src.site_export import SiteValidationError, StaticSiteAsset, StaticSiteBuilder
 
 _ORIGIN = re.compile(r"http://127\.0\.0\.1:([1-9][0-9]{0,4})\Z")
 _MAX_BODY_BYTES = 2 * 1024 * 1024
@@ -45,6 +51,11 @@ _ASSET_MEDIA: dict[str, str] = {
     "gif": "image/gif",
     "webp": "image/webp",
 }
+_PREVIEW_CSP = (
+    "default-src 'none'; style-src 'self'; img-src 'self'; "
+    "script-src 'none'; connect-src 'none'; form-action 'none'; "
+    "base-uri 'none'; frame-ancestors 'self'"
+)
 type _RasterMediaType = Literal["image/png", "image/jpeg", "image/gif", "image/webp"]
 _SECRET_NAMES = frozenset({"openai_api_key", "netlify_token"})
 _MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -293,6 +304,59 @@ def create_app(
             },
         )
 
+    def preview_site(project_id: str, file_path: str) -> Response:
+        identifier = _project_id(project_id)
+        with project_lock:
+            repository = ProjectRepository(project_root)
+            try:
+                current = repository.load(identifier)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            try:
+                editor = load_editor_state(current.state)
+                if editor is None:
+                    raise HTTPException(status_code=400)
+                references: list[str] = []
+                seen: set[str] = set()
+                if editor.brand.logo_path is not None:
+                    references.append(editor.brand.logo_path)
+                    seen.add(editor.brand.logo_path)
+                for page in editor.pages:
+                    for section in page.sections:
+                        reference = section.image_path
+                        if reference is not None and reference not in seen:
+                            references.append(reference)
+                            seen.add(reference)
+                assets = tuple(
+                    StaticSiteAsset(
+                        path=reference,
+                        data=repository.read_asset(identifier, reference),
+                    )
+                    for reference in references
+                )
+                document = to_static_site_document(editor, assets)
+                build = StaticSiteBuilder().build(document)
+            except (EditorStateError, SiteValidationError, ValidationError, FileNotFoundError):
+                raise HTTPException(status_code=400) from None
+
+        for site_file in build.files:
+            if site_file.path != file_path:
+                continue
+            headers = {
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Cross-Origin-Resource-Policy": "same-origin",
+            }
+            if site_file.path.endswith(".html"):
+                headers["Content-Security-Policy"] = _PREVIEW_CSP
+                media_type = "text/html"
+            elif site_file.path == "assets/site.css":
+                media_type = "text/css"
+            else:
+                media_type = _ASSET_MEDIA[site_file.path.rsplit(".", 1)[-1]]
+            return Response(content=site_file.data, media_type=media_type, headers=headers)
+        raise HTTPException(status_code=404)
+
     def delete_asset(project_id: str, asset_name: str) -> Response:
         identifier = _project_id(project_id)
         with project_lock:
@@ -355,6 +419,9 @@ def create_app(
     )
     app.add_api_route(
         "/api/v1/projects/{project_id}/assets/{asset_name}", read_asset, methods=["GET"]
+    )
+    app.add_api_route(
+        "/api/v1/projects/{project_id}/preview/{file_path:path}", preview_site, methods=["GET"]
     )
     app.add_api_route(
         "/api/v1/projects/{project_id}/assets/{asset_name}",
