@@ -2,21 +2,35 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
 import re
 import shutil
+import stat
 import tempfile
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 from uuid import UUID, uuid4
 
 from src.core.exceptions import ValidationError
 from src.core.types import JSONDict, JSONValue
 from src.projects.models import ProjectDocument, ProjectMetadata
+
+_ASSET_REFERENCE = re.compile(r"assets/([0-9a-f]{64})\.(png|jpg|gif|webp)")
+_ASSET_NAME = re.compile(r"[0-9a-f]{64}\.(png|jpg|gif|webp)")
+_ASSET_EXTENSIONS = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/gif": "gif",
+    "image/webp": "webp",
+}
+_MAX_ASSET_BYTES = 16 * 1024 * 1024
+_MAX_ASSET_COUNT = 256
+_MAX_TOTAL_ASSET_BYTES = 128 * 1024 * 1024
 
 
 class ProjectRepository:
@@ -90,6 +104,87 @@ class ProjectRepository:
         path = self._existing_path(project_id)
         self._load_path(path)  # Verify identity and structure before removing a directory.
         shutil.rmtree(path)
+
+    def write_asset(
+        self,
+        project_id: str,
+        data: bytes,
+        media_type: Literal["image/png", "image/jpeg", "image/gif", "image/webp"],
+    ) -> str:
+        """Store validated raster bytes under a deterministic project-local reference."""
+        if type(data) is not bytes or not data or len(data) > _MAX_ASSET_BYTES:
+            raise _invalid_asset()
+        if type(media_type) is not str:
+            raise _invalid_asset()
+        extension = _ASSET_EXTENSIONS.get(media_type)
+        if extension is None or not _has_signature(extension, data):
+            raise _invalid_asset()
+        reference = f"assets/{hashlib.sha256(data).hexdigest()}.{extension}"
+        directory = self._asset_directory(self._existing_path(project_id))
+        destination = directory / reference.removeprefix("assets/")
+        try:
+            existing = _read_managed_asset(destination, reference)
+        except FileNotFoundError:
+            existing = None
+        if existing is not None:
+            if existing != data:
+                raise _invalid_asset()
+            return reference
+        count, total = _managed_usage(directory)
+        if count >= _MAX_ASSET_COUNT or total + len(data) > _MAX_TOTAL_ASSET_BYTES:
+            raise _invalid_asset()
+        temporary: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "wb", dir=directory, prefix=".aurora-asset-", delete=False
+            ) as file:
+                temporary = Path(file.name)
+                file.write(data)
+                file.flush()
+                os.fsync(file.fileno())
+            try:
+                os.link(temporary, destination)
+            except FileExistsError:
+                if _read_managed_asset(destination, reference) != data:
+                    raise _invalid_asset() from None
+            return reference
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
+    def read_asset(self, project_id: str, path: str) -> bytes:
+        """Return detached, integrity-checked raster bytes from this project."""
+        _validate_asset_reference(path)
+        directory = self._asset_directory(self._existing_path(project_id))
+        return _read_managed_asset(directory / path.removeprefix("assets/"), path)
+
+    def delete_asset(self, project_id: str, path: str) -> bool:
+        """Remove an unreferenced managed asset without changing project state."""
+        _validate_asset_reference(path)
+        project = self._existing_path(project_id)
+        directory = self._asset_directory(project)
+        target = directory / path.removeprefix("assets/")
+        try:
+            _read_managed_asset(target, path)
+        except FileNotFoundError:
+            return False
+        document = self._load_path(project)
+        if _contains_string_value(document.state, path):
+            raise _invalid_asset()
+        target.unlink()
+        return True
+
+    def _asset_directory(self, project: Path) -> Path:
+        self._load_path(project)
+        directory = project / "assets"
+        if (
+            directory.is_symlink()
+            or directory.is_junction()
+            or not directory.is_dir()
+            or directory.resolve() != directory
+        ):
+            raise _invalid_asset()
+        return directory
 
     def _path_for(self, metadata: ProjectMetadata) -> Path:
         slug = re.sub(r"[^a-z0-9]+", "-", metadata.name.lower()).strip("-")[:80] or "project"
@@ -268,6 +363,84 @@ def _copy_json(value: object, ancestors: set[int]) -> JSONValue:
         finally:
             ancestors.remove(identity)
     raise ValidationError("Project state must contain only JSON values and finite numbers")
+
+
+def _invalid_asset() -> ValidationError:
+    return ValidationError("Invalid project asset.")
+
+
+def _validate_asset_reference(path: object) -> None:
+    if type(path) is not str or _ASSET_REFERENCE.fullmatch(path) is None:
+        raise _invalid_asset()
+
+
+def _has_signature(extension: str, data: bytes) -> bool:
+    if extension == "png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if extension == "jpg":
+        return data.startswith(b"\xff\xd8\xff")
+    if extension == "gif":
+        return data.startswith((b"GIF87a", b"GIF89a"))
+    return len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+
+
+def _managed_stat(path: Path) -> os.stat_result:
+    if path.is_symlink() or path.is_junction():
+        raise _invalid_asset()
+    try:
+        result = path.lstat()
+    except FileNotFoundError:
+        raise FileNotFoundError("Project asset not found") from None
+    if (
+        not stat.S_ISREG(result.st_mode)
+        or result.st_size < 1
+        or result.st_size > _MAX_ASSET_BYTES
+        or path.resolve().parent != path.parent
+    ):
+        raise _invalid_asset()
+    return result
+
+
+def _read_managed_asset(path: Path, reference: str) -> bytes:
+    size = _managed_stat(path).st_size
+    with path.open("rb") as file:
+        data = file.read(_MAX_ASSET_BYTES + 1)
+    match = _ASSET_REFERENCE.fullmatch(reference)
+    if (
+        match is None
+        or len(data) != size
+        or hashlib.sha256(data).hexdigest() != match.group(1)
+        or not _has_signature(match.group(2), data)
+    ):
+        raise _invalid_asset()
+    return data
+
+
+def _managed_usage(directory: Path) -> tuple[int, int]:
+    count = 0
+    total = 0
+    for entry in directory.iterdir():
+        if _ASSET_NAME.fullmatch(entry.name) is None:
+            continue
+        total += _managed_stat(entry).st_size
+        count += 1
+        if count > _MAX_ASSET_COUNT or total > _MAX_TOTAL_ASSET_BYTES:
+            raise _invalid_asset()
+    return count, total
+
+
+def _contains_string_value(value: JSONValue, target: str) -> bool:
+    pending: list[JSONValue] = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, str):
+            if current == target:
+                return True
+        elif isinstance(current, dict):
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+    return False
 
 
 __all__ = ["ProjectRepository"]
