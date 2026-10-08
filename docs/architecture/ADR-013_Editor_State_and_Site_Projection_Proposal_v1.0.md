@@ -14,6 +14,18 @@ the editor-state schema, pure projection, ownership, import boundary and
 acceptance gate below. PC-007 compiles those decisions. It does not approve
 another module, waive its tests/review, or certify a usable Windows MVP.
 
+### Approved P4 test-admission clarification
+
+After the P7 preflight found that the existing P4 import-DAG test recognized
+only Netlify as a public `src.site_export` consumer, the Architecture
+Authority explicitly replied "разрешаю полностью, дальше" to the narrow
+request to amend this ADR/PC-007 and update only
+`tests/site_export/test_models.py` to admit
+`src/editor/projection.py` as another public-gateway consumer. This is a
+test-registry correction, not permission to change P4 production code,
+P7's dependency direction, another P4 test, or any Runtime owner. It
+supersedes E-01's original nine-file list for this one test file only.
+
 ## Why this decision is needed
 
 ADR-002 requires a saved, editable site and a build/export path for the

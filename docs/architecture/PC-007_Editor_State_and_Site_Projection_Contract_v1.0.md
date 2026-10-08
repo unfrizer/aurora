@@ -15,7 +15,7 @@ replacement for P1 project persistence, or an HTTP/UI implementation.
 
 ## Exact ownership
 
-Only the following nine implementation/acceptance files are authorized:
+The following nine P7 implementation/acceptance files are authorized:
 
 ```text
 src/editor/__init__.py
@@ -29,8 +29,16 @@ tests/editor/test_projection.py
 tests/integration/test_editor_projection.py
 ```
 
+The Architecture Authority's later explicit ADR-013 test-admission
+clarification additionally authorizes **only**
+`tests/site_export/test_models.py` to recognize
+`src/editor/projection.py` as a public `src.site_export` consumer alongside
+the already approved Netlify consumer. Preserve every other P4 AST rule and
+all existing production behavior.
+
 This contract and ADR-013 approval record are the only architecture-document
-changes for P7. No change to P1/P4/P6 or their tests, Kernel/other Runtimes,
+changes for P7. Except for that exact P4 test correction, no change to
+P1/P4/P6 or their tests, Kernel/other Runtimes,
 dependencies, CI configuration, or another production package. The gateway
 `src.editor` exports exactly the eight symbols in ADR-013 E-03 and no
 additional public function, class, alias or constant.
