@@ -1,10 +1,18 @@
 # AURORA — Editor State and Site Projection Proposal v1.0
 
 **Document ID:** ADR-013
-**Status:** DRAFT — Architecture Authority decision required
+**Status:** APPROVED — E-01–E-05 explicitly approved by Architecture Authority
 **Date:** 2026-10-08
 **Target module:** P7-001 — Editor State and Static-Site Projection
 **Repository baseline:** `408d44c01981d17f0dfb9991a2f3da17ffa2ec3f`
+
+## Approval boundary
+
+On 2026-10-08 the Architecture Authority responded "утверждаю полностью,
+дальше" to the request to approve E-01–E-05 together. This approves exactly
+the editor-state schema, pure projection, ownership, import boundary and
+acceptance gate below. PC-007 compiles those decisions. It does not approve
+another module, waive its tests/review, or certify a usable Windows MVP.
 
 ## Why this decision is needed
 
@@ -170,11 +178,11 @@ hosted CI precede normal publication. A P7 module report and Tech Lead
 review remain mandatory. P7 alone does not satisfy the ADR-002 usable-Windows
 acceptance path.
 
-## Decision requested and deferred work
+## Decision and deferred work
 
-Architecture Authority approval is requested for **E-01–E-05 together**.
-Until then, this DRAFT is not an implementation contract and authorizes no
-PC-007 or P7 source/test work.
+**E-01–E-05 are approved together.** PC-007 is the exact P7 implementation
+contract. P7 may be built only under that contract in its own module task;
+approval of this ADR alone does not waive the module review or CI gate.
 
 Separate later contracts are still needed for structured one-prompt and
 image generation, asset storage/read safety, editor-aware HTTP composition,
