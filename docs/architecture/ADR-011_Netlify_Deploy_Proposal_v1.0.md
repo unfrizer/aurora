@@ -1,12 +1,19 @@
 # AURORA — Netlify Deploy Adapter Proposal v1.0
 
 **Document ID:** ADR-011
-**Status:** DRAFT — N-01–N-05 require Architecture Authority approval
+**Status:** APPROVED — N-01–N-05 explicitly approved by Architecture Authority
 **Date:** 2026-10-08
 **Target module:** P5-001 — Netlify Deploy Adapter
 **Repository baseline:** `45056a8cde98470f3514299748b3fc70e982ac49`
 
 ## Authority and current state
+
+The Architecture Authority replied "утверждаю все" on 2026-10-08 to the
+request to approve N-01–N-05, including the personal/local token boundary.
+That response approves these five decisions without changing their values.
+PC-005 compiles their implementation contract; P5 implementation and Tech
+Lead acceptance remain separate. This record does not claim a live Netlify
+deploy, independent human review, passing hosted CI, or a usable Windows MVP.
 
 ADR-002 approves Netlify as the only integrated MVP deploy target and requires
 build → ZIP → API deploy → poll until ready → public URL. It also requires a
@@ -22,9 +29,9 @@ are the same site tree.
 Netlify's [official API guide](https://docs.netlify.com/api-and-cli-guides/api-guides/get-started-with-api/)
 documents ZIP deployment, site creation, polling and authentication. Its
 [API reference](https://open-api.netlify.com/) describes deploy URL fields.
-These external API facts inform this proposal; they do not change AURORA's
-frozen Runtime ownership. This DRAFT authorizes no code, test, credential
-access, live site creation, or deployment.
+These external API facts inform this decision; they do not change AURORA's
+frozen Runtime ownership. Approval authorizes compiling PC-005 and a separate
+P5 module build, not a live site creation or production deployment.
 
 ## Frozen invariants
 
@@ -42,7 +49,7 @@ access, live site creation, or deployment.
 
 ## N-01 — Application ownership and file scope
 
-**Proposed decision; not approved.** P5 is an application outbound adapter,
+**Approved decision — N-01.** P5 is an application outbound adapter,
 not PlatformRuntime. It owns only Netlify-specific validation, HTTP, bounded
 polling, and sanitized deploy results/failures. Proposed module files:
 
@@ -57,7 +64,7 @@ tests/integration/test_netlify_deploy.py
 ```
 
 The test package marker avoids default-pytest module-name collisions. The
-proposed package gateway exports exactly `NetlifyDeployer`,
+approved package gateway exports exactly `NetlifyDeployer`,
 `NetlifyDeployment`, and `NetlifyDeployError`; PC-005 must register these
 symbols and the files before implementation. P5 may
 import the standard library and PC-004's public build/export API, but not a
@@ -66,7 +73,7 @@ FastAPI, or frontend. Lower layers never import P5.
 
 ## N-02 — Credential and distribution boundary
 
-**Proposed decision; not approved.** For the first personally operated local
+**Approved decision — N-02.** For the first personally operated local
 Windows MVP, the user supplies their own Netlify personal access token in
 future Settings. PC-002 stores it under `netlify_token`; future application
 composition retrieves and passes it only on an explicit Deploy command. P5
@@ -77,12 +84,11 @@ This scope is a personal/local tool, **not** a generally distributed public
 Netlify integration. Netlify's official guide says public integrations for
 others must use OAuth2. If AURORA is distributed as such, OAuth consent,
 callback, token lifecycle, and credential ownership need another approved
-contract first. Architecture Authority must select this local-token boundary
-or require OAuth now.
+contract first. This approval selects the local-token boundary, not OAuth now.
 
 ## N-03 — Build handoff and network boundary
 
-**Proposed decision; not approved.** Candidate public entry point:
+**Approved decision — N-03.** Public entry point:
 
 ```text
 NetlifyDeployer(api_token: str)
@@ -90,7 +96,7 @@ NetlifyDeployer.deploy(build: StaticSiteBuild, *, site_id: str | None = None)
     -> NetlifyDeployment
 ```
 
-Approval of N-03 would freeze these names and signatures. `build` comes from
+N-03 freezes these names and signatures. `build` comes from
 the approved P4 builder. P5 reuses `StaticSiteExporter` in an invocation-owned
 temporary directory to stage the exact PC-004 ZIP **before** contacting
 Netlify. It accepts no arbitrary browser-supplied ZIP, user-selected upload
@@ -117,19 +123,19 @@ project, or decide the future UI's project-to-site binding.
 
 ## N-04 — Polling, result and failure model
 
-**Proposed decision; not approved.** Poll only the newly created deploy via
+**Approved decision — N-04.** Poll only the newly created deploy via
 `GET /api/v1/deploys/{deploy_id}`, under a monotonic 120-second deadline that
 starts after the ZIP POST returns and
 no more than one poll per two seconds. Succeed only at Netlify state `ready`.
 No unbounded polling or background task.
 
-`NetlifyDeployment` is proposed as a frozen, slotted, keyword-only dataclass
+`NetlifyDeployment` is a frozen, slotted, keyword-only dataclass
 with exactly `site_id: str`, `deploy_id: str`, and `public_url: str`. Read
 `public_url` from the ready deploy's `ssl_url` field only; require an HTTPS
 URL with a nonempty host and no embedded credentials. A missing/invalid field
 is a protocol error, not a fabricated URL. P5 does not open the URL.
 
-`NetlifyDeployError(RuntimeError)` is proposed with read-only `stage`,
+`NetlifyDeployError(RuntimeError)` has read-only `stage`,
 `category`, `site_id`, and `deploy_id` attributes. Stages are `validation`,
 `site_create`, `upload`, and `poll`; categories are `invalid_input`, `auth`,
 `rate_limit`, `remote`, `transport`, `protocol`, `failed`, and `timeout`.
@@ -148,7 +154,7 @@ a future deliberate workflow, never an automatic second POST from P5.
 
 ## N-05 — Acceptance and publication gate
 
-**Proposed decision; not approved.** After explicit approval, compile PC-005,
+**Approved decision — N-05.** Compile PC-005,
 then implement P5 in its own module task/branch, changing only registered
 source/test files. Tests use synthetic PC-004 builds and fake HTTP, never a
 real token or Netlify endpoint. Cover new/existing site, exact ZIP/target/
@@ -163,18 +169,18 @@ module and stop for Tech Lead review. ADR-003 can govern normal PR/merge only
 after the task is authorized and checks pass. It does not authorize an actual
 production deployment.
 
-## Decisions requested from Architecture Authority
+## Approved decision record
 
-Approve or amend N-01–N-05, especially:
+The Authority approved N-01–N-05 in full, specifically:
 
 1. Personal/local BYO Netlify token for this MVP, with public OAuth integration
-   deferred, versus OAuth now.
+   deferred to a separate contract.
 2. Typed P4 build as the only deploy input and P5-owned temporary ZIP staging.
 3. New-site creation and existing-site redeploy, with no automatic POST retry
    or site deletion after partial failure.
 4. Bounded synchronous ready-result and recoverable-ID failure model.
 5. Exact P5 ownership and fake-network acceptance boundary.
 
-Without approval, do not generate PC-005 or P5 code. Future FastAPI/UI
+PC-005 may be compiled and P5 built only in its separate task. Future FastAPI/UI
 composition, persistent project/site-ID binding, live-user verification and
 public OAuth distribution remain separately owned contract work.
