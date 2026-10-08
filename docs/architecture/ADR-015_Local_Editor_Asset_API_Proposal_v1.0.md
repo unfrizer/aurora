@@ -1,7 +1,7 @@
 # AURORA — Local Editor and Asset API Proposal v1.0
 
 **Document ID:** ADR-015
-**Status:** DRAFT — Architecture Authority decision required
+**Status:** APPROVED — EA-01–EA-05
 **Date:** 2026-10-08
 **Target module:** P6-002 — Local Editor and Raster Asset API
 **Repository baseline:** `4254b4aea1d3a6e799c3063bc61342634a5b301b`
@@ -19,10 +19,10 @@ not authorize them.
 
 This proposal extends the **existing P6 application-composition owner**.
 It does not change a Runtime, P1/P7 schemas, an existing route, the
-Windows credential boundary or a provider. Approval of the decisions
-below is required before a PC-009 contract or P6-002 code. The
+Windows credential boundary or a provider. The decisions below
+authorize a PC-009 contract and a separate P6-002 module task. The
 Architecture Freeze and full Master Pack are not present in this
-checkout; this DRAFT does not claim to replace either authority.
+checkout; this ADR does not claim to replace either authority.
 
 ## EA-01 — Ownership and dependency direction
 
@@ -136,11 +136,11 @@ not add structured one-prompt generation, image generation, preview,
 build/export/deploy HTTP, global settings, React/Vite, or a Windows
 launcher. P6-002 alone is not the ADR-002 usable Windows version.
 
-## Decision requested
+## Approval record
 
-Architecture Authority approval is requested for **EA-01–EA-05
-together**. If approved, PC-006 may be narrowly amended to admit this
-P6 extension, PC-009 may compile the exact implementation contract,
-and P6-002 may begin in a separate module branch/task. A different
-upload format, route shape, security limit, error mapping or owner is
-a new decision, not an implementation default.
+On 2026-10-08, the Architecture Authority explicitly approved
+**EA-01–EA-05 in full** in the project conversation. PC-006 may be
+narrowly amended, PC-009 may compile this decision, and P6-002 may
+begin as a separate module task with its own validation and Tech Lead
+review. A different upload format, route shape, security limit, error
+mapping or owner requires a new decision.
