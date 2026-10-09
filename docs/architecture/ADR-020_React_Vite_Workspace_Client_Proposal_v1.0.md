@@ -1,7 +1,7 @@
 # AURORA — React/Vite Workspace Client Proposal v1.0
 
 - Document ID: ADR-020
-- Status: DRAFT — product/contract decisions requested; no implementation authority
+- Status: APPROVED — UI-01–UI-05, explicitly approved by Architecture Authority on 2026-10-09
 - Date: 2026-10-09
 - Proposed module: UI-001 — Local Browser Workspace on Existing P6 API
 - Repository baseline: `7ba3744fc5e82dff323539e77e9b5c21ef5dc618`
@@ -186,6 +186,5 @@ owners/contracts. No existing L0–L8 or backend ownership changes here.
 
 ## Approval requested
 
-UI-01–UI-05 are one product/implementation decision set. Approval would
-authorize compiling PC-014 and implementing UI-001 as its own module.
-This DRAFT does not authorize a frontend dependency install or source edit.
+The Architecture Authority approved UI-01–UI-05 in full on 2026-10-09.
+PC-014 compiles this decision set into the separate UI-001 implementation task.
