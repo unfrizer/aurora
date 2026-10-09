@@ -1,47 +1,55 @@
 # AURORA
 
-Runtime-first UI Engine based on Architecture Freeze v1.0 and the canonical
-Engineering Bible / Master Pack v1.1.
+AURORA is a Windows-focused local visual workspace built around the approved
+Python Runtime Engine. The browser UI uses React, TypeScript and Vite; the
+loopback backend uses Python 3.13 and FastAPI. Architecture Freeze v1.0 and
+the approved contracts in `docs/architecture/` define ownership.
 
-## Stack
+## Run on Windows from source
 
-- Python 3.13
-- uv
-- Pydantic v2
-- Ruff
-- Pyright
-- Pytest
-
-## Implemented Modules
-
-The repository contains the Wave 1 Kernel and approved in-memory Wave 2–9
-runtime modules, plus portable project persistence, a Windows Credential Manager
-adapter, and a synchronous OpenAI Responses plain-text adapter.
-
-These are building blocks, not a finished Windows application. The React/Vite
-workspace, local FastAPI server, structured business/image generation, static-site
-builder/export and Netlify deployment are not implemented yet. Known Kernel
-contract gaps are recorded in the pre-MVP audit under `docs/architecture/`.
-
-## Development and Validation
-
-Install Python 3.13 and uv, then run from the repository root:
+Install Python 3.13, uv, Node 24 and pnpm 11. From the repository root:
 
 ```powershell
 uv sync --frozen --dev --python 3.13
+cd frontend
+pnpm install --frozen-lockfile
+pnpm build
+cd ..
+uv run --frozen python -m src.launcher
+```
+
+The launcher binds a temporary port on `127.0.0.1`, opens the default browser
+after readiness and runs in the foreground. Ctrl+C stops it. A source checkout
+requires the frontend build above; there is no installer or prebuilt bundle yet.
+
+The current UI can create and reopen local projects, explicitly initialize a
+blank website, edit its brand/pages/sections/SEO and local raster images,
+preview the saved static site, save changes, export a site ZIP and explicitly
+deploy through Netlify. It supports RU/EN interface choice, onboarding and
+independently collapsible panels. OpenAI text assist applies only to a selected
+section after user review. The API keys are stored through Windows Credential
+Manager, not in the browser or project files.
+
+This is **not** the complete one-prompt usable MVP. Structured brand/site/
+content/SEO generation, AI image generation, persisted global settings,
+folder export and Windows packaging still need separate approved contracts.
+The UI does not claim these features exist. OpenAI and Netlify requests may
+incur charges or publish content; they run only on explicit user actions.
+
+## Validate
+
+```powershell
 uv run --frozen ruff check .
 uv run --frozen pyright
 uv run --frozen pytest
-uv run --frozen python -m src.main
+cd frontend
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test
+pnpm build
 ```
 
-The last command runs the Kernel lifecycle smoke flow and exits; it does not open
-a visual workspace. Tests substitute network and credential-manager boundaries
-and do not require real OpenAI or Netlify keys. Passing these tests does not
-certify a live provider call or the full usable-MVP scenario.
-
-## Architecture Authority
-
-Each implementation module requires an APPROVED canonical contract. Runtime
-ownership and dependency direction remain frozen. See `AGENTS.md`, the AB-series
-runtime contracts, ADR-001/002 and PC-series application contracts.
+Tests use temporary projects, fake credentials and fake provider responses.
+They do not prove that a live OpenAI request, Netlify deployment or the full
+Windows acceptance path works. Every implementation module requires its own
+approved contract and latest-head CI before merge.
