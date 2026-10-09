@@ -108,3 +108,12 @@ tests/site_export/test_models.py admitting src/local_api/app.py as one
 additional public-gateway consumer, while preserving the P5/P7
 consumers and every private-P4/lower-owner prohibition. This does not
 authorize export HTTP or another P4 consumer.
+
+## Approved P6-004 ZIP-download consumer admission
+
+ADR-017 ZX-01–ZX-05 approves PC-011 as a separate P6 application task.
+The existing admitted src/local_api/app.py consumer may additionally
+import only StaticSiteExporter and SiteExportError from the public
+src.site_export gateway. P4's API, implementation, artifact rules and
+ownership remain unchanged. No P4 production file or existing P4 test
+changes in P6-004.

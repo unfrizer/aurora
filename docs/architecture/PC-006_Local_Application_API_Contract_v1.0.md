@@ -110,3 +110,15 @@ tests/local_api/test_security.py's allowed-import set while retaining
 all other assertions. PC-010 names the complete implementation scope.
 This approval does not include export/deploy HTTP, a frontend or a
 Windows launcher.
+
+## Approved P6-004 ZIP-download extension
+
+ADR-017 ZX-01–ZX-05 and PC-011 authorize a separate P6 task adding
+only POST /api/v1/projects/{project_id}/exports/zip with the exact
+strict timestamp body, same-origin mutation gates, P1/P7/P4 composition,
+server-owned temporary ZIP staging, fixed success headers and numeric
+error mapping specified there. Only src/local_api/app.py and schemas.py
+may change among production files; the two PC-011 test files may be
+created. Existing routes, create_app signature, project state and
+lower-owner APIs remain unchanged. This does not approve folder export,
+deployment, generation, frontend or launcher behavior.
