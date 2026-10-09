@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -34,12 +35,19 @@ from src.generation import (
 from src.local_api.schemas import (
     CreateProjectBody,
     CredentialBody,
+    ExportZipBody,
     SaveEditorBody,
     SaveProjectBody,
     TextGenerationBody,
 )
 from src.projects import ProjectDocument, ProjectRepository
-from src.site_export import SiteValidationError, StaticSiteAsset, StaticSiteBuilder
+from src.site_export import (
+    SiteExportError,
+    SiteValidationError,
+    StaticSiteAsset,
+    StaticSiteBuilder,
+    StaticSiteExporter,
+)
 
 _ORIGIN = re.compile(r"http://127\.0\.0\.1:([1-9][0-9]{0,4})\Z")
 _MAX_BODY_BYTES = 2 * 1024 * 1024
@@ -357,6 +365,60 @@ def create_app(
             return Response(content=site_file.data, media_type=media_type, headers=headers)
         raise HTTPException(status_code=404)
 
+    def export_site_zip(project_id: str, body: ExportZipBody) -> Response:
+        identifier = _project_id(project_id)
+        with project_lock:
+            repository = ProjectRepository(project_root)
+            try:
+                current = repository.load(identifier)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            if current.metadata.updated_at != body.expected_updated_at:
+                raise HTTPException(status_code=409)
+            try:
+                editor = load_editor_state(current.state)
+                if editor is None:
+                    raise HTTPException(status_code=400)
+                references: list[str] = []
+                seen: set[str] = set()
+                if editor.brand.logo_path is not None:
+                    references.append(editor.brand.logo_path)
+                    seen.add(editor.brand.logo_path)
+                for page in editor.pages:
+                    for section in page.sections:
+                        reference = section.image_path
+                        if reference is not None and reference not in seen:
+                            references.append(reference)
+                            seen.add(reference)
+                assets = tuple(
+                    StaticSiteAsset(
+                        path=reference,
+                        data=repository.read_asset(identifier, reference),
+                    )
+                    for reference in references
+                )
+                document = to_static_site_document(editor, assets)
+                build = StaticSiteBuilder().build(document)
+            except (EditorStateError, SiteValidationError, ValidationError, FileNotFoundError):
+                raise HTTPException(status_code=400) from None
+            try:
+                with tempfile.TemporaryDirectory(prefix="aurora-site-") as staging:
+                    destination = Path(staging) / "site.zip"
+                    exported = StaticSiteExporter().export_zip(build, destination)
+                    zip_bytes = exported.read_bytes()
+            except (OSError, SiteExportError, SiteValidationError):
+                raise HTTPException(status_code=500) from None
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": 'attachment; filename="aurora-site.zip"',
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Cross-Origin-Resource-Policy": "same-origin",
+            },
+        )
+
     def delete_asset(project_id: str, asset_name: str) -> Response:
         identifier = _project_id(project_id)
         with project_lock:
@@ -422,6 +484,9 @@ def create_app(
     )
     app.add_api_route(
         "/api/v1/projects/{project_id}/preview/{file_path:path}", preview_site, methods=["GET"]
+    )
+    app.add_api_route(
+        "/api/v1/projects/{project_id}/exports/zip", export_site_zip, methods=["POST"]
     )
     app.add_api_route(
         "/api/v1/projects/{project_id}/assets/{asset_name}",
