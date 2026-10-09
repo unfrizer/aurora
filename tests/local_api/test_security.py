@@ -145,6 +145,7 @@ def test_p6_imports_only_approved_application_gateways() -> None:
         "src.local_api.app",
         "src.local_api.schemas",
         "src.projects",
+        "src.site_export",
     }
     for path in Path("src/local_api").glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
