@@ -122,3 +122,20 @@ may change among production files; the two PC-011 test files may be
 created. Existing routes, create_app signature, project state and
 lower-owner APIs remain unchanged. This does not approve folder export,
 deployment, generation, frontend or launcher behavior.
+
+## Approved P6-005 explicit Netlify deploy extension
+
+ADR-018 ND-01–ND-05 and PC-012 authorize a separate P6 task adding
+only POST /api/v1/projects/{project_id}/deployments/netlify with strict
+timestamp, literal confirmation and optional canonical site ID.
+P6 composes a saved P1/P7/P4 snapshot and retrieves the P2 token, then
+releases its app lock before calling only the public P5 gateway. Exact
+request, success, error mapping and recovery rules are in PC-012.
+The only exception to this contract's fixed numeric-code error body is
+the new route's ND-03 recovery object carrying P5-validated site_id
+and/or deploy_id after a partial remote effect. Existing routes retain
+their exact fixed envelope and same-origin/body protections.
+Only src/local_api/app.py, schemas.py, two new PC-012 test files and the
+narrow src.deployment admission in tests/local_api/test_security.py
+may change. No P5 implementation, project/site persistence, automatic
+retry, frontend, launcher or second deployment provider is approved.
