@@ -164,15 +164,14 @@ def test_p6_imports_only_approved_application_gateways() -> None:
         if "local_api" in path.parts:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        assert not any(
-            (
-                isinstance(node, ast.ImportFrom)
-                and node.module is not None
-                and node.module.startswith("src.local_api")
-            )
-            or (
-                isinstance(node, ast.Import)
-                and any(alias.name.startswith("src.local_api") for alias in node.names)
-            )
-            for node in ast.walk(tree)
-        ), path
+        local_api_imports: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module is not None:
+                if node.module.startswith("src.local_api"):
+                    local_api_imports.append(node.module)
+            elif isinstance(node, ast.Import):
+                local_api_imports.extend(
+                    alias.name for alias in node.names if alias.name.startswith("src.local_api")
+                )
+        expected = ["src.local_api"] if path == Path("src/launcher/desktop.py") else []
+        assert local_api_imports == expected, path

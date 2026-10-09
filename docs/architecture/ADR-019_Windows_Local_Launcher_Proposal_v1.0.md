@@ -1,7 +1,7 @@
 # AURORA — Windows Local Launcher Proposal v1.0
 
 - Document ID: ADR-019
-- Status: DRAFT — decision requested; no implementation authority
+- Status: APPROVED — Architecture Authority approved WL-01–WL-05
 - Date: 2026-10-09
 - Proposed module: APP-001 — Windows Local Launcher and Same-Origin UI Host
 - Repository baseline: `ef59ef330598c73d78522a91bd44c5cdcccdf322`
@@ -33,6 +33,7 @@ tests/launcher/__init__.py
 tests/launcher/test_desktop.py
 tests/launcher/test_server.py
 tests/integration/test_windows_launcher.py
+tests/local_api/test_security.py # one narrow P6 import-consumer admission
 pyproject.toml                 # APP-001 dependency declaration only
 uv.lock                        # matching resolution only
 ```
@@ -127,8 +128,22 @@ scope/import review and latest-head hosted CI. Produce one APP-001 module
 report and stop for Tech Lead review. A separate frontend contract must
 specify client files, toolchain, screens, HTTP behavior and tests.
 
-## Approval requested
+## Approval record
 
-WL-01–WL-05 are one decision set. Approval authorizes compiling PC-013
-and then implementing APP-001 as its own module task. This DRAFT alone
-authorizes no source, test or dependency change.
+On 2026-10-09 the Architecture Authority replied «полностью утверждаю,
+дальше» to the explicit request to approve WL-01–WL-05. All five decisions
+are approved without amendment. PC-013 compiles their exact APP-001
+implementation boundary. This approval does not authorize a real provider
+request or waive module review and latest-head CI.
+
+### Approved P6 test-admission correction
+
+The first full APP-001 Pytest run found that the existing P6 AST guard in
+`tests/local_api/test_security.py` prohibited every consumer of
+`src.local_api`, contradicting the explicitly approved launcher-to-P6
+public-gateway dependency. On 2026-10-09 the Architecture Authority replied
+«полностью утверждаю, дальше» to the narrow request to amend this ADR and
+PC-013 and change only that test. It may recognize exactly
+`src/launcher/desktop.py` importing `src.local_api`, while continuing to
+reject private P6 imports and every other outside consumer. No P6 source,
+other P6 test, API behavior or Runtime ownership change is approved.
