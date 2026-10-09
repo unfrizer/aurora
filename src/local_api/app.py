@@ -20,6 +20,7 @@ from pydantic import JsonValue
 
 from src.core.exceptions import ValidationError
 from src.credentials import CredentialStoreError, SecretName, WindowsCredentialStore
+from src.deployment import NetlifyDeployer, NetlifyDeployError
 from src.editor import (
     EditorStateError,
     load_editor_state,
@@ -35,6 +36,7 @@ from src.generation import (
 from src.local_api.schemas import (
     CreateProjectBody,
     CredentialBody,
+    DeployNetlifyBody,
     ExportZipBody,
     SaveEditorBody,
     SaveProjectBody,
@@ -53,6 +55,7 @@ _ORIGIN = re.compile(r"http://127\.0\.0\.1:([1-9][0-9]{0,4})\Z")
 _MAX_BODY_BYTES = 2 * 1024 * 1024
 _MAX_ASSET_BODY_BYTES = 16 * 1024 * 1024
 _ASSET_UPLOAD = re.compile(r"/api/v1/projects/[^/]+/assets\Z")
+_NETLIFY_DEPLOY = re.compile(r"/api/v1/projects/[^/]+/deployments/netlify\Z")
 _ASSET_MEDIA: dict[str, str] = {
     "png": "image/png",
     "jpg": "image/jpeg",
@@ -83,6 +86,28 @@ def _project_id(value: str) -> str:
         return str(UUID(value))
     except (ValueError, TypeError, AttributeError):
         raise HTTPException(status_code=400) from None
+
+
+def _canonical_site_id(value: str | None) -> None:
+    if value is None:
+        return
+    try:
+        if str(UUID(value)) != value:
+            raise ValueError
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(status_code=400) from None
+
+
+def _deploy_status(error: NetlifyDeployError) -> int:
+    if error.stage == "validation":
+        return 500
+    if error.category in ("auth", "remote", "protocol", "failed"):
+        return 502
+    if error.category in ("rate_limit", "transport"):
+        return 503
+    if error.category == "timeout":
+        return 504
+    return 500
 
 
 def _name(value: str) -> str:
@@ -202,7 +227,15 @@ def create_app(
                     if len(body_json) > _MAX_BODY_BYTES:
                         return _error(400)
         response = await call_next(request)
-        return _error(response.status_code) if response.status_code >= 400 else response
+        if response.status_code >= 400:
+            if (
+                request.method == "POST"
+                and _NETLIFY_DEPLOY.fullmatch(request.url.path)
+                and getattr(request.state, "netlify_recovery", False)
+            ):
+                return response
+            return _error(response.status_code)
+        return response
 
     async def validation_error(_request: Request, _error: Exception) -> JSONResponse:
         return _error_response(400)
@@ -419,6 +452,73 @@ def create_app(
             },
         )
 
+    def deploy_netlify(project_id: str, body: DeployNetlifyBody, request: Request) -> Response:
+        identifier = _project_id(project_id)
+        _canonical_site_id(body.site_id)
+        with project_lock:
+            repository = ProjectRepository(project_root)
+            try:
+                current = repository.load(identifier)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            if current.metadata.updated_at != body.expected_updated_at:
+                raise HTTPException(status_code=409)
+            token = credential_store.get_secret("netlify_token")
+            if token is None:
+                raise HTTPException(status_code=409)
+            try:
+                editor = load_editor_state(current.state)
+                if editor is None:
+                    raise HTTPException(status_code=400)
+                references: list[str] = []
+                seen: set[str] = set()
+                if editor.brand.logo_path is not None:
+                    references.append(editor.brand.logo_path)
+                    seen.add(editor.brand.logo_path)
+                for page in editor.pages:
+                    for section in page.sections:
+                        reference = section.image_path
+                        if reference is not None and reference not in seen:
+                            references.append(reference)
+                            seen.add(reference)
+                assets = tuple(
+                    StaticSiteAsset(
+                        path=reference,
+                        data=repository.read_asset(identifier, reference),
+                    )
+                    for reference in references
+                )
+                document = to_static_site_document(editor, assets)
+                build = StaticSiteBuilder().build(document)
+            except (EditorStateError, SiteValidationError, ValidationError, FileNotFoundError):
+                raise HTTPException(status_code=400) from None
+        try:
+            deployment = NetlifyDeployer(token).deploy(build, site_id=body.site_id)
+        except NetlifyDeployError as error:
+            status = _deploy_status(error)
+            if error.site_id is None and error.deploy_id is None:
+                raise HTTPException(status_code=status) from None
+            request.state.netlify_recovery = True
+            return JSONResponse(
+                status_code=status,
+                content={
+                    "error": {
+                        "code": status,
+                        "recovery": {
+                            "site_id": error.site_id,
+                            "deploy_id": error.deploy_id,
+                        },
+                    }
+                },
+            )
+        return JSONResponse(
+            content={
+                "site_id": deployment.site_id,
+                "deploy_id": deployment.deploy_id,
+                "public_url": deployment.public_url,
+            }
+        )
+
     def delete_asset(project_id: str, asset_name: str) -> Response:
         identifier = _project_id(project_id)
         with project_lock:
@@ -487,6 +587,9 @@ def create_app(
     )
     app.add_api_route(
         "/api/v1/projects/{project_id}/exports/zip", export_site_zip, methods=["POST"]
+    )
+    app.add_api_route(
+        "/api/v1/projects/{project_id}/deployments/netlify", deploy_netlify, methods=["POST"]
     )
     app.add_api_route(
         "/api/v1/projects/{project_id}/assets/{asset_name}",
