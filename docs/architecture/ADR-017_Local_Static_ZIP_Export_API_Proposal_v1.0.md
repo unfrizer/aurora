@@ -1,14 +1,14 @@
 # AURORA — Local Static ZIP Export API Proposal v1.0
 
 Document ID: ADR-017
-Status: DRAFT — Architecture Authority decision required
+Status: APPROVED — Architecture Authority approved ZX-01–ZX-05
 Date: 2026-10-09
 Proposed module: P6-004 — Local Static ZIP Export API
 Repository baseline: 9bd669979be0513fb8b541de647d3fc8ce39fb9f
 
 ## Decision boundary
 
-This is a proposal, not code or implementation authority. ADR-002
+This decision authorizes compilation of the exact PC-011 implementation contract. ADR-002
 requires a downloadable static site, and P4 already produces a
 deterministic ZIP from a typed build. P6-003 can preview a saved editor
 site, but no approved P6 contract may expose a ZIP through HTTP.
@@ -137,9 +137,11 @@ P4 exporter remains directly usable by approved application callers;
 this proposal adds only a browser-facing ZIP download path. Passing
 P6-004 alone does not meet ADR-002 usable-Windows acceptance.
 
-## Decision requested
+## Approval record
 
-The Architecture Authority must approve, revise or reject ZX-01–ZX-05
-before PC-011 is compiled or P6-004 code begins. This DRAFT is not an
-approval and is not a substitute for the missing full architecture
-volumes or an invented public contract.
+On 2026-10-09 the Architecture Authority replied «полностью утверждаю,
+дальше» to the request to approve ADR-017 ZX-01–ZX-05. All five decisions
+are approved without amendment. PC-011 compiles their exact P6-004
+implementation boundary. This approval does not replace the missing full
+architecture volumes, waive latest-head validation, or approve a later
+implementation PR before its required review and checks.
