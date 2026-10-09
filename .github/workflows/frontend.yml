@@ -1,0 +1,42 @@
+name: Frontend
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  workspace:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Check launcher-compatible bundle
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath dist/index.html -PathType Leaf)) { throw 'Missing index.html' }
+          $files = Get-ChildItem -LiteralPath dist -Recurse -File
+          foreach ($file in $files) {
+            $relative = $file.FullName.Substring((Resolve-Path -LiteralPath dist).Path.Length + 1).Replace('\', '/')
+            if ($relative -eq 'index.html') { continue }
+            if ($relative -notmatch '^assets/[A-Za-z0-9._-]+\.(js|css|png|jpg|jpeg|gif|webp|ico|woff|woff2)$') {
+              throw "Unsupported UI asset: $relative"
+            }
+          }
