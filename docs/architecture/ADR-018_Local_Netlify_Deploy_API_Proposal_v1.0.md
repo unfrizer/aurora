@@ -1,7 +1,7 @@
 # AURORA — Local Netlify Deploy API Proposal v1.0
 
 Document ID: ADR-018
-Status: DRAFT — Architecture Authority decision required
+Status: APPROVED — Architecture Authority approved ND-01–ND-05
 Date: 2026-10-09
 Proposed module: P6-005 — Local Netlify Deploy API
 Repository baseline: 8877bc9cd219e950c2b8c8f5ce6b44e85af3a35b
@@ -19,7 +19,7 @@ completed external side effect. This proposal supplies those decisions
 without changing L0–L8, P1/P2/P4/P5/P7 ownership or the public P5 API.
 
 The full Architecture Freeze v1.0 and Master Pack v1.1 are not present
-in this checkout. This DRAFT cannot substitute for them or authorize code.
+in this checkout. This decision does not substitute for them.
 The proposed decisions ND-01–ND-05 form one separate P6 module task.
 No real Netlify request, token read, site creation or deploy occurs while
 preparing or testing the proposal.
@@ -162,9 +162,13 @@ workspace, Windows launcher, structured one-prompt/image generation or
 global settings is authorized here. P6-005 alone does not meet the
 ADR-002 usable-Windows acceptance path.
 
-## Decision requested
+## Approval record
 
-The Architecture Authority must approve, revise or reject ND-01–ND-05,
-especially the route-limited PC-006 recovery-envelope exception and
-the no-automatic-retry/unknown-ID limitation. Until then this document
-is DRAFT. No PC-012 compilation or P6-005 implementation is authorized.
+On 2026-10-09 the Architecture Authority replied «полностью утверждаю,
+дальше» to the request to approve ND-01–ND-05, specifically including
+the route-limited PC-006 recovery-envelope exception and the
+no-automatic-retry/unknown-ID limitation. All five decisions are
+approved without amendment. PC-012 compiles their exact P6-005
+implementation boundary; the separate module and latest-head review
+gates remain in force. This approval does not authorize a real deploy
+or waive any user-data, credential or network safety rule.

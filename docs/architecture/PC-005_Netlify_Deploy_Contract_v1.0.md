@@ -147,3 +147,12 @@ Run Ruff, strict Windows/Linux Pyright, full discovered Pytest and bounded
 smoke. Review the exact diff and latest-head hosted CI when publishing. After
 one P5 module report, STOP for Tech Lead review. PR/merge may follow ADR-003
 only with its conditions; it never implies an actual production deploy.
+
+## Approved P6-005 public-gateway consumer admission
+
+ADR-018 ND-01–ND-05 and PC-012 approve a separate P6 local HTTP
+composition task. The existing P5 public gateway may be imported by
+src/local_api/app.py for NetlifyDeployer and NetlifyDeployError only.
+P5 production, API, network rules, error model, staging and ownership
+do not change. P6 never imports P5 private modules. No P5 source or
+existing P5 test changes are authorized in P6-005.
