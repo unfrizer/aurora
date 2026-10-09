@@ -24,6 +24,10 @@ class SaveEditorBody(RequestBody):
     expected_updated_at: str
 
 
+class ExportZipBody(RequestBody):
+    expected_updated_at: str
+
+
 class CredentialBody(RequestBody):
     secret: SecretStr = Field(repr=False)
 
