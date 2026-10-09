@@ -139,6 +139,7 @@ def test_p6_imports_only_approved_application_gateways() -> None:
     allowed = {
         "src.core.exceptions",
         "src.credentials",
+        "src.deployment",
         "src.editor",
         "src.generation",
         "src.local_api",
