@@ -38,10 +38,12 @@ from src.local_api.schemas import (
     CredentialBody,
     DeployNetlifyBody,
     ExportZipBody,
+    ProjectDraftGenerationBody,
     SaveEditorBody,
     SaveProjectBody,
     TextGenerationBody,
 )
+from src.project_generation import ProjectDraftGenerator, ProjectDraftOutcome, ProjectDraftRequest
 from src.projects import ProjectDocument, ProjectRepository
 from src.site_export import (
     SiteExportError,
@@ -88,6 +90,13 @@ def _project_id(value: str) -> str:
         raise HTTPException(status_code=400) from None
 
 
+def _canonical_project_id(value: str) -> str:
+    identifier = _project_id(value)
+    if identifier != value:
+        raise HTTPException(status_code=400)
+    return identifier
+
+
 def _canonical_site_id(value: str | None) -> None:
     if value is None:
         return
@@ -115,6 +124,17 @@ def _name(value: str) -> str:
         raise HTTPException(status_code=400)
     try:
         value.encode("utf-8")
+    except UnicodeError:
+        raise HTTPException(status_code=400) from None
+    return value
+
+
+def _draft_project_name(value: str) -> str:
+    if type(value) is not str or not value.strip():
+        raise HTTPException(status_code=400)
+    try:
+        if len(value.encode("utf-8")) > 256:
+            raise HTTPException(status_code=400)
     except UnicodeError:
         raise HTTPException(status_code=400) from None
     return value
@@ -167,6 +187,32 @@ def _job(job: GenerationJob) -> dict[str, object]:
             "retryable": failure.retryable,
         },
     }
+
+
+def _draft_candidate(outcome: ProjectDraftOutcome, source_updated_at: str) -> JSONResponse:
+    failure = outcome.failure
+    return JSONResponse(
+        content={
+            "job_id": outcome.job_id,
+            "status": outcome.status,
+            "source_updated_at": source_updated_at,
+            "editor": None
+            if outcome.document is None
+            else save_editor_state({}, outcome.document)["editor"],
+            "failure": None
+            if failure is None
+            else {
+                "category": failure.category,
+                "message": failure.message,
+                "retryable": failure.retryable,
+            },
+        },
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "same-origin",
+        },
+    )
 
 
 def create_app(
@@ -570,6 +616,40 @@ def create_app(
             raise HTTPException(status_code=400) from None
         return _job(job)
 
+    def generate_project_draft(project_id: str, body: ProjectDraftGenerationBody) -> Response:
+        with project_lock:
+            identifier = _canonical_project_id(project_id)
+            try:
+                current = ProjectRepository(project_root).load(identifier)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            if current.metadata.updated_at != body.expected_updated_at:
+                raise HTTPException(status_code=409)
+            try:
+                existing_editor = load_editor_state(current.state)
+            except EditorStateError:
+                raise HTTPException(status_code=400) from None
+            if existing_editor is not None:
+                raise HTTPException(status_code=409)
+            project_name = _draft_project_name(current.metadata.name)
+            source_updated_at = current.metadata.updated_at
+            key = credential_store.get_secret("openai_api_key")
+            if key is None:
+                raise HTTPException(status_code=409)
+        try:
+            client = OpenAIResponsesClient(key)
+        except GenerationConfigurationError:
+            raise HTTPException(status_code=503) from None
+        outcome = ProjectDraftGenerator(client).generate(
+            ProjectDraftRequest(
+                project_name=project_name,
+                business_prompt=body.business_prompt,
+                language=body.language,
+                model=body.model,
+            )
+        )
+        return _draft_candidate(outcome, source_updated_at)
+
     app.add_api_route("/api/v1/health", health, methods=["GET"])
     app.add_api_route("/api/v1/projects", list_projects, methods=["GET"])
     app.add_api_route("/api/v1/projects", create_project, methods=["POST"], status_code=201)
@@ -608,6 +688,9 @@ def create_app(
         "/api/v1/credentials/{name}", delete_credential, methods=["DELETE"], status_code=204
     )
     app.add_api_route("/api/v1/generation/text", generate_text, methods=["POST"])
+    app.add_api_route(
+        "/api/v1/projects/{project_id}/generation/draft", generate_project_draft, methods=["POST"]
+    )
     return app
 
 

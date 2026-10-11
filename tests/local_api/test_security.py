@@ -145,6 +145,7 @@ def test_p6_imports_only_approved_application_gateways() -> None:
         "src.local_api",
         "src.local_api.app",
         "src.local_api.schemas",
+        "src.project_generation",
         "src.projects",
         "src.site_export",
     }
