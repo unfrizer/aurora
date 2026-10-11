@@ -43,6 +43,40 @@ class DeployNetlifyBody(RequestBody):
         return True
 
 
+class ProjectDraftGenerationBody(RequestBody):
+    business_prompt: str = Field(repr=False)
+    language: Literal["ru", "en"]
+    model: str
+    expected_updated_at: str
+    confirm_generation: Literal[True]
+
+    @field_validator("business_prompt", mode="before")
+    @classmethod
+    def _valid_business_prompt(cls, value: object) -> str:
+        if type(value) is not str or not value.strip():
+            raise ValueError("A nonblank business prompt is required.")
+        try:
+            if len(value.encode("utf-8")) > 8 * 1024:
+                raise ValueError("The business prompt is too large.")
+        except UnicodeError:
+            raise ValueError("A UTF-8 business prompt is required.") from None
+        return value
+
+    @field_validator("model", mode="before")
+    @classmethod
+    def _valid_model(cls, value: object) -> str:
+        if type(value) is not str or not value.strip():
+            raise ValueError("A nonblank model is required.")
+        return value
+
+    @field_validator("confirm_generation", mode="before")
+    @classmethod
+    def _require_literal_true(cls, value: object) -> Literal[True]:
+        if value is not True:
+            raise ValueError("Explicit confirmation is required.")
+        return True
+
+
 class CredentialBody(RequestBody):
     secret: SecretStr = Field(repr=False)
 

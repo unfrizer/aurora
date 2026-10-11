@@ -118,4 +118,20 @@ def test_exact_module_files_and_public_application_imports_only() -> None:
                 assert node.func.id != "print"
     for path in (root / "src").rglob("*.py"):
         if package not in path.parents:
-            assert "src.project_generation" not in path.read_text(encoding="utf-8")
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            imports = [
+                node.module
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom)
+                and node.module is not None
+                and node.module.startswith("src.project_generation")
+            ]
+            imports.extend(
+                alias.name
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Import)
+                for alias in node.names
+                if alias.name.startswith("src.project_generation")
+            )
+            expected = ["src.project_generation"] if path == root / "src/local_api/app.py" else []
+            assert imports == expected, path
