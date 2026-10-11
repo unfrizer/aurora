@@ -164,6 +164,7 @@ def test_import_dag_and_no_higher_or_lower_owner_changes() -> None:
         root / "src" / "deployment" / "netlify.py",
         root / "src" / "editor" / "projection.py",
         root / "src" / "local_api" / "app.py",
+        root / "src" / "project_generation" / "service.py",
     }
     for path in (root / "src").rglob("*.py"):
         if package in path.parents:
