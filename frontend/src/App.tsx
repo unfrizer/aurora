@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, createProject, deleteProject, listProjects, openProject, renameProject, saveEditor } from './api';
+import { ApiError, createProject, deleteProject, generateProjectDraft, listProjects, openProject, renameProject, saveEditor } from './api';
 import { DEFAULT_MODEL } from './config';
 import { blankEditor } from './editor';
 import { t } from './i18n';
-import type { EditorDocument, Language, ProjectDocument, ProjectMetadata } from './types';
-import { parseEditor } from './types';
+import type { DraftResult, EditorDocument, Language, ProjectDocument, ProjectMetadata } from './types';
+import { parseEditor, validDraftInputs } from './types';
 import { ExportDeploy } from './components/ExportDeploy';
 import { Onboarding } from './components/Onboarding';
 import { Projects } from './components/Projects';
+import { ProjectGeneration } from './components/ProjectGeneration';
 import { Settings } from './components/Settings';
 import { Workspace } from './components/Workspace';
 
-type Screen = 'projects' | 'workspace' | 'settings' | 'export';
+type Screen = 'projects' | 'workspace' | 'settings' | 'export' | 'generation';
 
 function message(error: unknown, language: Language): string {
   if (error instanceof ApiError) {
@@ -38,6 +39,12 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState('');
+  const [generationPrompt, setGenerationPrompt] = useState('');
+  const [candidate, setCandidate] = useState<Extract<DraftResult, { status: 'completed' }> | null>(null);
+  const [generationFailure, setGenerationFailure] = useState<Extract<DraftResult, { status: 'failed' }> | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [generationConflict, setGenerationConflict] = useState(false);
   const docRef = useRef<ProjectDocument | null>(null);
   const editorRef = useRef<EditorDocument | null>(null);
   const dirtyRef = useRef(false);
@@ -54,17 +61,18 @@ export default function App() {
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (dirtyRef.current) { event.preventDefault(); event.returnValue = ''; }
+      if (dirtyRef.current || generating || accepting || candidate) { event.preventDefault(); event.returnValue = ''; }
     };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, []);
+  }, [generating, accepting, candidate]);
 
   function setDocument(document: ProjectDocument, loadedEditor: EditorDocument | null, bad = false) {
     docRef.current = document; editorRef.current = loadedEditor;
     setActive(document); setEditor(loadedEditor); setEditorError(bad);
     dirtyRef.current = false; blockedRef.current = false;
     setDirty(false); setError(''); revisionRef.current = 0;
+    setCandidate(null); setGenerationFailure(null); setGenerationConflict(false); setGenerationPrompt('');
   }
 
   async function refresh() { setProjects(await listProjects()); }
@@ -91,6 +99,70 @@ export default function App() {
       setDocument(document, null); await refresh(); setScreen('workspace');
     } catch (reason) { onError(reason); }
     finally { setBusy(false); }
+  }
+
+  async function runDraft(document: ProjectDocument, prompt: string) {
+    if (!language || !validDraftInputs(document.metadata.name, prompt, model)) return;
+    setGenerationPrompt(prompt); setCandidate(null); setGenerationFailure(null);
+    setGenerationConflict(false); setError(''); setScreen('generation'); setGenerating(true);
+    try {
+      const result = await generateProjectDraft(
+        document.metadata.project_id, prompt, language, model, document.metadata.updated_at,
+      );
+      if (result.status === 'completed') setCandidate(result);
+      else setGenerationFailure(result);
+    } catch (reason) { onError(reason); }
+    finally { setGenerating(false); }
+  }
+
+  async function generateNew(name: string, prompt: string) {
+    if (!language || !validDraftInputs(name, prompt, model)) { setError(t(lang, 'error400')); return; }
+    if (!window.confirm(t(lang, 'generationConfirm'))) return;
+    setBusy(true);
+    try {
+      const document = await createProject(name);
+      setDocument(document, null); setScreen('generation');
+      try { await refresh(); } catch (reason) { onError(reason); }
+      await runDraft(document, prompt);
+    } catch (reason) { onError(reason); }
+    finally { setBusy(false); }
+  }
+
+  async function generateExisting() {
+    const document = docRef.current;
+    if (!document || editorRef.current || editorError ||
+        !validDraftInputs(document.metadata.name, generationPrompt, model)) return;
+    if (!window.confirm(t(lang, 'generationConfirm'))) return;
+    await runDraft(document, generationPrompt);
+  }
+
+  async function acceptDraft() {
+    const draft = candidate;
+    const document = docRef.current;
+    if (!draft || !document || accepting || generationConflict) return;
+    setAccepting(true);
+    try {
+      const saved = await saveEditor(document.metadata.project_id, draft.editor, draft.source_updated_at);
+      if (saved.metadata.project_id !== document.metadata.project_id) throw new Error('Invalid saved project');
+      const loaded = parseEditor(saved.state.editor);
+      setDocument(saved, loaded); setScreen('workspace'); await refresh();
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.status === 409) setGenerationConflict(true);
+      onError(reason);
+    } finally { setAccepting(false); }
+  }
+
+  function discardDraft() {
+    if (candidate && !window.confirm(t(lang, 'discardConfirm'))) return;
+    setCandidate(null); setGenerationFailure(null); setGenerationConflict(false);
+    setGenerationPrompt(''); setScreen('workspace');
+  }
+
+  async function reloadGeneration() {
+    const id = docRef.current?.metadata.project_id;
+    if (!id || (candidate && !window.confirm(t(lang, 'discardConfirm')))) return;
+    setCandidate(null); setGenerationFailure(null); setGenerationConflict(false);
+    await open(id);
   }
 
   async function remove(id: string): Promise<boolean> {
@@ -166,32 +238,44 @@ export default function App() {
   }
 
   async function navigate(next: Screen) {
+    if (busy || generating || accepting) return;
     await queueRef.current;
     if (dirtyRef.current && !window.confirm(t(lang, 'leaveConfirm'))) return;
+    if (candidate && next !== 'generation') {
+      if (!window.confirm(t(lang, 'discardConfirm'))) return;
+      setCandidate(null); setGenerationFailure(null); setGenerationConflict(false);
+      setGenerationPrompt('');
+    }
     if (next === 'export' && !(await flush())) return;
     if (next === 'projects') try { await refresh(); } catch (reason) { onError(reason); }
     setScreen(next);
   }
 
   return <div className="app-shell">
-    <header className="topbar"><button className="brandmark" onClick={() => void navigate('projects')}>✦ <span>AURORA</span></button>
+    <header className="topbar"><button className="brandmark" disabled={busy || generating || accepting} onClick={() => void navigate('projects')}>✦ <span>AURORA</span></button>
       <nav aria-label="Main navigation">
-        <button className={screen === 'projects' ? 'active' : ''} onClick={() => void navigate('projects')}>{t(lang, 'projects')}</button>
-        {active && <button className={screen === 'workspace' ? 'active' : ''} onClick={() => void navigate('workspace')}>{t(lang, 'workspace')}</button>}
-        {active && editor && <button className={screen === 'export' ? 'active' : ''} onClick={() => void navigate('export')}>{t(lang, 'export')}</button>}
-        <button className={screen === 'settings' ? 'active' : ''} onClick={() => void navigate('settings')}>{t(lang, 'settings')}</button>
+        <button disabled={busy || generating || accepting} className={screen === 'projects' ? 'active' : ''} onClick={() => void navigate('projects')}>{t(lang, 'projects')}</button>
+        {active && <button disabled={busy || generating || accepting} className={screen === 'workspace' ? 'active' : ''} onClick={() => void navigate('workspace')}>{t(lang, 'workspace')}</button>}
+        {active && editor && <button disabled={busy || generating || accepting} className={screen === 'export' ? 'active' : ''} onClick={() => void navigate('export')}>{t(lang, 'export')}</button>}
+        <button disabled={busy || generating || accepting} className={screen === 'settings' ? 'active' : ''} onClick={() => void navigate('settings')}>{t(lang, 'settings')}</button>
       </nav>
-      <button className="guide-link" onClick={() => setGuide(true)}>{t(lang, 'onboarding')}</button>
+      <button className="guide-link" disabled={busy || generating || accepting} onClick={() => setGuide(true)}>{t(lang, 'onboarding')}</button>
     </header>
     {error && <div className="error-banner" role="alert">{error}<button aria-label={t(lang, 'close')} onClick={() => setError('')}>×</button></div>}
-    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} onCreate={create} onOpen={open} onDelete={remove} />}
+    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onGenerate={generateNew} onOpen={open} onDelete={remove} />}
+    {screen === 'generation' && active && <ProjectGeneration language={lang} projectName={active.metadata.name}
+      model={model} prompt={generationPrompt} candidate={candidate} failure={generationFailure}
+      pending={generating} accepting={accepting} conflict={generationConflict}
+      onPrompt={setGenerationPrompt} onGenerate={() => void generateExisting()}
+      onAccept={() => void acceptDraft()} onDiscard={discardDraft} onReload={() => void reloadGeneration()} />}
     {screen === 'workspace' && active && (editorError
       ? <main className="empty-workspace"><h1>{active.metadata.name}</h1><p role="alert">{t(lang, 'badEditor')}</p><button onClick={() => void reload()}>{t(lang, 'reload')}</button></main>
       : editor
         ? <Workspace language={lang} projectId={active.metadata.project_id} projectName={active.metadata.name} editor={editor}
             model={model} dirty={dirty} saving={saving} onCommit={commit} onFlush={flush} onRename={rename} onReload={reload} onError={onError} />
         : <main className="empty-workspace"><span className="eyebrow">NEW WORKSPACE</span><h1>{active.metadata.name}</h1>
-            <p>{t(lang, 'noGeneration')}</p><button className="primary" disabled={busy} onClick={() => void startBlank()}>{t(lang, 'blank')}</button></main>)}
+            <p>{t(lang, 'noGeneration')}</p><div className="actions"><button className="primary" disabled={busy} onClick={() => { setGenerationPrompt(''); setScreen('generation'); }}>{t(lang, 'generateDraft')}</button>
+              <button disabled={busy} onClick={() => void startBlank()}>{t(lang, 'blank')}</button></div></main>)}
     {screen === 'settings' && <Settings language={lang} onLanguage={setLanguage} model={model} onModel={setModel} onError={onError} />}
     {screen === 'export' && active && editor && <ExportDeploy language={lang} projectId={active.metadata.project_id} ready={flush} onError={onError} />}
     {guide && <Onboarding language={language} onLanguage={setLanguage} onClose={() => setGuide(false)} />}

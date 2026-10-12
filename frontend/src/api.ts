@@ -1,7 +1,8 @@
 import { MAX_RASTER_BYTES, RASTER_TYPES } from './config';
 import {
-  parseDeployment, parseEditor, parseMetadata, parseProject, parseTextResult, record,
-  type DeploymentResult, type EditorDocument, type ProjectDocument, type ProjectMetadata, type TextResult,
+  parseDeployment, parseDraftResult, parseEditor, parseMetadata, parseProject, parseTextResult, record,
+  type DeploymentResult, type DraftResult, type EditorDocument, type Language,
+  type ProjectDocument, type ProjectMetadata, type TextResult,
 } from './types';
 
 const ROOT = '/api/v1';
@@ -97,6 +98,15 @@ export async function deleteCredential(name: CredentialName): Promise<void> {
 
 export async function generateText(model: string, prompt: string, instructions: string): Promise<TextResult> {
   return parseTextResult(await json('/generation/text', 'POST', { model, prompt, instructions }));
+}
+
+export async function generateProjectDraft(
+  projectId: string, businessPrompt: string, language: Language, model: string, expected: string,
+): Promise<DraftResult> {
+  const value = await json(`${projectPath(projectId)}/generation/draft`, 'POST', {
+    business_prompt: businessPrompt, language, model, expected_updated_at: expected, confirm_generation: true,
+  });
+  return parseDraftResult(value, expected, language);
 }
 
 export async function uploadRaster(projectId: string, file: File): Promise<string> {

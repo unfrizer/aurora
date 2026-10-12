@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, createProject, credentialStatus, deployNetlify, exportZip, generateText, saveEditor, setCredential, uploadRaster } from '../src/api';
+import { ApiError, createProject, credentialStatus, deployNetlify, exportZip, generateProjectDraft, generateText, saveEditor, setCredential, uploadRaster } from '../src/api';
 import { blankEditor } from '../src/editor';
 
 const id = '00000000-0000-4000-8000-000000000001';
@@ -81,5 +81,44 @@ describe('same-origin P6 client', () => {
     expect(JSON.parse((mock.mock.calls[2] as [string, RequestInit])[1].body as string)).toEqual({
       expected_updated_at: 'then', confirm_deploy: true, site_id: null,
     });
+  });
+
+  it('sends exactly one confirmed same-origin project draft request and parses the candidate', async () => {
+    const editor = blankEditor('Studio', 'en');
+    const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      job_id: id, status: 'completed', source_updated_at: 'then', editor, failure: null,
+    })));
+    vi.stubGlobal('fetch', mock);
+    const result = await generateProjectDraft(id, '  private prompt  ', 'en', 'configured-model', 'then');
+    expect(result.status).toBe('completed');
+    expect(result.editor).toEqual(editor);
+    expect(mock).toHaveBeenCalledTimes(1);
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/v1/projects/${id}/generation/draft`);
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'X-Aurora-Request': '1', 'Content-Type': 'application/json' });
+    expect(JSON.parse(init.body as string)).toEqual({ business_prompt: '  private prompt  ',
+      language: 'en', model: 'configured-model', expected_updated_at: 'then', confirm_generation: true });
+    expect(init.body).not.toContain('api_key');
+  });
+
+  it('rejects failed terminal snapshots with malformed fields and never saves them', async () => {
+    const result = { job_id: id, status: 'failed', source_updated_at: 'then', editor: null,
+      failure: { category: 'network', message: 'Safe message', retryable: true } };
+    const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify(result)));
+    vi.stubGlobal('fetch', mock);
+    expect((await generateProjectDraft(id, 'prompt', 'ru', 'm', 'then')).status).toBe('failed');
+    for (const malformed of [
+      { ...result, source_updated_at: 'wrong' },
+      { ...result, failure: { ...result.failure, category: 'private' } },
+      { ...result, failure: { ...result.failure, raw: 'secret' } },
+      { ...result, editor: blankEditor('Studio', 'ru') },
+      { ...result, job_id: 'not-uuid' },
+      { ...result, extra: 'private' },
+    ]) {
+      mock.mockResolvedValueOnce(new Response(JSON.stringify(malformed)));
+      await expect(generateProjectDraft(id, 'prompt', 'ru', 'm', 'then')).rejects.toThrow();
+    }
   });
 });

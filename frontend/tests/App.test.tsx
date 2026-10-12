@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   renameProject: vi.fn(), deleteProject: vi.fn(), credentialStatus: vi.fn(),
   setCredential: vi.fn(), deleteCredential: vi.fn(), exportZip: vi.fn(), deployNetlify: vi.fn(),
   generateText: vi.fn(), uploadRaster: vi.fn(), deleteRaster: vi.fn(),
+  generateProjectDraft: vi.fn(),
 }));
 
 vi.mock('../src/api', async (original) => ({ ...(await original<typeof import('../src/api')>()), ...mocks }));
@@ -43,6 +44,8 @@ beforeEach(() => {
   mocks.deleteCredential.mockResolvedValue(undefined);
   mocks.renameProject.mockImplementation(async (doc: ProjectDocument, name: string) => ({ ...doc, metadata: { ...doc.metadata, name } }));
   mocks.deleteProject.mockResolvedValue(undefined);
+  mocks.generateProjectDraft.mockResolvedValue({ job_id: id, status: 'completed',
+    source_updated_at: metadata.updated_at, editor: blankEditor('Studio', 'en'), failure: null });
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -219,6 +222,145 @@ describe('workspace flow', () => {
     await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(mocks.deleteRaster).toHaveBeenCalledWith(id, `${'a'.repeat(64)}.png`));
     expect((mocks.saveEditor.mock.calls[1]?.[1] as EditorDocument).pages[0]?.sections[0]?.image_path).toBeNull();
+  });
+});
+
+describe('one-prompt project draft', () => {
+  it('requires per-attempt confirmation, reviews unsaved text, then accepts with the source timestamp', async () => {
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirm);
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
+      { target: { value: '  Make a studio site  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
+    expect(await screen.findByRole('heading', { name: 'Review draft' })).toBeInTheDocument();
+    expect(mocks.createProject).toHaveBeenCalledWith('Studio');
+    expect(mocks.generateProjectDraft).toHaveBeenCalledWith(id, '  Make a studio site  ', 'en', 'gpt-5.6-terra', metadata.updated_at);
+    expect(mocks.createProject.mock.invocationCallOrder[0]).toBeLessThan(mocks.generateProjectDraft.mock.invocationCallOrder[0] ?? 0);
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(screen.getByText('Not saved')).toBeInTheDocument();
+    expect(screen.getByText('About')).toBeInTheDocument();
+    expect(screen.queryByTitle('Preview')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Accept and save' }));
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
+    expect(mocks.saveEditor).toHaveBeenCalledWith(id, expect.objectContaining({ schema_version: 1 }), metadata.updated_at);
+    expect(await screen.findByText('CONTENT BLOCKS')).toBeInTheDocument();
+  });
+
+  it('keeps the created empty project on generation error and offers deliberate retry', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    mocks.generateProjectDraft.mockRejectedValue(new ApiError(503));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.change(screen.getByLabelText('Describe your business in one prompt'), { target: { value: 'A studio' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
+    await waitFor(() => expect(mocks.generateProjectDraft).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('button', { name: 'Generate from prompt' })).toBeInTheDocument();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.deleteProject).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace' }));
+    expect(await screen.findByRole('button', { name: 'Start blank site' })).toBeInTheDocument();
+  });
+
+  it('shows a terminal failure without saving and requires another click to retry', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    mocks.generateProjectDraft.mockResolvedValueOnce({ job_id: id, status: 'failed',
+      source_updated_at: metadata.updated_at, editor: null,
+      failure: { category: 'rate_limited', message: 'Safe message', retryable: true } });
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.change(screen.getByLabelText('Describe your business in one prompt'), { target: { value: 'A studio' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('rate_limited');
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(mocks.generateProjectDraft).toHaveBeenCalledTimes(1);
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('retains the candidate after a 409 and never rebases its acceptance timestamp', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    mocks.saveEditor.mockRejectedValue(new ApiError(409));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.change(screen.getByLabelText('Describe your business in one prompt'), { target: { value: 'A studio' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept and save' }));
+    expect(await screen.findByText(/automatic overwrite is blocked/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept and save' })).toBeDisabled();
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+    expect(mocks.saveEditor.mock.calls[0]?.[2]).toBe(metadata.updated_at);
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace' }));
+    expect(await screen.findByRole('button', { name: 'Start blank site' })).toBeInTheDocument();
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('generates from an existing empty project without creating another', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    mocks.openProject.mockResolvedValue(empty);
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('NEW WORKSPACE');
+    const generate = screen.getByRole('button', { name: 'Generate from prompt' });
+    await waitFor(() => expect(generate).toBeEnabled());
+    fireEvent.click(generate);
+    fireEvent.change(await screen.findByLabelText('Describe your business in one prompt'), { target: { value: 'Studio site' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
+    expect(await screen.findByRole('heading', { name: 'Review draft' })).toBeInTheDocument();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows one honest pending state and warns on pending and unaccepted candidate unload', async () => {
+    let finish: ((value: unknown) => void) | undefined;
+    mocks.generateProjectDraft.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirm);
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.change(screen.getByLabelText('Describe your business in one prompt'), { target: { value: 'A studio' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
+    expect(await screen.findByText('Generating one draft…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Projects' })).toBeDisabled();
+    expect(screen.queryByText('Generating images')).not.toBeInTheDocument();
+    const pendingUnload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(pendingUnload);
+    expect(pendingUnload.defaultPrevented).toBe(true);
+    expect(mocks.generateProjectDraft).toHaveBeenCalledTimes(1);
+    finish?.({ job_id: id, status: 'completed', source_updated_at: metadata.updated_at,
+      editor: blankEditor('Studio', 'en'), failure: null });
+    expect(await screen.findByRole('heading', { name: 'Review draft' })).toBeInTheDocument();
+    const candidateUnload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(candidateUnload);
+    expect(candidateUnload.defaultPrevented).toBe(true);
+    confirm.mockReturnValue(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('heading', { name: 'Review draft' })).toBeInTheDocument();
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Discard draft' }));
+    expect(await screen.findByRole('button', { name: 'Start blank site' })).toBeInTheDocument();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.deleteProject).not.toHaveBeenCalled();
+  });
+
+  it('keeps RU language through request and candidate review without browser storage', async () => {
+    const storage = vi.spyOn(Storage.prototype, 'setItem');
+    mocks.generateProjectDraft.mockResolvedValue({ job_id: id, status: 'completed',
+      source_updated_at: metadata.updated_at, editor: blankEditor('Студия', 'ru'), failure: null });
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    await enter('ru');
+    fireEvent.change(screen.getByLabelText('Название проекта'), { target: { value: 'Студия' } });
+    fireEvent.change(screen.getByLabelText('Опишите бизнес одним запросом'), { target: { value: 'Сайт студии' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Создать из запроса' }));
+    expect(await screen.findByRole('heading', { name: 'Просмотр черновика' })).toBeInTheDocument();
+    expect(mocks.generateProjectDraft).toHaveBeenCalledWith(id, 'Сайт студии', 'ru', 'gpt-5.6-terra', metadata.updated_at);
+    expect(storage).not.toHaveBeenCalled();
+    storage.mockRestore();
   });
 });
 
