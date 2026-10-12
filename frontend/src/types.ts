@@ -54,6 +54,12 @@ export interface TextResult {
   failure: { category: string; message: string; retryable: boolean } | null;
 }
 
+export type DraftFailureCategory = 'authentication' | 'rate_limited' | 'remote' | 'network' | 'invalid_response';
+export type DraftResult =
+  | { job_id: string; status: 'completed'; source_updated_at: string; editor: EditorDocument; failure: null }
+  | { job_id: string; status: 'failed'; source_updated_at: string; editor: null;
+      failure: { category: DraftFailureCategory; message: string; retryable: boolean } };
+
 export interface DeploymentResult {
   site_id: string;
   deploy_id: string;
@@ -142,6 +148,38 @@ export function parseTextResult(value: unknown): TextResult {
     throw new Error('Invalid generation response');
   }
   return value as unknown as TextResult;
+}
+
+export function validDraftInputs(name: string, prompt: string, model: string): boolean {
+  try {
+    encodeURIComponent(name); encodeURIComponent(prompt); encodeURIComponent(model);
+    const encoder = new TextEncoder();
+    return !!name.trim() && encoder.encode(name).length <= 256 &&
+      !!prompt.trim() && encoder.encode(prompt).length <= 8 * 1024 && !!model.trim();
+  } catch { return false; }
+}
+
+export function parseDraftResult(value: unknown, expected: string, language: Language): DraftResult {
+  if (!record(value) || !keys(value, ['job_id', 'status', 'source_updated_at', 'editor', 'failure']) ||
+      !uuid(value.job_id) || value.source_updated_at !== expected) {
+    throw new Error('Invalid project draft response');
+  }
+  if (value.status === 'completed') {
+    if (value.failure !== null) throw new Error('Invalid project draft response');
+    const editor = parseEditor(value.editor);
+    if (editor.language !== language) throw new Error('Invalid project draft response');
+    return { job_id: value.job_id, status: 'completed', source_updated_at: expected, editor, failure: null };
+  }
+  if (value.status === 'failed' && value.editor === null && record(value.failure) &&
+      keys(value.failure, ['category', 'message', 'retryable']) &&
+      typeof value.failure.category === 'string' &&
+      ['authentication', 'rate_limited', 'remote', 'network', 'invalid_response'].includes(value.failure.category) &&
+      typeof value.failure.message === 'string' && typeof value.failure.retryable === 'boolean') {
+    return { job_id: value.job_id, status: 'failed', source_updated_at: expected, editor: null,
+      failure: { category: value.failure.category as DraftFailureCategory,
+        message: value.failure.message, retryable: value.failure.retryable } };
+  }
+  throw new Error('Invalid project draft response');
 }
 
 export function parseDeployment(value: unknown): DeploymentResult {

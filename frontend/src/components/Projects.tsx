@@ -1,18 +1,22 @@
 import { useState } from 'react';
 import { t } from '../i18n';
+import { validDraftInputs } from '../types';
 import type { Language, ProjectMetadata } from '../types';
 
 interface Props {
   language: Language;
   projects: ProjectMetadata[];
   busy: boolean;
+  model: string;
   onCreate: (name: string) => Promise<void>;
+  onGenerate: (name: string, prompt: string) => Promise<void>;
   onOpen: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<boolean>;
 }
 
-export function Projects({ language, projects, busy, onCreate, onOpen, onDelete }: Props) {
+export function Projects({ language, projects, busy, model, onCreate, onGenerate, onOpen, onDelete }: Props) {
   const [name, setName] = useState('');
+  const [prompt, setPrompt] = useState('');
   const [deleting, setDeleting] = useState<ProjectMetadata | null>(null);
   const [confirmation, setConfirmation] = useState('');
   return <main className="projects-page">
@@ -28,9 +32,12 @@ export function Projects({ language, projects, busy, onCreate, onOpen, onDelete 
         if (trimmed) void onCreate(trimmed);
       }}>
         <span className="eyebrow">NEW PROJECT</span>
-        <label>{t(language, 'projectName')}<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={120} /></label>
-        <button className="primary" disabled={busy || !name.trim()}>{t(language, 'create')}</button>
-        <small>{t(language, 'blank')}</small>
+        <label>{t(language, 'projectName')}<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
+        <label>{t(language, 'businessPrompt')}<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} /></label>
+        <div className="actions"><button disabled={busy || !name.trim()}>{t(language, 'create')}</button>
+          <button className="primary" type="button" disabled={busy || !validDraftInputs(name, prompt, model)}
+            onClick={() => void onGenerate(name, prompt)}>{t(language, 'generateDraft')}</button></div>
+        <small>{t(language, 'generationScope')}</small>
       </form>
       <section className="project-list" aria-label={t(language, 'projects')}>
         {projects.length === 0 && <p className="muted">{t(language, 'noProjects')}</p>}
