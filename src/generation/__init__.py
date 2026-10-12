@@ -1,5 +1,10 @@
-"""OpenAI text-generation application adapter for AURORA."""
+"""OpenAI text and image generation application adapters for AURORA."""
 
+from src.generation.image_models import (
+    ImageGenerationJob,
+    ImageGenerationRequest,
+    ImageGenerationResult,
+)
 from src.generation.models import (
     GenerationErrorCategory,
     GenerationFailure,
@@ -8,6 +13,7 @@ from src.generation.models import (
     GenerationResult,
 )
 from src.generation.openai_client import GenerationConfigurationError, OpenAIResponsesClient
+from src.generation.openai_image_client import OpenAIImageClient
 
 __all__ = [
     "GenerationConfigurationError",
@@ -16,5 +22,9 @@ __all__ = [
     "GenerationJob",
     "GenerationRequest",
     "GenerationResult",
+    "ImageGenerationJob",
+    "ImageGenerationRequest",
+    "ImageGenerationResult",
+    "OpenAIImageClient",
     "OpenAIResponsesClient",
 ]
