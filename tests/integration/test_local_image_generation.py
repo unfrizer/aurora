@@ -27,11 +27,15 @@ _JOB_ID = "a0000000-0000-4000-8000-000000000002"
 
 
 class _Store(WindowsCredentialStore):
+    def __init__(self) -> None:
+        self.reads = 0
+
     def set_secret(self, name: SecretName, secret: str) -> None:
         raise AssertionError("No real credential write")
 
     def get_secret(self, name: SecretName) -> str | None:
         assert name == "openai_api_key"
+        self.reads += 1
         return "synthetic-key"
 
     def delete_secret(self, name: SecretName) -> bool:
