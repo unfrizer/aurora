@@ -31,6 +31,9 @@ from src.generation import (
     GenerationConfigurationError,
     GenerationJob,
     GenerationRequest,
+    ImageGenerationJob,
+    ImageGenerationRequest,
+    OpenAIImageClient,
     OpenAIResponsesClient,
 )
 from src.local_api.schemas import (
@@ -38,6 +41,7 @@ from src.local_api.schemas import (
     CredentialBody,
     DeployNetlifyBody,
     ExportZipBody,
+    ImageGenerationBody,
     ProjectDraftGenerationBody,
     SaveEditorBody,
     SaveProjectBody,
@@ -199,6 +203,32 @@ def _draft_candidate(outcome: ProjectDraftOutcome, source_updated_at: str) -> JS
             "editor": None
             if outcome.document is None
             else save_editor_state({}, outcome.document)["editor"],
+            "failure": None
+            if failure is None
+            else {
+                "category": failure.category,
+                "message": failure.message,
+                "retryable": failure.retryable,
+            },
+        },
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "same-origin",
+        },
+    )
+
+
+def _image_generation_outcome(
+    job: ImageGenerationJob, source_updated_at: str, asset_path: str | None
+) -> JSONResponse:
+    failure = job.failure
+    return JSONResponse(
+        content={
+            "job_id": job.job_id,
+            "status": job.status,
+            "source_updated_at": source_updated_at,
+            "asset_path": asset_path,
             "failure": None
             if failure is None
             else {
@@ -650,6 +680,44 @@ def create_app(
         )
         return _draft_candidate(outcome, source_updated_at)
 
+    def generate_project_image(project_id: str, body: ImageGenerationBody) -> Response:
+        with project_lock:
+            identifier = _canonical_project_id(project_id)
+            repository = ProjectRepository(project_root)
+            try:
+                current = repository.load(identifier)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            if current.metadata.updated_at != body.expected_updated_at:
+                raise HTTPException(status_code=409)
+            source_updated_at = current.metadata.updated_at
+            key = credential_store.get_secret("openai_api_key")
+            if key is None:
+                raise HTTPException(status_code=409)
+        try:
+            client = OpenAIImageClient(key)
+        except GenerationConfigurationError:
+            raise HTTPException(status_code=503) from None
+        try:
+            job = client.generate(ImageGenerationRequest(model=body.model, prompt=body.prompt))
+        except GenerationConfigurationError:
+            raise HTTPException(status_code=400) from None
+        if job.status == "failed":
+            return _image_generation_outcome(job, source_updated_at, None)
+        result = job.result
+        if result is None:
+            raise HTTPException(status_code=500)
+        with project_lock:
+            repository = ProjectRepository(project_root)
+            try:
+                repository.load(identifier)
+                asset_path = repository.write_asset(identifier, result.data, "image/png")
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            except ValidationError:
+                raise HTTPException(status_code=400) from None
+        return _image_generation_outcome(job, source_updated_at, asset_path)
+
     app.add_api_route("/api/v1/health", health, methods=["GET"])
     app.add_api_route("/api/v1/projects", list_projects, methods=["GET"])
     app.add_api_route("/api/v1/projects", create_project, methods=["POST"], status_code=201)
@@ -690,6 +758,9 @@ def create_app(
     app.add_api_route("/api/v1/generation/text", generate_text, methods=["POST"])
     app.add_api_route(
         "/api/v1/projects/{project_id}/generation/draft", generate_project_draft, methods=["POST"]
+    )
+    app.add_api_route(
+        "/api/v1/projects/{project_id}/generation/image", generate_project_image, methods=["POST"]
     )
     return app
 
