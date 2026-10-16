@@ -81,6 +81,26 @@ class ProjectRepository:
     def load(self, project_id: str) -> ProjectDocument:
         return self._load_path(self._existing_path(project_id))
 
+    def export_directory(self, project_id: str) -> Path:
+        """Return this project's validated, existing export parent without writing."""
+        project = self._existing_path(project_id)
+        self._load_path(project)
+        directory = project / "exports"
+        try:
+            details = directory.lstat()
+        except FileNotFoundError:
+            raise ValidationError("Invalid project export directory.") from None
+        attributes = cast("int", getattr(details, "st_file_attributes", 0))
+        if (
+            not stat.S_ISDIR(details.st_mode)
+            or directory.is_symlink()
+            or directory.is_junction()
+            or attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT
+            or directory.resolve() != directory
+        ):
+            raise ValidationError("Invalid project export directory.")
+        return directory
+
     def list(self) -> tuple[ProjectMetadata, ...]:
         if not self._root.exists():
             return ()
