@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   setCredential: vi.fn(), deleteCredential: vi.fn(), exportZip: vi.fn(), deployNetlify: vi.fn(),
   generateText: vi.fn(), uploadRaster: vi.fn(), deleteRaster: vi.fn(),
   generateProjectDraft: vi.fn(),
+  generateImage: vi.fn(),
 }));
 
 vi.mock('../src/api', async (original) => ({ ...(await original<typeof import('../src/api')>()), ...mocks }));
@@ -46,6 +47,8 @@ beforeEach(() => {
   mocks.deleteProject.mockResolvedValue(undefined);
   mocks.generateProjectDraft.mockResolvedValue({ job_id: id, status: 'completed',
     source_updated_at: metadata.updated_at, editor: blankEditor('Studio', 'en'), failure: null });
+  mocks.generateImage.mockResolvedValue({ job_id: id, status: 'completed',
+    source_updated_at: '2026-10-09T02:00:00Z', asset_path: `assets/${'a'.repeat(64)}.png`, failure: null });
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -361,6 +364,41 @@ describe('one-prompt project draft', () => {
     expect(mocks.generateProjectDraft).toHaveBeenCalledWith(id, 'Сайт студии', 'ru', 'gpt-5.6-terra', metadata.updated_at);
     expect(storage).not.toHaveBeenCalled();
     storage.mockRestore();
+  });
+
+  it('keeps a separate session image model and locks workspace navigation while an image is pending or unreviewed', async () => {
+    let finish: ((result: unknown) => void) | undefined;
+    mocks.generateImage.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    const model = await screen.findByLabelText('OpenAI image model (this session only)');
+    expect(model).toHaveValue('gpt-image-2');
+    fireEvent.change(model, { target: { value: 'custom-image-model' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+    await screen.findByRole('heading', { name: 'Projects' });
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    const generate = screen.getAllByRole('button', { name: 'Generate image' });
+    fireEvent.click(generate[generate.length - 1]!);
+    const dialog = screen.getByRole('dialog', { name: 'Generate image' });
+    expect(screen.getByRole('button', { name: 'Export & deploy' })).toBeDisabled();
+    expect(document.querySelector('.workspace .canvas')).toHaveAttribute('inert');
+    fireEvent.change(within(dialog).getByLabelText('Describe the image'), { target: { value: 'Studio logo' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Generate image' }));
+    await waitFor(() => expect(mocks.generateImage).toHaveBeenCalledWith(id, 'Studio logo', 'custom-image-model', '2026-10-09T02:00:00Z'));
+    expect(screen.getByRole('button', { name: 'Projects' })).toBeDisabled();
+    const unload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+    finish?.({ job_id: id, status: 'completed', source_updated_at: '2026-10-09T02:00:00Z',
+      asset_path: `assets/${'a'.repeat(64)}.png`, failure: null });
+    await screen.findByText('Stored in project, not attached');
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Discard image' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Settings' })).toBeEnabled());
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.deleteRaster).not.toHaveBeenCalled();
   });
 });
 

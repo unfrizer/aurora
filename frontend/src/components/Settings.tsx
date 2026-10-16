@@ -10,6 +10,8 @@ interface Props {
   onLanguage: (value: Language) => void;
   model: string;
   onModel: (value: string) => void;
+  imageModel: string;
+  onImageModel: (value: string) => void;
   onError: (error: unknown) => void;
 }
 
@@ -37,7 +39,7 @@ function Secret({ name, label, language, onError }: { name: SecretName; label: s
   </div>;
 }
 
-export function Settings({ language, onLanguage, model, onModel, onError }: Props) {
+export function Settings({ language, onLanguage, model, onModel, imageModel, onImageModel, onError }: Props) {
   return <main className="settings-page">
     <span className="eyebrow">PREFERENCES / 02</span><h1>{t(language, 'settings')}</h1>
     <p className="muted">{t(language, 'settingsNote')}</p>
@@ -48,6 +50,7 @@ export function Settings({ language, onLanguage, model, onModel, onError }: Prop
         </select>
       </label>
       <label>{t(language, 'model')}<input value={model} onChange={(event) => onModel(event.target.value)} /></label>
+      <label>{t(language, 'imageModel')}<input value={imageModel} onChange={(event) => onImageModel(event.target.value)} /></label>
       <Secret name="openai_api_key" label={t(language, 'openai')} language={language} onError={onError} />
       <Secret name="netlify_token" label={t(language, 'netlify')} language={language} onError={onError} />
     </div>

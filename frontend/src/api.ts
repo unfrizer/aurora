@@ -1,7 +1,7 @@
 import { MAX_RASTER_BYTES, RASTER_TYPES } from './config';
 import {
-  parseDeployment, parseDraftResult, parseEditor, parseMetadata, parseProject, parseTextResult, record,
-  type DeploymentResult, type DraftResult, type EditorDocument, type Language,
+  parseDeployment, parseDraftResult, parseEditor, parseImageResult, parseMetadata, parseProject, parseTextResult, record,
+  type DeploymentResult, type DraftResult, type EditorDocument, type ImageResult, type Language,
   type ProjectDocument, type ProjectMetadata, type TextResult,
 } from './types';
 
@@ -107,6 +107,13 @@ export async function generateProjectDraft(
     business_prompt: businessPrompt, language, model, expected_updated_at: expected, confirm_generation: true,
   });
   return parseDraftResult(value, expected, language);
+}
+
+export async function generateImage(projectId: string, prompt: string, model: string, expected: string): Promise<ImageResult> {
+  const value = await json(`${projectPath(projectId)}/generation/image`, 'POST', {
+    prompt, model, expected_updated_at: expected, confirm_generation: true,
+  });
+  return parseImageResult(value, expected);
 }
 
 export async function uploadRaster(projectId: string, file: File): Promise<string> {

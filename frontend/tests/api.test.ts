@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, createProject, credentialStatus, deployNetlify, exportZip, generateProjectDraft, generateText, saveEditor, setCredential, uploadRaster } from '../src/api';
+import { ApiError, createProject, credentialStatus, deployNetlify, exportZip, generateImage, generateProjectDraft, generateText, saveEditor, setCredential, uploadRaster } from '../src/api';
 import { blankEditor } from '../src/editor';
 
 const id = '00000000-0000-4000-8000-000000000001';
@@ -119,6 +119,49 @@ describe('same-origin P6 client', () => {
     ]) {
       mock.mockResolvedValueOnce(new Response(JSON.stringify(malformed)));
       await expect(generateProjectDraft(id, 'prompt', 'ru', 'm', 'then')).rejects.toThrow();
+    }
+  });
+
+  it('sends one confirmed image request and accepts only the exact completed shape', async () => {
+    const path = `assets/${'a'.repeat(64)}.png`;
+    const result = { job_id: id, status: 'completed', source_updated_at: 'then', asset_path: path, failure: null };
+    const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify(result)));
+    vi.stubGlobal('fetch', mock);
+    expect((await generateImage(id, '  unchanged prompt  ', 'configured-image-model', 'then')).asset_path).toBe(path);
+    expect(mock).toHaveBeenCalledTimes(1);
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/v1/projects/${id}/generation/image`);
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.cache).toBe('no-store');
+    expect(init.headers).toEqual({ 'X-Aurora-Request': '1', 'Content-Type': 'application/json' });
+    expect(JSON.parse(init.body as string)).toEqual({ prompt: '  unchanged prompt  ', model: 'configured-image-model',
+      expected_updated_at: 'then', confirm_generation: true });
+    expect(init.body).not.toContain('api_key');
+    for (const bad of [
+      { ...result, source_updated_at: 'different' }, { ...result, asset_path: 'assets/a.png' },
+      { ...result, asset_path: path.replace('.png', '.jpg') }, { ...result, failure: { category: 'remote' } },
+      { ...result, extra: 'private' }, { ...result, job_id: 'bad-id' },
+    ]) {
+      mock.mockResolvedValueOnce(new Response(JSON.stringify(bad)));
+      await expect(generateImage(id, 'prompt', 'model', 'then')).rejects.toThrow();
+    }
+  });
+
+  it('accepts only a sanitized terminal image failure', async () => {
+    const result = { job_id: id, status: 'failed', source_updated_at: 'then', asset_path: null,
+      failure: { category: 'network', message: 'Safe failure', retryable: true } };
+    const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify(result)));
+    vi.stubGlobal('fetch', mock);
+    expect((await generateImage(id, 'prompt', 'model', 'then')).status).toBe('failed');
+    for (const bad of [
+      { ...result, asset_path: `assets/${'a'.repeat(64)}.png` },
+      { ...result, failure: { ...result.failure, category: 'private' } },
+      { ...result, failure: { ...result.failure, raw: 'secret' } },
+      { ...result, status: 'queued' },
+    ]) {
+      mock.mockResolvedValueOnce(new Response(JSON.stringify(bad)));
+      await expect(generateImage(id, 'prompt', 'model', 'then')).rejects.toThrow();
     }
   });
 });

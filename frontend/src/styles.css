@@ -9,3 +9,6 @@
 .generation-review .badge{justify-self:start}.generation-section{border-top:1px solid #e6e8f0;padding-top:1rem}
 .generation-section h3{font-size:1rem}.generation-section p{margin-bottom:0}
 @media(max-width:700px){.generation-page{width:calc(100% - 2rem);margin:1.5rem auto}}
+.image-dialog{width:min(620px,100%);max-height:calc(100vh - 2rem);overflow:auto}
+.image-dialog .image-candidate{width:100%;max-height:330px;object-fit:contain;background:#f4f5f9;border-radius:10px}
+.image-dialog .image-prompt-review{white-space:pre-wrap;overflow-wrap:anywhere;max-height:110px;overflow:auto}

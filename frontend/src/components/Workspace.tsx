@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { deleteRaster, previewUrl, rasterUrl, uploadRaster } from '../api';
 import { assetName, move, nextPageSlug, replacePage, replaceSection } from '../editor';
 import { t } from '../i18n';
-import type { EditorDocument, EditorPage, EditorSection, Language } from '../types';
+import type { EditorDocument, EditorPage, EditorSection, Language, ProjectDocument } from '../types';
+import { ImageGeneration, type ImageSnapshot, type ImageTarget } from './ImageGeneration';
 import { TextAssist } from './TextAssist';
 
 interface Props {
@@ -11,10 +12,14 @@ interface Props {
   projectName: string;
   editor: EditorDocument;
   model: string;
+  imageModel: string;
   dirty: boolean;
   saving: boolean;
   onCommit: (next: EditorDocument) => Promise<boolean>;
   onFlush: () => Promise<string | null>;
+  onImageSnapshot: () => Promise<ImageSnapshot | null>;
+  onImageDocument: (document: ProjectDocument, editor: EditorDocument) => void;
+  onImageLock: (locked: boolean) => void;
   onRename: (name: string) => Promise<boolean>;
   onReload: () => Promise<void>;
   onError: (error: unknown) => void;
@@ -40,8 +45,8 @@ function withSectionImage(editor: EditorDocument, pageId: string, sectionId: str
   return replaceSection(editor, pageId, { ...section, image_path: path });
 }
 
-export function Workspace({ language, projectId, projectName, editor, model, dirty, saving,
-  onCommit, onFlush, onRename, onReload, onError }: Props) {
+export function Workspace({ language, projectId, projectName, editor, model, imageModel, dirty, saving,
+  onCommit, onFlush, onImageSnapshot, onImageDocument, onImageLock, onRename, onReload, onError }: Props) {
   const [pageId, setPageId] = useState(editor.pages[0]?.id ?? '');
   const [sectionId, setSectionId] = useState('');
   const [leftOpen, setLeftOpen] = useState(true);
@@ -51,6 +56,7 @@ export function Workspace({ language, projectId, projectName, editor, model, dir
   const [newPage, setNewPage] = useState('');
   const [newSection, setNewSection] = useState('');
   const [rename, setRename] = useState(projectName);
+  const [imageDialog, setImageDialog] = useState<{ target: ImageTarget; label: string } | null>(null);
   const latestEditor = useRef(editor);
   latestEditor.current = editor;
   const page = editor.pages.find((item) => item.id === pageId) ?? editor.pages[0];
@@ -90,8 +96,18 @@ export function Workspace({ language, projectId, projectName, editor, model, dir
     if (timestamp && page) setPreview(`${previewUrl(projectId, page.slug)}?v=${encodeURIComponent(timestamp)}`);
   }
 
+  function startImage(target: ImageTarget, label: string) {
+    onImageLock(true);
+    setImageDialog({ target, label });
+  }
+
+  function closeImage() {
+    setImageDialog(null);
+    onImageLock(false);
+  }
+
   return <main className={`workspace ${leftOpen ? '' : 'left-collapsed'} ${rightOpen ? '' : 'right-collapsed'}`}>
-    <aside className="side left">
+    <aside className="side left" inert={imageDialog !== null}>
       <div className="side-head"><h2>{t(language, 'pages')}</h2><button aria-label={`Toggle ${t(language, 'pages')}`} onClick={() => setLeftOpen(!leftOpen)}>{leftOpen ? '‹' : '›'}</button></div>
       {leftOpen && <>
         <ol className="page-list">{editor.pages.map((item, index) => <li key={item.id} className={item.id === page?.id ? 'selected' : ''}>
@@ -111,7 +127,7 @@ export function Workspace({ language, projectId, projectName, editor, model, dir
         </form>
       </>}
     </aside>
-    <section className="canvas">
+    <section className="canvas" inert={imageDialog !== null}>
       <div className="canvas-toolbar"><div><span className="eyebrow">EDITOR / {page?.slug ?? '—'}</span><h1>{projectName}</h1></div>
         <div className="actions"><span className={`save-state ${dirty ? 'dirty' : ''}`} role="status">{saving ? t(language, 'saving') : dirty ? t(language, 'unsaved') : t(language, 'saved')}</span>
           <button onClick={() => void onFlush()}>{t(language, 'save')}</button>
@@ -140,6 +156,7 @@ export function Workspace({ language, projectId, projectName, editor, model, dir
               {item.image_path && <img className="asset-preview" src={rasterUrl(projectId, item.image_path)} alt={item.image_alt} />}
               <Field label={t(language, 'imageAlt')} value={item.image_alt} onCommit={(value) => changeSection({ ...item, image_alt: value })} />
               <div className="actions"><label className="file-button">{t(language, 'upload')}<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => void image(event.target.files?.[0], item.image_path, (current, path) => withSectionImage(current, page.id, item.id, path))} /></label>
+                <button onClick={() => startImage({ kind: 'section', pageId: page.id, sectionId: item.id }, `${page.title} / ${item.heading}`)}>{t(language, 'generateImage')}</button>
                 <button disabled={!item.image_path} onClick={() => void removeImage(item.image_path, (current, path) => withSectionImage(current, page.id, item.id, path))}>{t(language, 'removeImage')}</button></div>
             </article>)}
             <form className="add-form" onSubmit={(event) => { event.preventDefault(); if (!newSection.trim()) return;
@@ -153,7 +170,7 @@ export function Workspace({ language, projectId, projectName, editor, model, dir
         </div>}
       </>}
     </section>
-    <aside className="side right"><div className="side-head"><h2>{t(language, 'inspector')}</h2><button aria-label={`Toggle ${t(language, 'inspector')}`} onClick={() => setRightOpen(!rightOpen)}>{rightOpen ? '›' : '‹'}</button></div>
+    <aside className="side right" inert={imageDialog !== null}><div className="side-head"><h2>{t(language, 'inspector')}</h2><button aria-label={`Toggle ${t(language, 'inspector')}`} onClick={() => setRightOpen(!rightOpen)}>{rightOpen ? '›' : '‹'}</button></div>
       {rightOpen && <div className="inspector-content">
         <section className="card"><span className="eyebrow">PROJECT</span>
           <label className="field">{t(language, 'projectName')}<input value={rename} onChange={(event) => setRename(event.target.value)}
@@ -168,10 +185,14 @@ export function Workspace({ language, projectId, projectName, editor, model, dir
             <option value="system">System</option><option value="serif">Serif</option><option value="monospace">Monospace</option></select></label>
           {editor.brand.logo_path && <img className="asset-preview" src={rasterUrl(projectId, editor.brand.logo_path)} alt={editor.brand.name} />}
           <div className="actions"><label className="file-button">{t(language, 'logo')}<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => void image(event.target.files?.[0], editor.brand.logo_path, (current, path) => ({ ...current, brand: { ...current.brand, logo_path: path } }))} /></label>
+            <button onClick={() => startImage({ kind: 'logo' }, t(language, 'imageLogoTarget'))}>{t(language, 'generateImage')}</button>
             <button disabled={!editor.brand.logo_path} onClick={() => void removeImage(editor.brand.logo_path, (current, path) => ({ ...current, brand: { ...current.brand, logo_path: path } }))}>{t(language, 'removeImage')}</button></div>
         </section>
         {section && <TextAssist key={section.id} language={language} section={section} model={model} onAccept={(body) => changeSection({ ...section, body })} onError={onError} />}
       </div>}
     </aside>
+    {imageDialog && <ImageGeneration language={language} projectId={projectId} target={imageDialog.target}
+      targetLabel={imageDialog.label} model={imageModel} onSnapshot={onImageSnapshot}
+      onDocument={onImageDocument} onError={onError} onClose={closeImage} />}
   </main>;
 }

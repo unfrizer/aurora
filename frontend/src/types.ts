@@ -55,6 +55,10 @@ export interface TextResult {
 }
 
 export type DraftFailureCategory = 'authentication' | 'rate_limited' | 'remote' | 'network' | 'invalid_response';
+export type ImageResult =
+  | { job_id: string; status: 'completed'; source_updated_at: string; asset_path: string; failure: null }
+  | { job_id: string; status: 'failed'; source_updated_at: string; asset_path: null;
+      failure: { category: DraftFailureCategory; message: string; retryable: boolean } };
 export type DraftResult =
   | { job_id: string; status: 'completed'; source_updated_at: string; editor: EditorDocument; failure: null }
   | { job_id: string; status: 'failed'; source_updated_at: string; editor: null;
@@ -180,6 +184,36 @@ export function parseDraftResult(value: unknown, expected: string, language: Lan
         message: value.failure.message, retryable: value.failure.retryable } };
   }
   throw new Error('Invalid project draft response');
+}
+
+export function validImageInputs(prompt: string, model: string): boolean {
+  try {
+    encodeURIComponent(prompt); encodeURIComponent(model);
+    const encoder = new TextEncoder();
+    return !!prompt.trim() && encoder.encode(prompt).length <= 8 * 1024 && !!model.trim();
+  } catch { return false; }
+}
+
+export function parseImageResult(value: unknown, expected: string): ImageResult {
+  if (!record(value) || !keys(value, ['job_id', 'status', 'source_updated_at', 'asset_path', 'failure']) ||
+      !uuid(value.job_id) || value.source_updated_at !== expected) {
+    throw new Error('Invalid image generation response');
+  }
+  if (value.status === 'completed' && value.failure === null &&
+      typeof value.asset_path === 'string' && /^assets\/[a-f0-9]{64}\.png$/.test(value.asset_path)) {
+    return { job_id: value.job_id, status: 'completed', source_updated_at: expected,
+      asset_path: value.asset_path, failure: null };
+  }
+  if (value.status === 'failed' && value.asset_path === null && record(value.failure) &&
+      keys(value.failure, ['category', 'message', 'retryable']) &&
+      typeof value.failure.category === 'string' &&
+      ['authentication', 'rate_limited', 'remote', 'network', 'invalid_response'].includes(value.failure.category) &&
+      typeof value.failure.message === 'string' && typeof value.failure.retryable === 'boolean') {
+    return { job_id: value.job_id, status: 'failed', source_updated_at: expected, asset_path: null,
+      failure: { category: value.failure.category as DraftFailureCategory,
+        message: value.failure.message, retryable: value.failure.retryable } };
+  }
+  throw new Error('Invalid image generation response');
 }
 
 export function parseDeployment(value: unknown): DeploymentResult {
