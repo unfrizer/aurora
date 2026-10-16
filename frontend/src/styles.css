@@ -12,3 +12,9 @@
 .image-dialog{width:min(620px,100%);max-height:calc(100vh - 2rem);overflow:auto}
 .image-dialog .image-candidate{width:100%;max-height:330px;object-fit:contain;background:#f4f5f9;border-radius:10px}
 .image-dialog .image-prompt-review{white-space:pre-wrap;overflow-wrap:anywhere;max-height:110px;overflow:auto}
+.guided-page{width:min(960px,calc(100% - 3rem));margin:3.5rem auto;display:grid;gap:1.3rem}
+.guided-page>h1{margin:0}.guided-intro,.guided-plan{display:grid;gap:1rem}.guided-plan ol{display:grid;gap:.6rem;margin:0;padding-left:1.5rem}
+.guided-plan li{padding:.6rem;border-bottom:1px solid #e6e8f0;display:flex;justify-content:space-between;gap:1rem}
+.guided-plan li strong{color:#6860a5}.guided-current{border-top:1px solid #e6e8f0;padding-top:1rem;display:grid;gap:.65rem}
+.guided-current h2,.guided-current p{margin:0}.guided-prompt{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f5fa;padding:1rem;border-radius:9px}
+@media(max-width:700px){.guided-page{width:calc(100% - 2rem);margin:1.5rem auto}}

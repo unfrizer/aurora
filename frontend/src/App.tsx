@@ -6,13 +6,14 @@ import { t } from './i18n';
 import type { DraftResult, EditorDocument, Language, ProjectDocument, ProjectMetadata } from './types';
 import { parseEditor, validDraftInputs } from './types';
 import { ExportDeploy } from './components/ExportDeploy';
+import { GuidedImageCompletion } from './components/GuidedImageCompletion';
 import { Onboarding } from './components/Onboarding';
 import { Projects } from './components/Projects';
 import { ProjectGeneration } from './components/ProjectGeneration';
 import { Settings } from './components/Settings';
 import { Workspace } from './components/Workspace';
 
-type Screen = 'projects' | 'workspace' | 'settings' | 'export' | 'generation';
+type Screen = 'projects' | 'workspace' | 'settings' | 'export' | 'generation' | 'guided-images';
 
 function message(error: unknown, language: Language): string {
   if (error instanceof ApiError) {
@@ -148,7 +149,7 @@ export default function App() {
       const saved = await saveEditor(document.metadata.project_id, draft.editor, draft.source_updated_at);
       if (saved.metadata.project_id !== document.metadata.project_id) throw new Error('Invalid saved project');
       const loaded = parseEditor(saved.state.editor);
-      setDocument(saved, loaded); setScreen('workspace'); await refresh();
+      setDocument(saved, loaded); setScreen('guided-images'); await refresh();
     } catch (reason) {
       if (reason instanceof ApiError && reason.status === 409) setGenerationConflict(true);
       onError(reason);
@@ -237,6 +238,11 @@ export default function App() {
     setImageLocked(locked);
   }
 
+  async function startGuidedImages() {
+    if (imageLockRef.current || !editorRef.current || !(await flush())) return;
+    setScreen('guided-images');
+  }
+
   async function reload() {
     const id = docRef.current?.metadata.project_id;
     if (!id) return;
@@ -292,12 +298,16 @@ export default function App() {
         ? <Workspace language={lang} projectId={active.metadata.project_id} projectName={active.metadata.name} editor={editor}
             model={model} imageModel={imageModel} dirty={dirty} saving={saving} onCommit={commit} onFlush={flush}
             onImageSnapshot={imageSnapshot} onImageDocument={imageDocument} onImageLock={imageLock}
-            onRename={rename} onReload={reload} onError={onError} />
+            onRename={rename} onReload={reload} onGuidedImages={startGuidedImages} onError={onError} />
         : <main className="empty-workspace"><span className="eyebrow">NEW WORKSPACE</span><h1>{active.metadata.name}</h1>
             <p>{t(lang, 'noGeneration')}</p><div className="actions"><button className="primary" disabled={busy} onClick={() => { setGenerationPrompt(''); setScreen('generation'); }}>{t(lang, 'generateDraft')}</button>
               <button disabled={busy} onClick={() => void startBlank()}>{t(lang, 'blank')}</button></div></main>)}
     {screen === 'settings' && <Settings language={lang} onLanguage={setLanguage} model={model} onModel={setModel}
       imageModel={imageModel} onImageModel={setImageModel} onError={onError} />}
+    {screen === 'guided-images' && active && editor && <GuidedImageCompletion language={lang}
+      projectId={active.metadata.project_id} editor={editor} model={imageModel}
+      onSnapshot={imageSnapshot} onDocument={imageDocument} onLock={imageLock}
+      onError={onError} onExit={() => setScreen('workspace')} />}
     {screen === 'export' && active && editor && <ExportDeploy language={lang} projectId={active.metadata.project_id} ready={flush} onError={onError} />}
     {guide && <Onboarding language={language} onLanguage={setLanguage} onClose={() => setGuide(false)} />}
   </div>;
