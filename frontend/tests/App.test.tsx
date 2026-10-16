@@ -229,6 +229,26 @@ describe('workspace flow', () => {
 });
 
 describe('one-prompt project draft', () => {
+  it('reopens an idle guided plan from a saved editor; skipped slots remain available next session', async () => {
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    fireEvent.click(screen.getByRole('button', { name: 'Complete project images' }));
+    expect(await screen.findByRole('button', { name: 'Review image plan' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review image plan' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Skip this image' }));
+    expect(screen.getByText('Studio / About', { selector: 'h2' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await screen.findByText('CONTENT BLOCKS');
+    fireEvent.click(screen.getByRole('button', { name: 'Complete project images' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review image plan' }));
+    expect(screen.getByText('Create a brand logo for "Studio". Tagline: "". Language: en.')).toBeInTheDocument();
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export & deploy' }));
+    expect(await screen.findByRole('button', { name: 'Download site ZIP' })).toBeInTheDocument();
+  });
+
   it('requires per-attempt confirmation, reviews unsaved text, then accepts with the source timestamp', async () => {
     const confirm = vi.fn(() => false);
     vi.stubGlobal('confirm', confirm);
@@ -252,6 +272,9 @@ describe('one-prompt project draft', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Accept and save' }));
     await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
     expect(mocks.saveEditor).toHaveBeenCalledWith(id, expect.objectContaining({ schema_version: 1 }), metadata.updated_at);
+    expect(await screen.findByRole('heading', { name: 'Complete project images' })).toBeInTheDocument();
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace' }));
     expect(await screen.findByText('CONTENT BLOCKS')).toBeInTheDocument();
   });
 

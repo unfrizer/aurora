@@ -22,6 +22,7 @@ interface Props {
   onImageLock: (locked: boolean) => void;
   onRename: (name: string) => Promise<boolean>;
   onReload: () => Promise<void>;
+  onGuidedImages: () => Promise<void>;
   onError: (error: unknown) => void;
 }
 
@@ -46,7 +47,7 @@ function withSectionImage(editor: EditorDocument, pageId: string, sectionId: str
 }
 
 export function Workspace({ language, projectId, projectName, editor, model, imageModel, dirty, saving,
-  onCommit, onFlush, onImageSnapshot, onImageDocument, onImageLock, onRename, onReload, onError }: Props) {
+  onCommit, onFlush, onImageSnapshot, onImageDocument, onImageLock, onRename, onReload, onGuidedImages, onError }: Props) {
   const [pageId, setPageId] = useState(editor.pages[0]?.id ?? '');
   const [sectionId, setSectionId] = useState('');
   const [leftOpen, setLeftOpen] = useState(true);
@@ -131,6 +132,7 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
       <div className="canvas-toolbar"><div><span className="eyebrow">EDITOR / {page?.slug ?? '—'}</span><h1>{projectName}</h1></div>
         <div className="actions"><span className={`save-state ${dirty ? 'dirty' : ''}`} role="status">{saving ? t(language, 'saving') : dirty ? t(language, 'unsaved') : t(language, 'saved')}</span>
           <button onClick={() => void onFlush()}>{t(language, 'save')}</button>
+          <button onClick={() => void onGuidedImages()}>{t(language, 'guidedTitle')}</button>
           <button onClick={() => void onReload()}>{t(language, 'reload')}</button></div></div>
       {!page ? <p>{t(language, 'badEditor')}</p> : <>
         <div className="tabline"><button className={preview ? '' : 'active'} onClick={() => setPreview('')}>{t(language, 'workspace')}</button>

@@ -199,4 +199,55 @@ describe('reviewed image generation', () => {
     expect(screen.queryByLabelText('Attach to')).not.toBeInTheDocument();
     expect(mocks.generateImage).toHaveBeenCalledTimes(1);
   });
+
+  it('blocks a guided paid request when its frozen target was filled before the call', async () => {
+    const onSnapshot = vi.fn().mockResolvedValue({ editor: { ...initial, brand: { ...initial.brand, logo_path: path } }, updatedAt: timestamp });
+    const onError = vi.fn();
+    render(<ImageGeneration language="en" projectId={projectId} target={{ kind: 'logo' }} targetLabel="Brand logo"
+      model="gpt-image-2" initialPrompt="Visible proposed logo" allowedTargets={[{ kind: 'logo' }]}
+      requireEmptyTarget guided onSnapshot={onSnapshot} onDocument={vi.fn()} onError={onError} onClose={vi.fn()} />);
+    expect(screen.getByLabelText('Describe the image')).toHaveValue('Visible proposed logo');
+    fireEvent.click(screen.getByRole('button', { name: 'Generate image' }));
+    await waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('reselects only a frozen empty guided target after 409 and never repeats the paid call', async () => {
+    const page = initial.pages[0]!;
+    const section = page.sections[0]!;
+    const newer = '2026-10-16T01:00:00Z';
+    const revised = { ...initial, brand: { ...initial.brand, logo_path: path } };
+    mocks.saveEditor.mockRejectedValueOnce(new ApiError(409))
+      .mockImplementationOnce(async (_id: string, editor: EditorDocument) => document(editor, '2026-10-16T02:00:00Z'));
+    mocks.openProject.mockResolvedValue(document(revised, newer));
+    const onSnapshot = vi.fn().mockResolvedValueOnce({ editor: initial, updatedAt: timestamp })
+      .mockResolvedValueOnce({ editor: initial, updatedAt: timestamp })
+      .mockResolvedValue({ editor: revised, updatedAt: newer });
+    const onAttached = vi.fn();
+    render(<ImageGeneration language="en" projectId={projectId} target={{ kind: 'logo' }} targetLabel="Brand logo"
+      model="gpt-image-2" initialPrompt="Visible proposed logo" allowedTargets={[
+        { kind: 'logo' }, { kind: 'section', pageId: page.id, sectionId: section.id },
+      ]} requireEmptyTarget guided onSnapshot={onSnapshot} onDocument={vi.fn()}
+      onError={vi.fn()} onClose={vi.fn()} onAttached={onAttached} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Generate image' }));
+    await screen.findByText('Stored in project, not attached');
+    fireEvent.click(screen.getByRole('button', { name: 'Attach and save' }));
+    await screen.findByText(/The project changed/);
+    fireEvent.click(screen.getByRole('button', { name: 'Reload project and choose target' }));
+    const chooser = await screen.findByLabelText('Attach to');
+    expect(screen.queryByRole('option', { name: 'Brand logo' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Studio / About' })).toBeInTheDocument();
+    fireEvent.change(chooser, { target: { value: `${page.id}/${section.id}` } });
+    fireEvent.change(screen.getByLabelText('Enter image description for the section.'),
+      { target: { value: 'A studio section' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Attach and save' }));
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(2));
+    const attached = mocks.saveEditor.mock.calls[1]?.[1] as EditorDocument;
+    expect(attached.brand.logo_path).toBe(path);
+    expect(attached.pages[0]?.sections[0]).toMatchObject({ image_path: path, image_alt: 'A studio section' });
+    expect(mocks.saveEditor.mock.calls[1]?.[2]).toBe(newer);
+    expect(mocks.generateImage).toHaveBeenCalledTimes(1);
+    expect(onAttached).toHaveBeenCalledWith({ kind: 'section', pageId: page.id, sectionId: section.id });
+  });
 });

@@ -17,18 +17,37 @@ interface Props {
   onDocument: (document: ProjectDocument, editor: EditorDocument) => void;
   onError: (error: unknown) => void;
   onClose: () => void;
+  initialPrompt?: string;
+  allowedTargets?: readonly ImageTarget[];
+  requireEmptyTarget?: boolean;
+  guided?: boolean;
+  onAttached?: (target: ImageTarget) => void;
 }
 
 type Phase = 'form' | 'preparing' | 'pending' | 'review' | 'failed' | 'uncertain' | 'conflict' | 'reselect' | 'saving';
 type Completed = Extract<ImageResult, { status: 'completed' }>;
 type Failed = Extract<ImageResult, { status: 'failed' }>;
 
-function targetOptions(editor: EditorDocument, language: Language): { key: string; label: string; target: ImageTarget }[] {
-  return [{ key: 'logo', label: t(language, 'imageLogoTarget'), target: { kind: 'logo' } },
+function sameTarget(left: ImageTarget, right: ImageTarget): boolean {
+  return left.kind === right.kind && (left.kind === 'logo' ||
+    (right.kind === 'section' && left.pageId === right.pageId && left.sectionId === right.sectionId));
+}
+
+function emptyTarget(editor: EditorDocument, target: ImageTarget): boolean {
+  if (target.kind === 'logo') return editor.brand.logo_path === null;
+  return editor.pages.find((page) => page.id === target.pageId)?.sections
+    .find((section) => section.id === target.sectionId)?.image_path === null;
+}
+
+function targetOptions(editor: EditorDocument, language: Language, allowedTargets?: readonly ImageTarget[],
+  requireEmptyTarget = false): { key: string; label: string; target: ImageTarget }[] {
+  const all = [{ key: 'logo', label: t(language, 'imageLogoTarget'), target: { kind: 'logo' } as ImageTarget },
     ...editor.pages.flatMap((page) => page.sections.map((section) => ({
       key: `${page.id}/${section.id}`, label: `${page.title} / ${section.heading}`,
-      target: { kind: 'section' as const, pageId: page.id, sectionId: section.id },
+      target: { kind: 'section' as const, pageId: page.id, sectionId: section.id } as ImageTarget,
     })))];
+  return all.filter(({ target }) => (!allowedTargets || allowedTargets.some((allowed) => sameTarget(allowed, target))) &&
+    (!requireEmptyTarget || emptyTarget(editor, target)));
 }
 
 function withImage(editor: EditorDocument, target: ImageTarget, path: string, alt: string): EditorDocument | null {
@@ -46,8 +65,9 @@ function hasTarget(editor: EditorDocument, target: ImageTarget): boolean {
     page.sections.some((section) => section.id === target.sectionId));
 }
 
-export function ImageGeneration({ language, projectId, target, targetLabel, model, onSnapshot, onDocument, onError, onClose }: Props) {
-  const [prompt, setPrompt] = useState('');
+export function ImageGeneration({ language, projectId, target, targetLabel, model, onSnapshot, onDocument, onError,
+  onClose, initialPrompt = '', allowedTargets, requireEmptyTarget = false, guided = false, onAttached }: Props) {
+  const [prompt, setPrompt] = useState(initialPrompt);
   const [alt, setAlt] = useState('');
   const [phase, setPhase] = useState<Phase>('form');
   const [snapshot, setSnapshot] = useState<ImageSnapshot | null>(null);
@@ -55,7 +75,7 @@ export function ImageGeneration({ language, projectId, target, targetLabel, mode
   const [failure, setFailure] = useState<Failed | null>(null);
   const [pickedKey, setPickedKey] = useState('');
   const inFlight = useRef(false);
-  const options = snapshot ? targetOptions(snapshot.editor, language) : [];
+  const options = snapshot ? targetOptions(snapshot.editor, language, allowedTargets, requireEmptyTarget) : [];
   const chosen = phase === 'reselect' || pickedKey ? options.find((item) => item.key === pickedKey)?.target : target;
   const needsAlt = chosen?.kind === 'section';
   const risky = phase === 'pending' || phase === 'review' || phase === 'conflict' || phase === 'reselect' || phase === 'saving';
@@ -68,14 +88,17 @@ export function ImageGeneration({ language, projectId, target, targetLabel, mode
   }, [risky]);
 
   async function generate() {
-    if (inFlight.current || !validImageInputs(prompt, model) || !window.confirm(t(language, 'imageConfirm'))) return;
+    if (inFlight.current || !validImageInputs(prompt, model) || (target.kind === 'section' && !alt.trim()) ||
+        !window.confirm(t(language, guided ? 'guidedImageConfirm' : 'imageConfirm'))) return;
     inFlight.current = true;
     setPhase('preparing'); setFailure(null);
     let sent = false;
     try {
       const saved = await onSnapshot();
       if (!saved) { setPhase('form'); return; }
-      if (!hasTarget(saved.editor, target)) { onError(new Error('Selected image target is unavailable')); setPhase('form'); return; }
+      if (!hasTarget(saved.editor, target) || (requireEmptyTarget && !emptyTarget(saved.editor, target))) {
+        onError(new Error('Selected image target is unavailable')); setPhase('form'); return;
+      }
       setSnapshot(saved); setPhase('pending');
       sent = true;
       const result = await generateImage(projectId, prompt, model, saved.updatedAt);
@@ -89,6 +112,7 @@ export function ImageGeneration({ language, projectId, target, targetLabel, mode
     if (inFlight.current || !snapshot || !candidate || !chosen ||
         (phase !== 'review' && phase !== 'reselect')) return;
     if (needsAlt && !alt.trim()) { onError(new Error('Image alt text is required')); return; }
+    if (requireEmptyTarget && !emptyTarget(snapshot.editor, chosen)) { setPhase('conflict'); return; }
     if (phase === 'reselect' && !window.confirm(t(language, 'imageReloadConfirm'))) return;
     const next = withImage(snapshot.editor, chosen, candidate.asset_path, alt);
     if (!next) { onError(new Error('Selected image target is unavailable')); return; }
@@ -106,7 +130,7 @@ export function ImageGeneration({ language, projectId, target, targetLabel, mode
       const verified = chosen.kind === 'logo' ? decoded.brand.logo_path === candidate.asset_path :
         decoded.pages.find((page) => page.id === chosen.pageId)?.sections.find((section) => section.id === chosen.sectionId)?.image_path === candidate.asset_path;
       if (!verified) throw new Error('Invalid saved image');
-      onDocument(saved, decoded); onClose();
+      onDocument(saved, decoded); onAttached?.(chosen); onClose();
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) setPhase('conflict');
       else { onError(error); setPhase(phase === 'reselect' ? 'reselect' : 'review'); }
