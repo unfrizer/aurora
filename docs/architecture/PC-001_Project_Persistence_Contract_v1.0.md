@@ -62,3 +62,17 @@ gateway, JSON ownership or atomicity limitations. Asset writes have
 their own bounded publication and validation semantics in PC-008; they
 do not make state and assets a cross-file transaction. P1-002 does not
 authorize changes to other owners, other existing tests or the Runtime.
+
+## Approved P1-003 Extension
+
+ADR-028 FX-01–FX-05 approves a separate, read-only project export-directory
+boundary. PC-022 is its exact implementation contract. P1-003 may add only
+`ProjectRepository.export_directory(project_id: str) -> Path` in
+`src/projects/repository.py`, with new tests in
+`tests/projects/test_export_directory.py` and
+`tests/integration/test_project_export_directory.py`. The method validates
+one existing project and its direct, non-linked `exports/` child, then returns
+that absolute path without creating or deleting anything. It neither builds
+nor writes an export. P6 and UI folder-export behavior remain later module
+tasks. The existing P1 JSON, asset, constructor, gateway, and ownership
+contracts remain unchanged.
