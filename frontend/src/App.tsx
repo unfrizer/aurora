@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, createProject, deleteProject, generateProjectDraft, listProjects, openProject, renameProject, saveEditor } from './api';
-import { DEFAULT_MODEL } from './config';
+import { DEFAULT_IMAGE_MODEL, DEFAULT_MODEL } from './config';
 import { blankEditor } from './editor';
 import { t } from './i18n';
 import type { DraftResult, EditorDocument, Language, ProjectDocument, ProjectMetadata } from './types';
@@ -31,6 +31,8 @@ export default function App() {
   const [guide, setGuide] = useState(true);
   const [screen, setScreen] = useState<Screen>('projects');
   const [model, setModel] = useState(DEFAULT_MODEL);
+  const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
+  const [imageLocked, setImageLocked] = useState(false);
   const [projects, setProjects] = useState<ProjectMetadata[]>([]);
   const [active, setActive] = useState<ProjectDocument | null>(null);
   const [editor, setEditor] = useState<EditorDocument | null>(null);
@@ -49,6 +51,7 @@ export default function App() {
   const editorRef = useRef<EditorDocument | null>(null);
   const dirtyRef = useRef(false);
   const blockedRef = useRef(false);
+  const imageLockRef = useRef(false);
   const revisionRef = useRef(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const lang = language ?? 'en';
@@ -219,6 +222,21 @@ export default function App() {
     return docRef.current.metadata.updated_at;
   }
 
+  async function imageSnapshot(): Promise<{ editor: EditorDocument; updatedAt: string } | null> {
+    const updatedAt = await flush();
+    return updatedAt && editorRef.current ? { editor: editorRef.current, updatedAt } : null;
+  }
+
+  function imageDocument(document: ProjectDocument, loadedEditor: EditorDocument) {
+    setDocument(document, loadedEditor);
+    void refresh().catch(onError);
+  }
+
+  function imageLock(locked: boolean) {
+    imageLockRef.current = locked;
+    setImageLocked(locked);
+  }
+
   async function reload() {
     const id = docRef.current?.metadata.project_id;
     if (!id) return;
@@ -238,7 +256,7 @@ export default function App() {
   }
 
   async function navigate(next: Screen) {
-    if (busy || generating || accepting) return;
+    if (busy || generating || accepting || imageLockRef.current) return;
     await queueRef.current;
     if (dirtyRef.current && !window.confirm(t(lang, 'leaveConfirm'))) return;
     if (candidate && next !== 'generation') {
@@ -252,14 +270,14 @@ export default function App() {
   }
 
   return <div className="app-shell">
-    <header className="topbar"><button className="brandmark" disabled={busy || generating || accepting} onClick={() => void navigate('projects')}>✦ <span>AURORA</span></button>
+    <header className="topbar"><button className="brandmark" disabled={busy || generating || accepting || imageLocked} onClick={() => void navigate('projects')}>✦ <span>AURORA</span></button>
       <nav aria-label="Main navigation">
-        <button disabled={busy || generating || accepting} className={screen === 'projects' ? 'active' : ''} onClick={() => void navigate('projects')}>{t(lang, 'projects')}</button>
-        {active && <button disabled={busy || generating || accepting} className={screen === 'workspace' ? 'active' : ''} onClick={() => void navigate('workspace')}>{t(lang, 'workspace')}</button>}
-        {active && editor && <button disabled={busy || generating || accepting} className={screen === 'export' ? 'active' : ''} onClick={() => void navigate('export')}>{t(lang, 'export')}</button>}
-        <button disabled={busy || generating || accepting} className={screen === 'settings' ? 'active' : ''} onClick={() => void navigate('settings')}>{t(lang, 'settings')}</button>
+        <button disabled={busy || generating || accepting || imageLocked} className={screen === 'projects' ? 'active' : ''} onClick={() => void navigate('projects')}>{t(lang, 'projects')}</button>
+        {active && <button disabled={busy || generating || accepting || imageLocked} className={screen === 'workspace' ? 'active' : ''} onClick={() => void navigate('workspace')}>{t(lang, 'workspace')}</button>}
+        {active && editor && <button disabled={busy || generating || accepting || imageLocked} className={screen === 'export' ? 'active' : ''} onClick={() => void navigate('export')}>{t(lang, 'export')}</button>}
+        <button disabled={busy || generating || accepting || imageLocked} className={screen === 'settings' ? 'active' : ''} onClick={() => void navigate('settings')}>{t(lang, 'settings')}</button>
       </nav>
-      <button className="guide-link" disabled={busy || generating || accepting} onClick={() => setGuide(true)}>{t(lang, 'onboarding')}</button>
+      <button className="guide-link" disabled={busy || generating || accepting || imageLocked} onClick={() => setGuide(true)}>{t(lang, 'onboarding')}</button>
     </header>
     {error && <div className="error-banner" role="alert">{error}<button aria-label={t(lang, 'close')} onClick={() => setError('')}>×</button></div>}
     {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onGenerate={generateNew} onOpen={open} onDelete={remove} />}
@@ -272,11 +290,14 @@ export default function App() {
       ? <main className="empty-workspace"><h1>{active.metadata.name}</h1><p role="alert">{t(lang, 'badEditor')}</p><button onClick={() => void reload()}>{t(lang, 'reload')}</button></main>
       : editor
         ? <Workspace language={lang} projectId={active.metadata.project_id} projectName={active.metadata.name} editor={editor}
-            model={model} dirty={dirty} saving={saving} onCommit={commit} onFlush={flush} onRename={rename} onReload={reload} onError={onError} />
+            model={model} imageModel={imageModel} dirty={dirty} saving={saving} onCommit={commit} onFlush={flush}
+            onImageSnapshot={imageSnapshot} onImageDocument={imageDocument} onImageLock={imageLock}
+            onRename={rename} onReload={reload} onError={onError} />
         : <main className="empty-workspace"><span className="eyebrow">NEW WORKSPACE</span><h1>{active.metadata.name}</h1>
             <p>{t(lang, 'noGeneration')}</p><div className="actions"><button className="primary" disabled={busy} onClick={() => { setGenerationPrompt(''); setScreen('generation'); }}>{t(lang, 'generateDraft')}</button>
               <button disabled={busy} onClick={() => void startBlank()}>{t(lang, 'blank')}</button></div></main>)}
-    {screen === 'settings' && <Settings language={lang} onLanguage={setLanguage} model={model} onModel={setModel} onError={onError} />}
+    {screen === 'settings' && <Settings language={lang} onLanguage={setLanguage} model={model} onModel={setModel}
+      imageModel={imageModel} onImageModel={setImageModel} onError={onError} />}
     {screen === 'export' && active && editor && <ExportDeploy language={lang} projectId={active.metadata.project_id} ready={flush} onError={onError} />}
     {guide && <Onboarding language={language} onLanguage={setLanguage} onClose={() => setGuide(false)} />}
   </div>;

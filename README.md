@@ -25,15 +25,19 @@ requires the frontend build above; there is no installer or prebuilt bundle yet.
 The current UI can create and reopen local projects, generate a text-only
 brand/site/content/SEO draft from one prompt for explicit review and saving,
 or initialize a blank website. It can edit brand/pages/sections/SEO and local
-raster images, preview the saved static site, save changes, export a site ZIP and explicitly
-deploy through Netlify. It supports RU/EN interface choice, onboarding and
+raster images, generate one image at a time for a logo or section with separate
+review and attachment, preview the saved static site, save changes, export a
+site ZIP and explicitly deploy through Netlify. It supports RU/EN interface
+choice, onboarding and
 independently collapsible panels. OpenAI text assist applies only to a selected
 section after user review. API keys are stored through Windows Credential
 Manager, not persisted in browser storage or project files.
 
-This is **not** the complete one-prompt usable MVP. AI image generation,
-persisted global settings, folder export and Windows packaging still need
-separate approved contracts. A generated draft is not saved until accepted.
+This is **not** the complete one-prompt usable MVP. Image generation is an
+explicit editor action, not part of the one-prompt text draft. Generated PNGs
+remain stored in the project even when discarded and count toward its asset
+quota. Persisted global settings, folder export and Windows packaging still
+need separate approved contracts. A generated draft is not saved until accepted.
 The UI does not claim the deferred features exist. OpenAI and Netlify requests may
 incur charges or publish content; they run only on explicit user actions.
 
