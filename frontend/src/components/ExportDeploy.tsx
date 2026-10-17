@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ApiError, deployNetlify, exportZip } from '../api';
+import { useRef, useState } from 'react';
+import { ApiError, deployNetlify, exportFolder, exportZip } from '../api';
 import { t } from '../i18n';
 import type { Language } from '../types';
 
@@ -15,8 +15,18 @@ export function ExportDeploy({ language, projectId, ready, onError }: Props) {
   const [url, setUrl] = useState('');
   const [recovery, setRecovery] = useState<{ site_id: string | null; deploy_id: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [folderPath, setFolderPath] = useState('');
+  const [folderUncertain, setFolderUncertain] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const pending = useRef(false);
+  function begin(): boolean {
+    if (pending.current) return false;
+    pending.current = true; setBusy(true);
+    return true;
+  }
+  function end() { pending.current = false; setBusy(false); }
   async function zip() {
-    setBusy(true);
+    if (!begin()) return;
     try {
       const expected = await ready();
       if (!expected) return;
@@ -28,11 +38,31 @@ export function ExportDeploy({ language, projectId, ready, onError }: Props) {
         document.body.append(link); link.click(); link.remove();
       } finally { window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0); }
     } catch (error) { onError(error); }
-    finally { setBusy(false); }
+    finally { end(); }
+  }
+  async function folder() {
+    if (pending.current || !window.confirm(t(language, 'folderConfirm'))) return;
+    if (!begin()) return;
+    setFolderPath(''); setFolderUncertain(false); setCopyFailed(false);
+    try {
+      const expected = await ready();
+      if (!expected) return;
+      setFolderPath(await exportFolder(projectId, expected));
+    } catch (error) {
+      setFolderUncertain(true); onError(error);
+    } finally { end(); }
+  }
+  async function copyPath() {
+    try {
+      await navigator.clipboard.writeText(folderPath);
+      setCopyFailed(false);
+    } catch { setCopyFailed(true); }
   }
   async function deploy() {
+    if (pending.current) return;
     if (!window.confirm(t(language, 'deployConfirm'))) return;
-    setBusy(true); setRecovery(null); setUrl('');
+    if (!begin()) return;
+    setRecovery(null); setUrl('');
     try {
       const expected = await ready();
       if (!expected) return;
@@ -41,12 +71,20 @@ export function ExportDeploy({ language, projectId, ready, onError }: Props) {
     } catch (error) {
       if (error instanceof ApiError && error.recovery) setRecovery(error.recovery);
       onError(error);
-    } finally { setBusy(false); }
+    } finally { end(); }
   }
   return <main className="export-page">
     <span className="eyebrow">PUBLISH / 03</span><h1>{t(language, 'export')}</h1>
-    <div className="card"><h2>Static site</h2><p>{t(language, 'noFolder')}</p>
-      <button className="primary" disabled={busy} onClick={() => void zip()}>{t(language, 'zip')}</button></div>
+    <div className="card"><h2>Static site</h2><p>{t(language, 'folderNote')}</p>
+      <button className="primary" disabled={busy} onClick={() => void folder()}>{t(language, 'folder')}</button>
+      <button disabled={busy} onClick={() => void zip()}>{t(language, 'zip')}</button>
+      {folderPath && <>
+        <label>{t(language, 'folderPath')}<input readOnly value={folderPath} onFocus={(event) => event.target.select()} /></label>
+        <button onClick={() => void copyPath()}>{t(language, 'copyPath')}</button>
+      </>}
+      {copyFailed && <p role="status">{t(language, 'copyFailed')}</p>}
+      {folderUncertain && <p role="status">{t(language, 'folderUncertain')}</p>}
+    </div>
     <div className="card"><h2>Netlify</h2>
       <label>{t(language, 'siteId')}<input value={siteId} onChange={(event) => setSiteId(event.target.value)} /></label>
       <button disabled={busy} onClick={() => void deploy()}>{t(language, 'deploy')}</button>
