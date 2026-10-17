@@ -37,3 +37,6 @@ Thumbs.db
 frontend/node_modules/
 frontend/dist/
 frontend/coverage/
+
+# Generated portable Windows distribution
+build/
