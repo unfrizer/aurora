@@ -30,6 +30,18 @@ class ExportZipBody(RequestBody):
     expected_updated_at: str
 
 
+class ExportFolderBody(RequestBody):
+    expected_updated_at: str
+    confirm_export: Literal[True]
+
+    @field_validator("confirm_export", mode="before")
+    @classmethod
+    def _require_literal_true(cls, value: object) -> Literal[True]:
+        if value is not True:
+            raise ValueError("Explicit confirmation is required.")
+        return True
+
+
 class DeployNetlifyBody(RequestBody):
     expected_updated_at: str
     confirm_deploy: Literal[True]

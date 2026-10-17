@@ -11,7 +11,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Literal, cast
 from urllib.parse import urlsplit
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -40,6 +40,7 @@ from src.local_api.schemas import (
     CreateProjectBody,
     CredentialBody,
     DeployNetlifyBody,
+    ExportFolderBody,
     ExportZipBody,
     ImageGenerationBody,
     ProjectDraftGenerationBody,
@@ -528,6 +529,59 @@ def create_app(
             },
         )
 
+    def export_site_folder(project_id: str, body: ExportFolderBody) -> JSONResponse:
+        identifier = _project_id(project_id)
+        with project_lock:
+            repository = ProjectRepository(project_root)
+            try:
+                current = repository.load(identifier)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404) from None
+            if current.metadata.updated_at != body.expected_updated_at:
+                raise HTTPException(status_code=409)
+            try:
+                editor = load_editor_state(current.state)
+                if editor is None:
+                    raise HTTPException(status_code=400)
+                references: list[str] = []
+                seen: set[str] = set()
+                if editor.brand.logo_path is not None:
+                    references.append(editor.brand.logo_path)
+                    seen.add(editor.brand.logo_path)
+                for page in editor.pages:
+                    for section in page.sections:
+                        reference = section.image_path
+                        if reference is not None and reference not in seen:
+                            references.append(reference)
+                            seen.add(reference)
+                assets = tuple(
+                    StaticSiteAsset(
+                        path=reference,
+                        data=repository.read_asset(identifier, reference),
+                    )
+                    for reference in references
+                )
+                document = to_static_site_document(editor, assets)
+                build = StaticSiteBuilder().build(document)
+            except (EditorStateError, SiteValidationError, ValidationError, FileNotFoundError):
+                raise HTTPException(status_code=400) from None
+            try:
+                parent = repository.export_directory(identifier)
+                destination = parent / f"aurora-site-{uuid4()}"
+                exported = StaticSiteExporter().export_folder(build, destination)
+            except (OSError, ValidationError, SiteExportError, SiteValidationError):
+                raise HTTPException(status_code=500) from None
+            return JSONResponse(
+                status_code=201,
+                content={"folder_path": str(exported)},
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Content-Type-Options": "nosniff",
+                    "Cross-Origin-Resource-Policy": "same-origin",
+                    "Referrer-Policy": "no-referrer",
+                },
+            )
+
     def deploy_netlify(project_id: str, body: DeployNetlifyBody, request: Request) -> Response:
         identifier = _project_id(project_id)
         _canonical_site_id(body.site_id)
@@ -735,6 +789,9 @@ def create_app(
     )
     app.add_api_route(
         "/api/v1/projects/{project_id}/exports/zip", export_site_zip, methods=["POST"]
+    )
+    app.add_api_route(
+        "/api/v1/projects/{project_id}/exports/folder", export_site_folder, methods=["POST"]
     )
     app.add_api_route(
         "/api/v1/projects/{project_id}/deployments/netlify", deploy_netlify, methods=["POST"]

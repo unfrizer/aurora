@@ -139,3 +139,15 @@ Only src/local_api/app.py, schemas.py, two new PC-012 test files and the
 narrow src.deployment admission in tests/local_api/test_security.py
 may change. No P5 implementation, project/site persistence, automatic
 retry, frontend, launcher or second deployment provider is approved.
+
+## Approved P6-008 local folder-export extension
+
+ADR-029 FE-01–FE-05 and PC-023 authorize a separate P6 task adding only
+POST /api/v1/projects/{project_id}/exports/folder. It composes the saved
+P1/P7/P4 site under the existing same-origin and app-lock boundaries and
+uses P1's public validated export directory plus P4's exclusive folder
+writer. The only approved local-path response disclosure is the successful,
+explicitly confirmed result defined in PC-023. Existing routes, public
+gateway, create_app signature, numeric error envelope and body limits remain
+unchanged. Only src/local_api/app.py, schemas.py and two new PC-023 test files
+may change. No P1/P4/P7, frontend, launcher or other module change is approved.
