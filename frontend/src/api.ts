@@ -1,8 +1,10 @@
 import { MAX_RASTER_BYTES, RASTER_TYPES } from './config';
 import {
-  parseDeployment, parseDraftResult, parseEditor, parseImageResult, parseMetadata, parseProject, parseTextResult, record,
+  parseDeployment, parseDraftResult, parseEditor, parseImageResult, parseMetadata, parsePreferencesSnapshot,
+  parseProject, parseSavedPreferences, parseTextResult, record,
   type DeploymentResult, type DraftResult, type EditorDocument, type ImageResult, type Language,
   type ProjectDocument, type ProjectMetadata, type TextResult,
+  type PreferencesSnapshot, type UserPreferences,
 } from './types';
 
 const ROOT = '/api/v1';
@@ -54,6 +56,18 @@ export async function listProjects(): Promise<ProjectMetadata[]> {
   const value = await json('/projects');
   if (!Array.isArray(value)) throw new Error('Invalid projects response');
   return value.map(parseMetadata);
+}
+
+export async function getPreferences(): Promise<PreferencesSnapshot> {
+  return parsePreferencesSnapshot(await json('/preferences'));
+}
+
+export async function savePreferences(
+  preferences: UserPreferences, expectedRevision: string,
+): Promise<{ preferences: UserPreferences; revision: string }> {
+  return parseSavedPreferences(await json('/preferences', 'PUT', {
+    preferences, expected_revision: expectedRevision,
+  }));
 }
 
 export async function createProject(name: string): Promise<ProjectDocument> {

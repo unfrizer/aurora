@@ -87,3 +87,11 @@ UI-001 is only the approved manual-workspace subset. Structured one-prompt
 brand/site/content/SEO generation, image generation, persisted global settings,
 folder export and end-user packaging require separate approved contracts. This
 contract cannot override an incompatible fact in the frozen architecture.
+
+## Approved UI-006 preferences extension
+
+ADR-034 and PC-029 authorize a separate client task after P8-001, P6-009
+and APP-002. It replaces UI-001's session-only language/model/onboarding
+behavior with confirmed persistence through the approved P6 preferences
+route. Only the files named in PC-029 may change. Project/editor state,
+credential handling, paid actions and L0–L8 ownership remain unchanged.

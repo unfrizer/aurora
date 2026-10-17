@@ -5,6 +5,7 @@ import type { EditorDocument, ProjectDocument } from '../src/types';
 import { blankEditor } from '../src/editor';
 
 const mocks = vi.hoisted(() => ({
+  getPreferences: vi.fn(), savePreferences: vi.fn(),
   listProjects: vi.fn(), createProject: vi.fn(), openProject: vi.fn(), saveEditor: vi.fn(),
   renameProject: vi.fn(), deleteProject: vi.fn(), credentialStatus: vi.fn(),
   setCredential: vi.fn(), deleteCredential: vi.fn(), exportFolder: vi.fn(), exportZip: vi.fn(), deployNetlify: vi.fn(),
@@ -29,13 +30,19 @@ function withEditor(editor: EditorDocument): ProjectDocument {
 
 async function enter(language: 'ru' | 'en' = 'en') {
   render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: language === 'en' ? 'English' : 'Русский' }));
-  fireEvent.click(screen.getByRole('button', { name: language === 'en' ? 'Start' : 'Начать' }));
+  fireEvent.click(await screen.findByRole('button', { name: language === 'en' ? 'English' : 'Русский' }));
+  fireEvent.click(await screen.findByRole('button', { name: language === 'en' ? 'Start' : 'Начать' }));
   await screen.findByRole('heading', { name: language === 'en' ? 'Projects' : 'Проекты' });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.getPreferences.mockResolvedValue({
+    preferences: { schema_version: 1, language: null, onboarding_completed: false,
+      general_model: 'gpt-5.6-terra', image_model: 'gpt-image-2' },
+    revision: 'a'.repeat(64), projects_directory: 'C:\\Projects',
+  });
+  mocks.savePreferences.mockImplementation(async (preferences: object) => ({ preferences, revision: 'b'.repeat(64) }));
   mocks.listProjects.mockResolvedValue([metadata]);
   mocks.createProject.mockResolvedValue(empty);
   mocks.openProject.mockResolvedValue(withEditor(blankEditor('Studio', 'en')));
@@ -56,6 +63,10 @@ afterEach(() => vi.unstubAllGlobals());
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
+    expect(mocks.savePreferences).toHaveBeenCalledTimes(2);
+    expect(mocks.savePreferences.mock.calls[0]?.[1]).toBe('a'.repeat(64));
+    expect(mocks.savePreferences.mock.calls[0]?.[0]).toMatchObject({ language: 'ru', onboarding_completed: false });
+    expect(mocks.savePreferences.mock.calls[1]?.[0]).toMatchObject({ language: 'ru', onboarding_completed: true });
     const input = screen.getByLabelText('Название проекта');
     fireEvent.change(input, { target: { value: 'Кофейня' } });
     fireEvent.click(screen.getByRole('button', { name: 'Создать проект' }));
@@ -389,15 +400,17 @@ describe('one-prompt project draft', () => {
     storage.mockRestore();
   });
 
-  it('keeps a separate session image model and locks workspace navigation while an image is pending or unreviewed', async () => {
+  it('uses the saved image model and locks workspace navigation while an image is pending or unreviewed', async () => {
     let finish: ((result: unknown) => void) | undefined;
     mocks.generateImage.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
     vi.stubGlobal('confirm', vi.fn(() => true));
     await enter();
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    const model = await screen.findByLabelText('OpenAI image model (this session only)');
+    const model = await screen.findByLabelText('OpenAI image model');
     expect(model).toHaveValue('gpt-image-2');
     fireEvent.change(model, { target: { value: 'custom-image-model' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    await waitFor(() => expect(mocks.savePreferences).toHaveBeenCalledTimes(3));
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
     await screen.findByRole('heading', { name: 'Projects' });
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
@@ -422,6 +435,117 @@ describe('one-prompt project draft', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Settings' })).toBeEnabled());
     expect(mocks.saveEditor).not.toHaveBeenCalled();
     expect(mocks.deleteRaster).not.toHaveBeenCalled();
+  });
+});
+
+describe('persistent preferences composition', () => {
+  it('reopens saved language and models without automatic onboarding and displays the server path read-only', async () => {
+    const storage = vi.spyOn(Storage.prototype, 'setItem');
+    mocks.getPreferences.mockResolvedValue({ preferences: {
+      schema_version: 1, language: 'ru', general_model: 'saved-general', image_model: 'saved-image',
+      onboarding_completed: true,
+    }, revision: 'a'.repeat(64), projects_directory: 'C:\\Projects' });
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Проекты' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'AURORA onboarding' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Настройки' }));
+    expect(await screen.findByLabelText('Модель OpenAI')).toHaveValue('saved-general');
+    expect(screen.getByLabelText('Модель изображений OpenAI')).toHaveValue('saved-image');
+    expect(screen.getByText('C:\\Projects').tagName).toBe('OUTPUT');
+    fireEvent.change(screen.getByLabelText('Модель OpenAI'), { target: { value: ' ' } });
+    expect(screen.getByRole('button', { name: 'Сохранить настройки' })).toBeDisabled();
+    expect(mocks.savePreferences).not.toHaveBeenCalled();
+    expect(storage).not.toHaveBeenCalled();
+    storage.mockRestore();
+  });
+
+  it('uses the persisted general model for a later confirmed generation', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    mocks.getPreferences.mockResolvedValue({ preferences: {
+      schema_version: 1, language: 'en', general_model: 'saved-general', image_model: 'gpt-image-2',
+      onboarding_completed: true,
+    }, revision: 'a'.repeat(64), projects_directory: 'C:\\Projects' });
+    render(<App />);
+    fireEvent.change(await screen.findByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
+      { target: { value: 'A studio' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
+    await waitFor(() => expect(mocks.generateProjectDraft).toHaveBeenCalledWith(
+      id, 'A studio', 'en', 'saved-general', metadata.updated_at));
+  });
+
+  it('fails closed on unavailable settings until an explicit retry', async () => {
+    mocks.getPreferences.mockRejectedValueOnce(new ApiError(503));
+    render(<App />);
+    expect(await screen.findByText(/Settings are unavailable or damaged/)).toBeInTheDocument();
+    expect(mocks.listProjects).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('button', { name: 'English' })).toBeInTheDocument();
+    expect(mocks.getPreferences).toHaveBeenCalledTimes(2);
+  });
+
+  it('holds first-use onboarding on 409 until an explicit confirmed reload', async () => {
+    mocks.savePreferences.mockRejectedValueOnce(new ApiError(409));
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'English' }));
+    expect(await screen.findByRole('button', { name: 'Reload settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'English' })).toBeDisabled();
+    expect(mocks.savePreferences).toHaveBeenCalledTimes(1);
+    const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
+    vi.stubGlobal('confirm', confirm);
+    fireEvent.click(screen.getByRole('button', { name: 'Reload settings' }));
+    expect(mocks.getPreferences).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Reload settings' }));
+    expect(await screen.findByRole('button', { name: 'English' })).toBeEnabled();
+    expect(mocks.getPreferences).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains an unsaved Settings draft after failure and applies only a confirmed save', async () => {
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    const model = await screen.findByLabelText('OpenAI model');
+    fireEvent.change(model, { target: { value: 'draft-general' } });
+    mocks.savePreferences.mockRejectedValueOnce(new ApiError(503));
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(await screen.findByText(/Settings were not saved/)).toBeInTheDocument();
+    expect(model).toHaveValue('draft-general');
+    expect(mocks.savePreferences).toHaveBeenCalledTimes(3);
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+    expect(mocks.savePreferences).toHaveBeenCalledTimes(4);
+    expect(mocks.savePreferences.mock.calls[3]?.[0]).toMatchObject({ general_model: 'draft-general' });
+  });
+
+  it('does not retry 409 or discard draft before an explicit confirmed reload', async () => {
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    const model = await screen.findByLabelText('OpenAI model');
+    fireEvent.change(model, { target: { value: 'draft-general' } });
+    mocks.savePreferences.mockRejectedValueOnce(new ApiError(409));
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(await screen.findByText(/Settings changed/)).toBeInTheDocument();
+    expect(model).toHaveValue('draft-general');
+    expect(screen.getByRole('button', { name: 'Save settings' })).toBeDisabled();
+    expect(mocks.savePreferences).toHaveBeenCalledTimes(3);
+    const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
+    vi.stubGlobal('confirm', confirm);
+    mocks.getPreferences.mockRejectedValueOnce(new ApiError(503));
+    mocks.getPreferences.mockResolvedValueOnce({ preferences: {
+      schema_version: 1, language: 'en', general_model: 'remote-general', image_model: 'gpt-image-2',
+      onboarding_completed: true,
+    }, revision: 'c'.repeat(64), projects_directory: 'C:\\Projects' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reload settings' }));
+    expect(model).toHaveValue('draft-general');
+    expect(mocks.getPreferences).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Reload settings' }));
+    await waitFor(() => expect(mocks.getPreferences).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: 'Save settings' })).toBeDisabled();
+    expect(model).toHaveValue('draft-general');
+    fireEvent.click(screen.getByRole('button', { name: 'Reload settings' }));
+    await waitFor(() => expect(model).toHaveValue('remote-general'));
+    expect(mocks.getPreferences).toHaveBeenCalledTimes(3);
+    expect(mocks.savePreferences).toHaveBeenCalledTimes(3);
   });
 });
 

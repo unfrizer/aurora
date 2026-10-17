@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ApiError, createProject, deleteProject, generateProjectDraft, listProjects, openProject, renameProject, saveEditor } from './api';
+import { ApiError, createProject, deleteProject, generateProjectDraft, getPreferences, listProjects, openProject, renameProject, saveEditor, savePreferences } from './api';
 import { DEFAULT_IMAGE_MODEL, DEFAULT_MODEL } from './config';
 import { blankEditor } from './editor';
 import { t } from './i18n';
-import type { DraftResult, EditorDocument, Language, ProjectDocument, ProjectMetadata } from './types';
+import type { DraftResult, EditorDocument, Language, PreferencesSnapshot, ProjectDocument, ProjectMetadata, UserPreferences } from './types';
 import { parseEditor, validDraftInputs } from './types';
 import { ExportDeploy } from './components/ExportDeploy';
 import { GuidedImageCompletion } from './components/GuidedImageCompletion';
@@ -30,6 +30,10 @@ function message(error: unknown, language: Language): string {
 export default function App() {
   const [language, setLanguage] = useState<Language | null>(null);
   const [guide, setGuide] = useState(true);
+  const [onboardingConflict, setOnboardingConflict] = useState(false);
+  const [preferences, setPreferences] = useState<PreferencesSnapshot | null>(null);
+  const [preferencesLoading, setPreferencesLoading] = useState(true);
+  const [preferencesBusy, setPreferencesBusy] = useState(false);
   const [screen, setScreen] = useState<Screen>('projects');
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
@@ -53,10 +57,77 @@ export default function App() {
   const dirtyRef = useRef(false);
   const blockedRef = useRef(false);
   const imageLockRef = useRef(false);
+  const preferencesRef = useRef<PreferencesSnapshot | null>(null);
+  const preferencesBusyRef = useRef(false);
   const revisionRef = useRef(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const lang = language ?? 'en';
   const onError = useCallback((reason: unknown) => setError(message(reason, lang)), [lang]);
+
+  function acceptPreferences(snapshot: PreferencesSnapshot, firstLoad = false) {
+    preferencesRef.current = snapshot; setPreferences(snapshot);
+    setOnboardingConflict(false);
+    setLanguage(snapshot.preferences.language);
+    setModel(snapshot.preferences.general_model); setImageModel(snapshot.preferences.image_model);
+    if (firstLoad) setGuide(!snapshot.preferences.onboarding_completed || snapshot.preferences.language === null);
+    setError('');
+  }
+
+  async function reloadPreferences(firstLoad = false): Promise<PreferencesSnapshot | null> {
+    if (firstLoad) setPreferencesLoading(true);
+    try {
+      const snapshot = await getPreferences();
+      acceptPreferences(snapshot, firstLoad);
+      return snapshot;
+    } catch (reason) {
+      onError(reason);
+      return null;
+    } finally { if (firstLoad) setPreferencesLoading(false); }
+  }
+
+  useEffect(() => { void reloadPreferences(true); }, []);
+
+  async function changePreferences(next: UserPreferences): Promise<'ok' | 'conflict' | 'error'> {
+    const current = preferencesRef.current;
+    if (!current || preferencesBusyRef.current) return 'error';
+    preferencesBusyRef.current = true; setPreferencesBusy(true);
+    try {
+      const saved = await savePreferences(next, current.revision);
+      acceptPreferences({ ...saved, projects_directory: current.projects_directory });
+      return 'ok';
+    } catch (reason) {
+      onError(reason);
+      return reason instanceof ApiError && reason.status === 409 ? 'conflict' : 'error';
+    } finally { preferencesBusyRef.current = false; setPreferencesBusy(false); }
+  }
+
+  async function chooseLanguage(value: Language) {
+    const current = preferencesRef.current;
+    if (current && await changePreferences({ ...current.preferences, language: value }) === 'conflict') {
+      setOnboardingConflict(true);
+    }
+  }
+
+  async function closeGuide() {
+    const current = preferencesRef.current;
+    if (current) {
+      const outcome = await changePreferences({ ...current.preferences, onboarding_completed: true });
+      if (outcome === 'ok') setGuide(false);
+      if (outcome === 'conflict') setOnboardingConflict(true);
+    }
+  }
+
+  async function reloadOnboarding() {
+    if (!window.confirm(t(lang, 'discardSettingsConfirm'))) return;
+    await reloadPreferences(true);
+  }
+
+  async function saveSettings(value: Language, generalModel: string, nextImageModel: string) {
+    const current = preferencesRef.current;
+    if (!current) return 'error' as const;
+    return changePreferences({ ...current.preferences, language: value,
+      general_model: generalModel, image_model: nextImageModel });
+  }
 
   useEffect(() => {
     if (!language) return;
@@ -275,6 +346,11 @@ export default function App() {
     setScreen(next);
   }
 
+  if (preferencesLoading) return <main className="settings-page" role="status">{t(lang, 'loadingPreferences')}</main>;
+  if (!preferences) return <main className="settings-page"><h1>AURORA</h1>
+    <p role="alert">{t(lang, 'preferencesUnavailable')}</p>
+    <button onClick={() => void reloadPreferences(true)}>{t(lang, 'tryAgain')}</button></main>;
+
   return <div className="app-shell">
     <header className="topbar"><button className="brandmark" disabled={busy || generating || accepting || imageLocked} onClick={() => void navigate('projects')}>✦ <span>AURORA</span></button>
       <nav aria-label="Main navigation">
@@ -302,13 +378,16 @@ export default function App() {
         : <main className="empty-workspace"><span className="eyebrow">NEW WORKSPACE</span><h1>{active.metadata.name}</h1>
             <p>{t(lang, 'noGeneration')}</p><div className="actions"><button className="primary" disabled={busy} onClick={() => { setGenerationPrompt(''); setScreen('generation'); }}>{t(lang, 'generateDraft')}</button>
               <button disabled={busy} onClick={() => void startBlank()}>{t(lang, 'blank')}</button></div></main>)}
-    {screen === 'settings' && <Settings language={lang} onLanguage={setLanguage} model={model} onModel={setModel}
-      imageModel={imageModel} onImageModel={setImageModel} onError={onError} />}
+    {screen === 'settings' && <Settings language={lang} model={model} imageModel={imageModel}
+      projectsDirectory={preferences.projects_directory} busy={preferencesBusy} onSave={saveSettings}
+      onReload={() => reloadPreferences()} onError={onError} />}
     {screen === 'guided-images' && active && editor && <GuidedImageCompletion language={lang}
       projectId={active.metadata.project_id} editor={editor} model={imageModel}
       onSnapshot={imageSnapshot} onDocument={imageDocument} onLock={imageLock}
       onError={onError} onExit={() => setScreen('workspace')} />}
     {screen === 'export' && active && editor && <ExportDeploy language={lang} projectId={active.metadata.project_id} ready={flush} onError={onError} />}
-    {guide && <Onboarding language={language} onLanguage={setLanguage} onClose={() => setGuide(false)} />}
+    {guide && <Onboarding language={language} busy={preferencesBusy} conflict={onboardingConflict}
+      onLanguage={(value) => void chooseLanguage(value)} onClose={() => void closeGuide()}
+      onReload={() => void reloadOnboarding()} />}
   </div>;
 }

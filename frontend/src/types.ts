@@ -1,4 +1,17 @@
 export type Language = 'ru' | 'en';
+export interface UserPreferences {
+  schema_version: 1;
+  language: Language | null;
+  general_model: string;
+  image_model: string;
+  onboarding_completed: boolean;
+}
+
+export interface PreferencesSnapshot {
+  preferences: UserPreferences;
+  revision: string;
+  projects_directory: string;
+}
 export type FontFamily = 'system' | 'serif' | 'monospace';
 
 export interface EditorBrand {
@@ -76,6 +89,41 @@ export function record(value: unknown): value is Record<string, unknown> {
 
 function keys(value: Record<string, unknown>, expected: string[]): boolean {
   return Object.keys(value).length === expected.length && expected.every((key) => key in value);
+}
+
+export function parseUserPreferences(value: unknown): UserPreferences {
+  if (!record(value) || !keys(value, ['schema_version', 'language', 'general_model', 'image_model', 'onboarding_completed']) ||
+      value.schema_version !== 1 || (value.language !== null && value.language !== 'ru' && value.language !== 'en') ||
+      !validPreferenceModel(value.general_model) || !validPreferenceModel(value.image_model) ||
+      typeof value.onboarding_completed !== 'boolean') {
+    throw new Error('Invalid preferences response');
+  }
+  return value as unknown as UserPreferences;
+}
+
+export function validPreferenceModel(value: unknown): value is string {
+  if (typeof value !== 'string' || !value.trim() || /\p{Cc}/u.test(value)) return false;
+  try { encodeURIComponent(value); return true; } catch { return false; }
+}
+
+export function parsePreferencesSnapshot(value: unknown): PreferencesSnapshot {
+  if (!record(value) || !keys(value, ['preferences', 'revision', 'projects_directory']) ||
+      typeof value.revision !== 'string' || !/^[0-9a-f]{64}$/.test(value.revision) ||
+      typeof value.projects_directory !== 'string' ||
+      !/^(?:[A-Za-z]:[\\/]|\/|\\\\)/.test(value.projects_directory) ||
+      /\p{Cc}/u.test(value.projects_directory)) {
+    throw new Error('Invalid preferences response');
+  }
+  return { preferences: parseUserPreferences(value.preferences), revision: value.revision,
+    projects_directory: value.projects_directory };
+}
+
+export function parseSavedPreferences(value: unknown): { preferences: UserPreferences; revision: string } {
+  if (!record(value) || !keys(value, ['preferences', 'revision']) ||
+      typeof value.revision !== 'string' || !/^[0-9a-f]{64}$/.test(value.revision)) {
+    throw new Error('Invalid preferences response');
+  }
+  return { preferences: parseUserPreferences(value.preferences), revision: value.revision };
 }
 
 function uuid(value: unknown): value is string {

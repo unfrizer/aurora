@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { credentialStatus, deleteCredential, setCredential } from '../api';
 import { t } from '../i18n';
-import type { Language } from '../types';
+import { validPreferenceModel, type Language } from '../types';
 
 type SecretName = 'openai_api_key' | 'netlify_token';
 
 interface Props {
   language: Language;
-  onLanguage: (value: Language) => void;
   model: string;
-  onModel: (value: string) => void;
   imageModel: string;
-  onImageModel: (value: string) => void;
+  projectsDirectory: string;
+  busy: boolean;
+  onSave: (language: Language, model: string, imageModel: string) => Promise<'ok' | 'conflict' | 'error'>;
+  onReload: () => Promise<{ preferences: { language: Language | null; general_model: string; image_model: string } } | null>;
   onError: (error: unknown) => void;
 }
 
@@ -39,18 +40,50 @@ function Secret({ name, label, language, onError }: { name: SecretName; label: s
   </div>;
 }
 
-export function Settings({ language, onLanguage, model, onModel, imageModel, onImageModel, onError }: Props) {
+export function Settings({ language, model, imageModel, projectsDirectory, busy, onSave, onReload, onError }: Props) {
+  const [draftLanguage, setDraftLanguage] = useState(language);
+  const [draftModel, setDraftModel] = useState(model);
+  const [draftImageModel, setDraftImageModel] = useState(imageModel);
+  const [status, setStatus] = useState<'none' | 'saved' | 'failed' | 'conflict'>('none');
+  useEffect(() => {
+    setDraftLanguage(language); setDraftModel(model); setDraftImageModel(imageModel);
+  }, [language, model, imageModel]);
+
+  async function save() {
+    const outcome = await onSave(draftLanguage, draftModel, draftImageModel);
+    setStatus(outcome === 'ok' ? 'saved' : outcome === 'conflict' ? 'conflict' : 'failed');
+  }
+
+  async function reload() {
+    if (!window.confirm(t(language, 'discardSettingsConfirm'))) return;
+    const fresh = await onReload();
+    if (!fresh) return;
+    setDraftLanguage(fresh.preferences.language ?? 'en');
+    setDraftModel(fresh.preferences.general_model);
+    setDraftImageModel(fresh.preferences.image_model);
+    setStatus('none');
+  }
+
   return <main className="settings-page">
     <span className="eyebrow">PREFERENCES / 02</span><h1>{t(language, 'settings')}</h1>
     <p className="muted">{t(language, 'settingsNote')}</p>
     <div className="card settings-card">
       <label>{t(language, 'chooseLanguage')}
-        <select value={language} onChange={(event) => onLanguage(event.target.value as Language)}>
+        <select value={draftLanguage} onChange={(event) => { setDraftLanguage(event.target.value as Language); if (status !== 'conflict') setStatus('none'); }}>
           <option value="ru">Русский</option><option value="en">English</option>
         </select>
       </label>
-      <label>{t(language, 'model')}<input value={model} onChange={(event) => onModel(event.target.value)} /></label>
-      <label>{t(language, 'imageModel')}<input value={imageModel} onChange={(event) => onImageModel(event.target.value)} /></label>
+      <label>{t(language, 'model')}<input value={draftModel} onChange={(event) => { setDraftModel(event.target.value); if (status !== 'conflict') setStatus('none'); }} /></label>
+      <label>{t(language, 'imageModel')}<input value={draftImageModel} onChange={(event) => { setDraftImageModel(event.target.value); if (status !== 'conflict') setStatus('none'); }} /></label>
+      <label>{t(language, 'projectsDirectory')}<output>{projectsDirectory}</output></label>
+      <div className="actions">
+        <button className="primary" disabled={busy || status === 'conflict' || !validPreferenceModel(draftModel) || !validPreferenceModel(draftImageModel)}
+          onClick={() => void save()}>{t(language, 'savePreferences')}</button>
+        {status === 'conflict' && <button onClick={() => void reload()}>{t(language, 'reloadPreferences')}</button>}
+      </div>
+      {status === 'saved' && <p role="status">{t(language, 'saved')}</p>}
+      {status === 'failed' && <p role="alert">{t(language, 'preferencesSaveFailed')}</p>}
+      {status === 'conflict' && <p role="alert">{t(language, 'preferencesConflict')}</p>}
       <Secret name="openai_api_key" label={t(language, 'openai')} language={language} onError={onError} />
       <Secret name="netlify_token" label={t(language, 'netlify')} language={language} onError={onError} />
     </div>
