@@ -198,6 +198,9 @@ describe('guided one-prompt image completion', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Discard image' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skip this image' })).toBeInTheDocument();
+    const idleUnload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(idleUnload);
+    expect(idleUnload.defaultPrevented).toBe(false);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
     expect((saved().state.editor as EditorDocument).brand.logo_path).toBeNull();
