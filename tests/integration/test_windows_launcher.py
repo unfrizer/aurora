@@ -14,6 +14,7 @@ from httpx import AsyncClient, Client
 from src.credentials import SecretName, WindowsCredentialStore
 from src.launcher import create_desktop_app
 from src.launcher import server as launcher_server
+from src.preferences import PreferencesStore
 
 _ORIGIN = "http://127.0.0.1:8765"
 
@@ -89,7 +90,10 @@ async def test_real_loopback_socket_serves_ui_and_api_without_browser_launch(
     monkeypatch.setattr(launcher_server.webbrowser, "open", fake_browser)
     running = asyncio.create_task(
         launcher_server._serve(  # pyright: ignore[reportPrivateUsage]
-            tmp_path / "Projects", ui_root, store
+            tmp_path / "Projects",
+            ui_root,
+            store,
+            PreferencesStore(tmp_path / "Settings" / "settings.json"),
         )
     )
     try:
@@ -97,9 +101,12 @@ async def test_real_loopback_socket_serves_ui_and_api_without_browser_launch(
         async with AsyncClient(base_url=opened[0], timeout=3) as client:
             index = await client.get("/")
             health = await client.get("/api/v1/health")
+            preferences = await client.get("/api/v1/preferences")
             assert index.status_code == 200
             assert index.text == "<html>real socket</html>"
             assert health.json() == {"status": "ok"}
+            assert preferences.status_code == 200
+            assert preferences.json()["preferences"]["language"] is None
         assert servers[0].started
         assert store.reads == 0
         assert not (tmp_path / "Projects").exists()

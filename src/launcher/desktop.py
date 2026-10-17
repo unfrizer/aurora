@@ -12,6 +12,7 @@ from fastapi.responses import Response
 
 from src.credentials import WindowsCredentialStore
 from src.local_api import create_app
+from src.preferences import PreferencesStore
 
 _ASSET_PATH = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*\Z")
 _ASSET_MEDIA = {
@@ -84,6 +85,7 @@ def create_desktop_app(
     credential_store: WindowsCredentialStore,
     allowed_origin: str,
     ui_root: Path,
+    preferences_store: PreferencesStore | None = None,
 ) -> FastAPI:
     """Compose P6 with a minimal, nonlinked static UI boundary."""
     root, assets = validate_bundle(ui_root)
@@ -91,6 +93,7 @@ def create_desktop_app(
         project_root=project_root,
         credential_store=credential_store,
         allowed_origin=allowed_origin,
+        preferences_store=preferences_store,
     )
 
     def index(request: Request) -> Response:

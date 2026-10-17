@@ -14,6 +14,7 @@ import uvicorn
 
 from src.credentials import WindowsCredentialStore
 from src.launcher.desktop import create_desktop_app, validate_bundle
+from src.preferences import PreferencesStore, default_preferences_path
 
 _LOGGER = logging.getLogger("aurora.launcher")
 _HOST = "127.0.0.1"
@@ -34,7 +35,10 @@ def _ui_root() -> Path:
 
 
 async def _serve(
-    project_root: Path, ui_root: Path, credential_store: WindowsCredentialStore
+    project_root: Path,
+    ui_root: Path,
+    credential_store: WindowsCredentialStore,
+    preferences_store: PreferencesStore | None = None,
 ) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind((_HOST, 0))
@@ -46,6 +50,7 @@ async def _serve(
             credential_store=credential_store,
             allowed_origin=origin,
             ui_root=ui_root,
+            preferences_store=preferences_store,
         )
         config = uvicorn.Config(
             app,
@@ -86,8 +91,9 @@ def run() -> None:
         project_root = _project_root()
         ui_root = _ui_root()
         validate_bundle(ui_root)
+        preferences_store = PreferencesStore(default_preferences_path())
         credential_store = WindowsCredentialStore()
-        asyncio.run(_serve(project_root, ui_root, credential_store))
+        asyncio.run(_serve(project_root, ui_root, credential_store, preferences_store))
     except KeyboardInterrupt:
         return
     except Exception:

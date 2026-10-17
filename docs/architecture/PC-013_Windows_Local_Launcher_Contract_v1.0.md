@@ -85,3 +85,13 @@ full Pytest, exact diff/import review and latest-head CI. Produce one APP-001
 module report and stop for Tech Lead review. Missing `frontend/dist` means
 APP-001 cannot yet provide the ADR-002 usable-Windows experience; frontend,
 generation, image creation, autosave, settings and installer remain separate.
+
+## Approved APP-002 preferences composition extension
+
+ADR-033 and PC-028 authorize a separate launcher task after P8-001 and
+P6-009. The launcher may additionally import the public `src.preferences`
+gateway, optionally inject its store through `create_desktop_app`, and resolve
+P8's fixed LOCALAPPDATA path only in production `run()`. The narrow launcher
+test import guard may admit `src.preferences` while preserving every other
+assertion. Existing callers, static UI, socket, browser, credential and P6
+behavior remain unchanged; no frontend or lower owner is modified.

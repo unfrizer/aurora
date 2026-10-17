@@ -12,6 +12,7 @@ import uvicorn
 from src.credentials import WindowsCredentialStore
 from src.launcher import run
 from src.launcher import server as server_module
+from src.preferences import PreferencesStore, default_preferences_path
 
 
 class FakeStore(WindowsCredentialStore):
@@ -167,20 +168,29 @@ def test_run_uses_validated_bundle_and_fake_credential_store(
 ) -> None:
     bundle = _bundle(tmp_path)
     store = FakeStore()
-    served: list[tuple[Path, Path, WindowsCredentialStore]] = []
+    served: list[tuple[Path, Path, WindowsCredentialStore, PreferencesStore]] = []
 
     async def fake_serve(
-        project_root: Path, ui_root: Path, credential_store: WindowsCredentialStore
+        project_root: Path,
+        ui_root: Path,
+        credential_store: WindowsCredentialStore,
+        preferences_store: PreferencesStore,
     ) -> None:
-        served.append((project_root, ui_root, credential_store))
+        served.append((project_root, ui_root, credential_store, preferences_store))
 
     monkeypatch.setattr(server_module.sys, "platform", "win32")
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    local_app_data = tmp_path / "LocalAppData"
+    local_app_data.mkdir()
+    monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
     monkeypatch.setattr(server_module, "_ui_root", lambda: bundle)
     monkeypatch.setattr(server_module, "WindowsCredentialStore", lambda: store)
     monkeypatch.setattr(server_module, "_serve", fake_serve)
     run()
-    assert served == [(tmp_path / "Documents" / "AURORA" / "Projects", bundle, store)]
+    assert len(served) == 1
+    assert served[0][:3] == (tmp_path / "Documents" / "AURORA" / "Projects", bundle, store)
+    assert served[0][3].load().schema_version == 1
+    assert not (local_app_data / "AURORA" / "settings.json").exists()
     assert store.reads == 0
 
 
@@ -198,3 +208,92 @@ def test_run_missing_bundle_exits_without_credential_or_server(
     with pytest.raises(SystemExit) as error:
         run()
     assert error.value.code == 1
+
+
+@pytest.mark.parametrize("local_app_data", [None, "relative-local-app-data"])
+def test_invalid_local_app_data_fails_before_socket_or_browser(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    local_app_data: str | None,
+) -> None:
+    bundle = _bundle(tmp_path)
+    monkeypatch.setattr(server_module.sys, "platform", "win32")
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    if local_app_data is None:
+        monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    else:
+        monkeypatch.setenv("LOCALAPPDATA", local_app_data)
+    monkeypatch.setattr(server_module, "_ui_root", lambda: bundle)
+
+    def unexpected_effect(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Invalid settings location must not bind or open a browser")
+
+    monkeypatch.setattr(server_module.socket, "socket", unexpected_effect)
+    monkeypatch.setattr(server_module.webbrowser, "open", unexpected_effect)
+    monkeypatch.setattr(server_module, "WindowsCredentialStore", unexpected_effect)
+    with pytest.raises(SystemExit) as error:
+        run()
+    assert error.value.code == 1
+    assert not (tmp_path / "Documents").exists()
+
+
+def test_default_settings_path_is_passed_without_loading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = _bundle(tmp_path)
+    local_app_data = tmp_path / "LocalAppData"
+    local_app_data.mkdir()
+    monkeypatch.setattr(server_module.sys, "platform", "win32")
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
+    monkeypatch.setattr(server_module, "_ui_root", lambda: bundle)
+    observed: list[Path] = []
+    real_store = PreferencesStore
+
+    def store_for_test(path: Path) -> PreferencesStore:
+        observed.append(path)
+        return real_store(path)
+
+    async def fake_serve(
+        _projects: Path,
+        _bundle: Path,
+        _credentials: WindowsCredentialStore,
+        _preferences: PreferencesStore,
+    ) -> None:
+        assert observed == [default_preferences_path()]
+
+    monkeypatch.setattr(server_module, "PreferencesStore", store_for_test)
+    monkeypatch.setattr(server_module, "_serve", fake_serve)
+    run()
+    assert observed == [local_app_data / "AURORA" / "settings.json"]
+    assert not observed[0].exists()
+
+
+def test_run_does_not_read_or_reset_damaged_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = _bundle(tmp_path)
+    local_app_data = tmp_path / "LocalAppData"
+    settings_path = local_app_data / "AURORA" / "settings.json"
+    settings_path.parent.mkdir(parents=True)
+    original = b'{"schema_version":1,"unexpected":"private"}'
+    settings_path.write_bytes(original)
+    monkeypatch.setattr(server_module.sys, "platform", "win32")
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
+    monkeypatch.setattr(server_module, "_ui_root", lambda: bundle)
+    reached_server = False
+
+    async def fake_serve(
+        _projects: Path,
+        _bundle: Path,
+        _credentials: WindowsCredentialStore,
+        _preferences: PreferencesStore,
+    ) -> None:
+        nonlocal reached_server
+        reached_server = True
+
+    monkeypatch.setattr(server_module, "_serve", fake_serve)
+    run()
+    assert reached_server
+    assert settings_path.read_bytes() == original
