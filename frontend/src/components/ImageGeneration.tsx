@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { ApiError, generateImage, openProject, rasterUrl, saveEditor } from '../api';
 import { t } from '../i18n';
 import type { EditorDocument, ImageResult, Language, ProjectDocument } from '../types';
@@ -80,7 +80,7 @@ export function ImageGeneration({ language, projectId, target, targetLabel, mode
   const needsAlt = chosen?.kind === 'section';
   const risky = phase === 'pending' || phase === 'review' || phase === 'conflict' || phase === 'reselect' || phase === 'saving';
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!risky) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', warn);

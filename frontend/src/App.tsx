@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ApiError, createProject, deleteProject, generateProjectDraft, listProjects, openProject, renameProject, saveEditor } from './api';
 import { DEFAULT_IMAGE_MODEL, DEFAULT_MODEL } from './config';
 import { blankEditor } from './editor';
@@ -63,7 +63,7 @@ export default function App() {
     void listProjects().then(setProjects).catch(onError);
   }, [language, onError]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (dirtyRef.current || generating || accepting || candidate) { event.preventDefault(); event.returnValue = ''; }
     };
