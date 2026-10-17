@@ -30,7 +30,8 @@ editor-derived suggestions and separate paid-call consent for each target,
 or generate one image at a time for a logo or section with separate review
 and attachment. It can preview the saved static site, save changes, export a
 site folder inside the project's `exports/` directory or a ZIP, and explicitly
-deploy through Netlify. It supports RU/EN interface choice, onboarding and
+deploy through Netlify. It persists RU/EN interface choice, model settings and
+onboarding completion in separate local application settings, and supports
 independently collapsible panels. OpenAI text assist applies only to a selected
 section after user review. API keys are stored through Windows Credential
 Manager, not persisted in browser storage or project files.
@@ -39,11 +40,10 @@ This is **not** the complete one-prompt usable MVP. Image completion is a
 guided optional step after accepting the text draft, not an unattended batch.
 It offers at most five empty targets and requires user-entered alt text for
 section images. Generated PNGs remain stored in the project even when
-discarded and count toward its asset quota. Persisted global settings and
-Windows packaging still need separate approved contracts. A generated draft
-is not saved until accepted.
-The UI does not claim the deferred features exist. OpenAI and Netlify requests may
-incur charges or publish content; they run only on explicit user actions.
+discarded and count toward its asset quota. Windows packaging still needs a
+separate approved contract. A generated draft is not saved until accepted.
+The UI does not claim the deferred features exist. OpenAI and Netlify requests
+may incur charges or publish content; they run only on explicit user actions.
 
 ## Validate
 
@@ -58,7 +58,9 @@ pnpm test
 pnpm build
 ```
 
-Tests use temporary projects, fake credentials and fake provider responses.
-They do not prove that a live OpenAI request, Netlify deployment or the full
-Windows acceptance path works. Every implementation module requires its own
-approved contract and latest-head CI before merge.
+Tests include one offline local-app journey from first-use settings through
+explicit draft/image acceptance, reopen and export, using temporary projects,
+fake credentials and fake provider responses. They do not prove that a live
+OpenAI request, Netlify deployment, real browser journey, installer or the full
+clean-PC Windows acceptance path works. Every implementation module requires
+its own approved contract and latest-head CI before merge.
