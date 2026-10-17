@@ -20,7 +20,30 @@ uv run --frozen python -m src.launcher
 
 The launcher binds a temporary port on `127.0.0.1`, opens the default browser
 after readiness and runs in the foreground. Ctrl+C stops it. A source checkout
-requires the frontend build above; there is no installer or prebuilt bundle yet.
+requires the frontend build above.
+
+## Portable Windows build
+
+The **Portable Windows** GitHub Actions workflow builds a Windows x64 ZIP
+containing `AURORA.exe`, its Python runtime dependencies and the compiled UI.
+After a successful workflow run, download its `AURORA-Windows-x64` artifact,
+extract the ZIP, and run `AURORA/AURORA.exe`. The target PC does not need
+Python, uv, Node or pnpm. The app is foreground-only and opens its loopback UI
+in the default browser; close it with Ctrl+C in the console. It is an unsigned
+portable build, not an installer or a claim of clean-PC acceptance testing.
+
+To create the same ZIP locally on Windows x64 with Python 3.13, uv, Node 24
+and pnpm 11 installed, run from the repository root:
+
+```powershell
+uv sync --frozen --dev --group build --python 3.13
+uv run --frozen --group build python -m scripts.build_windows_bundle
+```
+
+The output is `build/portable/AURORA-Windows-x64.zip`. A successful rebuild
+atomically replaces only that generated ZIP. No project or credential data is
+included. OpenAI generation needs a user-provided key and network access;
+Netlify deployment is optional and requires its own token.
 
 The current UI can create and reopen local projects, generate a text-only
 brand/site/content/SEO draft from one prompt for explicit review and saving,
@@ -40,8 +63,9 @@ This is **not** the complete one-prompt usable MVP. Image completion is a
 guided optional step after accepting the text draft, not an unattended batch.
 It offers at most five empty targets and requires user-entered alt text for
 section images. Generated PNGs remain stored in the project even when
-discarded and count toward its asset quota. Windows packaging still needs a
-separate approved contract. A generated draft is not saved until accepted.
+discarded and count toward its asset quota. The portable ZIP is available,
+but the complete clean-PC journey is not yet certified. A generated draft is
+not saved until accepted.
 The UI does not claim the deferred features exist. OpenAI and Netlify requests
 may incur charges or publish content; they run only on explicit user actions.
 
@@ -61,6 +85,6 @@ pnpm build
 Tests include one offline local-app journey from first-use settings through
 explicit draft/image acceptance, reopen and export, using temporary projects,
 fake credentials and fake provider responses. They do not prove that a live
-OpenAI request, Netlify deployment, real browser journey, installer or the full
-clean-PC Windows acceptance path works. Every implementation module requires
+OpenAI request, Netlify deployment, real browser journey or the full clean-PC
+Windows acceptance path works. Every implementation module requires
 its own approved contract and latest-head CI before merge.
