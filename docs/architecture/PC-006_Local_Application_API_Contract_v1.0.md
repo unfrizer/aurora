@@ -151,3 +151,14 @@ explicitly confirmed result defined in PC-023. Existing routes, public
 gateway, create_app signature, numeric error envelope and body limits remain
 unchanged. Only src/local_api/app.py, schemas.py and two new PC-023 test files
 may change. No P1/P4/P7, frontend, launcher or other module change is approved.
+
+## Approved P6-009 user-preferences API extension
+
+ADR-032 PA-01–PA-04 and PC-027 authorize a separate P6 task adding only
+GET/PUT `/api/v1/preferences` and optional explicit `PreferencesStore`
+injection to `create_app`. This preserves all existing calls and routes.
+P6 may import only the public `src.preferences` gateway; the corresponding
+test import guard may admit only `src.preferences`. The successful GET alone
+may disclose the read-only server-owned project root, as specified in PC-027.
+All existing same-origin, body, fixed-error and P8 persistence boundaries
+remain. No launcher or React change is approved by this extension.
