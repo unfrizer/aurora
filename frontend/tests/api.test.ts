@@ -1,13 +1,60 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, createProject, credentialStatus, deployNetlify, exportFolder, exportZip, generateImage, generateProjectDraft, generateText, saveEditor, setCredential, uploadRaster } from '../src/api';
+import { ApiError, createProject, credentialStatus, deployNetlify, exportFolder, exportZip, generateImage, generateProjectDraft, generateText, getPreferences, saveEditor, savePreferences, setCredential, uploadRaster } from '../src/api';
 import { blankEditor } from '../src/editor';
 
 const id = '00000000-0000-4000-8000-000000000001';
 const metadata = { project_id: id, name: 'Studio', format_version: '1', created_at: 'now', updated_at: 'then' };
+const userPreferences = { schema_version: 1 as const, language: 'en' as const,
+  general_model: 'gpt-5.6-terra', image_model: 'gpt-image-2', onboarding_completed: true };
+const revision = 'a'.repeat(64);
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('same-origin P6 client', () => {
+  it('loads exact P8 settings and PUTs only the five-field snapshot with revision', async () => {
+    const mock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      preferences: userPreferences, revision, projects_directory: 'C:\\Projects',
+    }))).mockResolvedValueOnce(new Response(JSON.stringify({ preferences: userPreferences, revision: 'b'.repeat(64) })));
+    vi.stubGlobal('fetch', mock);
+    expect((await getPreferences()).projects_directory).toBe('C:\\Projects');
+    expect(await savePreferences(userPreferences, revision)).toEqual({ preferences: userPreferences, revision: 'b'.repeat(64) });
+    const [getUrl, getInit] = mock.mock.calls[0] as [string, RequestInit];
+    expect(getUrl).toBe('/api/v1/preferences');
+    expect(getInit).toMatchObject({ method: 'GET', cache: 'no-store', credentials: 'same-origin', headers: {} });
+    const [putUrl, putInit] = mock.mock.calls[1] as [string, RequestInit];
+    expect(putUrl).toBe('/api/v1/preferences');
+    expect(putInit).toMatchObject({ method: 'PUT', cache: 'no-store', credentials: 'same-origin',
+      headers: { 'X-Aurora-Request': '1', 'Content-Type': 'application/json' } });
+    expect(JSON.parse(putInit.body as string)).toEqual({ preferences: userPreferences, expected_revision: revision });
+    expect(putInit.body).not.toContain('projects_directory');
+  });
+
+  it('fails closed on malformed preferences, unsafe path, stale revisions and damaged store', async () => {
+    const mock = vi.fn();
+    vi.stubGlobal('fetch', mock);
+    for (const bad of [
+      { preferences: userPreferences, revision, projects_directory: 'relative\\Projects' },
+      { preferences: userPreferences, revision: revision.toUpperCase(), projects_directory: 'C:\\Projects' },
+      { preferences: { ...userPreferences, secret: 'private' }, revision, projects_directory: 'C:\\Projects' },
+      { preferences: { ...userPreferences, general_model: '' }, revision, projects_directory: 'C:\\Projects' },
+      { preferences: { ...userPreferences, image_model: 'bad\u0085model' }, revision, projects_directory: 'C:\\Projects' },
+      { preferences: { ...userPreferences, image_model: '\ud800' }, revision, projects_directory: 'C:\\Projects' },
+      { preferences: userPreferences, revision, projects_directory: 'C:\\Projects', extra: 'private' },
+    ]) {
+      mock.mockResolvedValueOnce(new Response(JSON.stringify(bad)));
+      await expect(getPreferences()).rejects.toThrow('Invalid preferences response');
+    }
+    mock.mockResolvedValueOnce(new Response(JSON.stringify({ preferences: userPreferences,
+      revision, projects_directory: 'C:\\Projects' })));
+    await getPreferences();
+    mock.mockResolvedValueOnce(new Response(JSON.stringify({ preferences: userPreferences, revision,
+      projects_directory: 'C:\\private' })));
+    await expect(savePreferences(userPreferences, revision)).rejects.toThrow('Invalid preferences response');
+    mock.mockResolvedValueOnce(new Response('{"error":{"code":409}}', { status: 409 }));
+    await expect(savePreferences(userPreferences, revision)).rejects.toMatchObject({ status: 409 });
+    mock.mockResolvedValueOnce(new Response('{"error":{"code":503}}', { status: 503 }));
+    await expect(getPreferences()).rejects.toMatchObject({ status: 503 });
+  });
   it('sends exact mutation headers and validates project response', async () => {
     const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ metadata, state: {} }), { status: 201 }));
     vi.stubGlobal('fetch', mock);
