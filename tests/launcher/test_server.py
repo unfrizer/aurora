@@ -247,6 +247,7 @@ def test_default_settings_path_is_passed_without_loading(
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
     monkeypatch.setattr(server_module, "_ui_root", lambda: bundle)
+    monkeypatch.setattr(server_module, "WindowsCredentialStore", FakeStore)
     observed: list[Path] = []
     real_store = PreferencesStore
 
@@ -282,6 +283,7 @@ def test_run_does_not_read_or_reset_damaged_settings(
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
     monkeypatch.setattr(server_module, "_ui_root", lambda: bundle)
+    monkeypatch.setattr(server_module, "WindowsCredentialStore", FakeStore)
     reached_server = False
 
     async def fake_serve(
