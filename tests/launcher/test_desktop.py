@@ -80,7 +80,7 @@ def test_gateway_and_static_get_head(desktop: tuple[Client, FakeStore, Path]) ->
 
 def test_launcher_imports_only_owned_files_and_public_project_gateways() -> None:
     launcher_root = Path(__file__).resolve().parents[2] / "src" / "launcher"
-    allowed = {"src.credentials", "src.local_api", "src.launcher"}
+    allowed = {"src.credentials", "src.local_api", "src.launcher", "src.preferences"}
     for file in launcher_root.glob("*.py"):
         tree = ast.parse(file.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
@@ -90,7 +90,9 @@ def test_launcher_imports_only_owned_files_and_public_project_gateways() -> None
                         node.module == name or node.module.startswith(f"{name}.")
                         for name in allowed
                     )
-                    assert not node.module.startswith(("src.credentials.", "src.local_api."))
+                    assert not node.module.startswith(
+                        ("src.credentials.", "src.local_api.", "src.preferences.")
+                    )
             elif isinstance(node, ast.Import):
                 assert all(
                     not item.name.startswith("src.")
