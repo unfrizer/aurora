@@ -29,8 +29,8 @@ raster images, guide image completion after a saved text draft using visible
 editor-derived suggestions and separate paid-call consent for each target,
 or generate one image at a time for a logo or section with separate review
 and attachment. It can preview the saved static site, save changes, export a
-site ZIP and explicitly deploy through Netlify. It supports RU/EN interface
-choice, onboarding and
+site folder inside the project's `exports/` directory or a ZIP, and explicitly
+deploy through Netlify. It supports RU/EN interface choice, onboarding and
 independently collapsible panels. OpenAI text assist applies only to a selected
 section after user review. API keys are stored through Windows Credential
 Manager, not persisted in browser storage or project files.
@@ -39,9 +39,9 @@ This is **not** the complete one-prompt usable MVP. Image completion is a
 guided optional step after accepting the text draft, not an unattended batch.
 It offers at most five empty targets and requires user-entered alt text for
 section images. Generated PNGs remain stored in the project even when
-discarded and count toward its asset quota. Persisted global settings,
-folder export and Windows packaging still
-need separate approved contracts. A generated draft is not saved until accepted.
+discarded and count toward its asset quota. Persisted global settings and
+Windows packaging still need separate approved contracts. A generated draft
+is not saved until accepted.
 The UI does not claim the deferred features exist. OpenAI and Netlify requests may
 incur charges or publish content; they run only on explicit user actions.
 

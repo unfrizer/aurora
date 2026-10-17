@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, createProject, credentialStatus, deployNetlify, exportZip, generateImage, generateProjectDraft, generateText, saveEditor, setCredential, uploadRaster } from '../src/api';
+import { ApiError, createProject, credentialStatus, deployNetlify, exportFolder, exportZip, generateImage, generateProjectDraft, generateText, saveEditor, setCredential, uploadRaster } from '../src/api';
 import { blankEditor } from '../src/editor';
 
 const id = '00000000-0000-4000-8000-000000000001';
@@ -81,6 +81,44 @@ describe('same-origin P6 client', () => {
     expect(JSON.parse((mock.mock.calls[2] as [string, RequestInit])[1].body as string)).toEqual({
       expected_updated_at: 'then', confirm_deploy: true, site_id: null,
     });
+  });
+
+  it('sends one confirmed folder-export request and accepts only its strict 201 response', async () => {
+    const path = 'C:\\Users\\Tester\\Documents\\AURORA\\Projects\\studio\\exports\\aurora-site-123';
+    const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ folder_path: path }), {
+      status: 201, headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', mock);
+    expect(await exportFolder(id, 'then')).toBe(path);
+    expect(mock).toHaveBeenCalledTimes(1);
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/v1/projects/${id}/exports/folder`);
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.cache).toBe('no-store');
+    expect(init.headers).toEqual({ 'X-Aurora-Request': '1', 'Content-Type': 'application/json' });
+    expect(JSON.parse(init.body as string)).toEqual({ expected_updated_at: 'then', confirm_export: true });
+    for (const bad of [
+      { folder_path: '' }, { folder_path: 42 }, { folder_path: path, private: 'secret' },
+      { folder_path: 'bad\npath' }, { path },
+    ]) {
+      mock.mockResolvedValueOnce(new Response(JSON.stringify(bad), {
+        status: 201, headers: { 'content-type': 'application/json' },
+      }));
+      await expect(exportFolder(id, 'then')).rejects.toThrow('Invalid folder export response');
+    }
+    mock.mockResolvedValueOnce(new Response(JSON.stringify({ folder_path: path }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    }));
+    await expect(exportFolder(id, 'then')).rejects.toThrow('Invalid folder export response');
+    mock.mockResolvedValueOnce(new Response(JSON.stringify({ folder_path: path }), {
+      status: 201, headers: { 'content-type': 'text/plain' },
+    }));
+    await expect(exportFolder(id, 'then')).rejects.toThrow('Invalid folder export response');
+    mock.mockResolvedValueOnce(new Response(JSON.stringify({ folder_path: path }), {
+      status: 201, headers: { 'content-type': 'application/jsonp' },
+    }));
+    await expect(exportFolder(id, 'then')).rejects.toThrow('Invalid folder export response');
   });
 
   it('sends exactly one confirmed same-origin project draft request and parses the candidate', async () => {

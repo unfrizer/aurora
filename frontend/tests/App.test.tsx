@@ -7,7 +7,7 @@ import { blankEditor } from '../src/editor';
 const mocks = vi.hoisted(() => ({
   listProjects: vi.fn(), createProject: vi.fn(), openProject: vi.fn(), saveEditor: vi.fn(),
   renameProject: vi.fn(), deleteProject: vi.fn(), credentialStatus: vi.fn(),
-  setCredential: vi.fn(), deleteCredential: vi.fn(), exportZip: vi.fn(), deployNetlify: vi.fn(),
+  setCredential: vi.fn(), deleteCredential: vi.fn(), exportFolder: vi.fn(), exportZip: vi.fn(), deployNetlify: vi.fn(),
   generateText: vi.fn(), uploadRaster: vi.fn(), deleteRaster: vi.fn(),
   generateProjectDraft: vi.fn(),
   generateImage: vi.fn(),
@@ -426,7 +426,7 @@ describe('one-prompt project draft', () => {
 });
 
 describe('publication controls', () => {
-  it('downloads only ZIP and revokes its object URL', async () => {
+  it('keeps ZIP download and revokes its object URL', async () => {
     const create = vi.fn(() => 'blob:local');
     const revoke = vi.fn();
     vi.stubGlobal('URL', { createObjectURL: create, revokeObjectURL: revoke });
@@ -436,8 +436,88 @@ describe('publication controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Download site ZIP' }));
     await waitFor(() => expect(mocks.exportZip).toHaveBeenCalledWith(id, metadata.updated_at));
     await waitFor(() => expect(revoke).toHaveBeenCalledWith('blob:local'));
-    expect(screen.queryByRole('button', { name: /folder/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export site folder' })).toBeInTheDocument();
+    expect(mocks.exportFolder).not.toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+
+  it('requires folder confirmation and a saved timestamp, then displays and copies the returned path', async () => {
+    const confirm = vi.fn(() => false);
+    const copy = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('confirm', confirm);
+    vi.stubGlobal('navigator', { clipboard: { writeText: copy } });
+    const path = 'C:\\Users\\Tester\\Documents\\AURORA\\Projects\\studio\\exports\\aurora-site-123';
+    mocks.exportFolder.mockResolvedValue(path);
+    const ready = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(metadata.updated_at);
+    render(<ExportDeploy language="en" projectId={id} ready={ready} onError={vi.fn()} />);
+    expect(mocks.exportFolder).not.toHaveBeenCalled();
+    const button = screen.getByRole('button', { name: 'Export site folder' });
+    fireEvent.click(button);
+    expect(ready).not.toHaveBeenCalled();
+    expect(mocks.exportFolder).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true);
+    fireEvent.click(button);
+    await waitFor(() => expect(ready).toHaveBeenCalledTimes(1));
+    expect(mocks.exportFolder).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    await waitFor(() => expect(mocks.exportFolder).toHaveBeenCalledWith(id, metadata.updated_at));
+    expect(mocks.exportFolder).toHaveBeenCalledTimes(1);
+    expect(ready.mock.invocationCallOrder[1]).toBeLessThan(mocks.exportFolder.mock.invocationCallOrder[0] ?? 0);
+    expect(screen.getByLabelText('Finished-site folder')).toHaveValue(path);
+    expect(screen.queryByRole('link', { name: path })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy path' }));
+    await waitFor(() => expect(copy).toHaveBeenCalledWith(path));
+  });
+
+  it('keeps the path selectable when clipboard access fails', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
+    mocks.exportFolder.mockResolvedValue('C:\\Projects\\exports\\aurora-site-123');
+    render(<ExportDeploy language="en" projectId={id} ready={async () => metadata.updated_at} onError={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Export site folder' }));
+    await screen.findByDisplayValue('C:\\Projects\\exports\\aurora-site-123');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy path' }));
+    expect(await screen.findByText(/Select it and copy it manually/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Finished-site folder')).toHaveAttribute('readonly');
+  });
+
+  it('gates publication while pending and never retries or reports uncertain export as successful', async () => {
+    let fail: ((error: unknown) => void) | undefined;
+    mocks.exportFolder.mockImplementation(() => new Promise<string>((_resolve, reject) => { fail = reject; }));
+    const onError = vi.fn();
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    render(<ExportDeploy language="en" projectId={id} ready={async () => metadata.updated_at} onError={onError} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Export site folder' }));
+    await waitFor(() => expect(mocks.exportFolder).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Export site folder' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Download site ZIP' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Deploy to Netlify' })).toBeDisabled();
+    fail?.(new ApiError(409));
+    expect(await screen.findByText(/Inspect the project’s exports/)).toBeInTheDocument();
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ status: 409 }));
+    expect(screen.queryByLabelText('Finished-site folder')).not.toBeInTheDocument();
+    expect(mocks.exportFolder).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([new TypeError('network'), new Error('Invalid folder export response')])(
+    'does not auto-retry an uncertain folder response (%s)', async (failure) => {
+      vi.stubGlobal('confirm', vi.fn(() => true));
+      mocks.exportFolder.mockRejectedValue(failure);
+      const onError = vi.fn();
+      render(<ExportDeploy language="en" projectId={id} ready={async () => metadata.updated_at} onError={onError} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Export site folder' }));
+      expect(await screen.findByText(/Inspect the project’s exports/)).toBeInTheDocument();
+      expect(onError).toHaveBeenCalledWith(failure);
+      expect(screen.queryByLabelText('Finished-site folder')).not.toBeInTheDocument();
+      expect(mocks.exportFolder).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('shows the fixed local destination in Russian without sending a request on render', () => {
+    render(<ExportDeploy language="ru" projectId={id} ready={async () => metadata.updated_at} onError={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Экспортировать папку сайта' })).toBeInTheDocument();
+    expect(screen.getByText(/новую папку в exports\//)).toBeInTheDocument();
+    expect(mocks.exportFolder).not.toHaveBeenCalled();
   });
 
   it('requires explicit deploy confirmation and displays only recovery IDs on failure', async () => {

@@ -150,6 +150,22 @@ export async function exportZip(projectId: string, expected: string): Promise<Bl
   return response.blob();
 }
 
+export async function exportFolder(projectId: string, expected: string): Promise<string> {
+  const response = await request(`${projectPath(projectId)}/exports/folder`, 'POST', {
+    expected_updated_at: expected, confirm_export: true,
+  });
+  if (response.status !== 201 || !/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) {
+    throw new Error('Invalid folder export response');
+  }
+  const value: unknown = await response.json();
+  if (!record(value) || Object.keys(value).length !== 1 ||
+      typeof value.folder_path !== 'string' || !value.folder_path.trim() ||
+      /[\u0000-\u001f\u007f]/.test(value.folder_path)) {
+    throw new Error('Invalid folder export response');
+  }
+  return value.folder_path;
+}
+
 export async function deployNetlify(projectId: string, expected: string, siteId: string | null): Promise<DeploymentResult> {
   return parseDeployment(await json(`${projectPath(projectId)}/deployments/netlify`, 'POST', {
     expected_updated_at: expected, confirm_deploy: true, site_id: siteId,
