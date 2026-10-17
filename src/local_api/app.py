@@ -7,6 +7,7 @@ import re
 import tempfile
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, replace
+from hashlib import sha256
 from pathlib import Path
 from threading import RLock
 from typing import Literal, cast
@@ -45,9 +46,11 @@ from src.local_api.schemas import (
     ImageGenerationBody,
     ProjectDraftGenerationBody,
     SaveEditorBody,
+    SavePreferencesBody,
     SaveProjectBody,
     TextGenerationBody,
 )
+from src.preferences import PreferencesError, PreferencesStore, UserPreferences
 from src.project_generation import ProjectDraftGenerator, ProjectDraftOutcome, ProjectDraftRequest
 from src.projects import ProjectDocument, ProjectRepository
 from src.site_export import (
@@ -86,6 +89,21 @@ def _error(status: int) -> JSONResponse:
 
 def _project(document: ProjectDocument) -> dict[str, object]:
     return {"metadata": asdict(document.metadata), "state": document.state}
+
+
+def _preferences_revision(preferences: UserPreferences) -> str:
+    raw = json.dumps(
+        asdict(preferences), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return sha256(raw).hexdigest()
+
+
+_PREFERENCES_HEADERS = {
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Referrer-Policy": "no-referrer",
+}
 
 
 def _project_id(value: str) -> str:
@@ -251,6 +269,7 @@ def create_app(
     project_root: Path,
     credential_store: WindowsCredentialStore,
     allowed_origin: str,
+    preferences_store: PreferencesStore | None = None,
 ) -> FastAPI:
     """Build an inert API object for one exact loopback origin."""
     match = _ORIGIN.fullmatch(allowed_origin)
@@ -334,6 +353,46 @@ def create_app(
 
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    def read_preferences() -> JSONResponse:
+        if preferences_store is None:
+            raise HTTPException(status_code=503)
+        with project_lock:
+            try:
+                current = preferences_store.load()
+            except PreferencesError:
+                raise HTTPException(status_code=503) from None
+        return JSONResponse(
+            content={
+                "preferences": asdict(current),
+                "revision": _preferences_revision(current),
+                "projects_directory": str(project_root.absolute()),
+            },
+            headers=_PREFERENCES_HEADERS,
+        )
+
+    def save_preferences(body: SavePreferencesBody) -> JSONResponse:
+        if preferences_store is None:
+            raise HTTPException(status_code=503)
+        try:
+            proposed = UserPreferences(**body.preferences.model_dump())
+        except PreferencesError:
+            raise HTTPException(status_code=400) from None
+        with project_lock:
+            try:
+                current = preferences_store.load()
+            except PreferencesError:
+                raise HTTPException(status_code=503) from None
+            if body.expected_revision != _preferences_revision(current):
+                raise HTTPException(status_code=409)
+            try:
+                preferences_store.save(proposed)
+            except PreferencesError:
+                raise HTTPException(status_code=503) from None
+        return JSONResponse(
+            content={"preferences": asdict(proposed), "revision": _preferences_revision(proposed)},
+            headers=_PREFERENCES_HEADERS,
+        )
 
     def list_projects() -> list[dict[str, object]]:
         with project_lock:
@@ -773,6 +832,8 @@ def create_app(
         return _image_generation_outcome(job, source_updated_at, asset_path)
 
     app.add_api_route("/api/v1/health", health, methods=["GET"])
+    app.add_api_route("/api/v1/preferences", read_preferences, methods=["GET"])
+    app.add_api_route("/api/v1/preferences", save_preferences, methods=["PUT"])
     app.add_api_route("/api/v1/projects", list_projects, methods=["GET"])
     app.add_api_route("/api/v1/projects", create_project, methods=["POST"], status_code=201)
     app.add_api_route("/api/v1/projects/{project_id}", load_project, methods=["GET"])
