@@ -55,7 +55,20 @@ function projectFolder(projectsDirectory: string): string {
   return path.join(projectsDirectory, names[0]!);
 }
 
-test('one-prompt browser journey uses only isolated fake services', async ({ page }) => {
+interface PersistedEditor {
+  editor: {
+    brand: { logo_path: string | null };
+    pages: { sections: { image_path: string | null; image_alt: string }[] }[];
+  };
+}
+
+test('one-prompt and guided-image browser journey uses only isolated fake services', async ({ page }) => {
+  const imageRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/generation/image')) {
+      imageRequests.push(request.postData() ?? '');
+    }
+  });
   await page.goto('/');
   await page.getByRole('button', { name: 'Русский' }).click();
   await page.getByRole('button', { name: 'Начать' }).click();
@@ -83,6 +96,58 @@ test('one-prompt browser journey uses only isolated fake services', async ({ pag
 
   await page.getByRole('button', { name: 'Принять и сохранить' }).click();
   await expect(page.getByRole('heading', { name: 'Добавить изображения к проекту' })).toBeVisible();
+  const folder = projectFolder(projectsDirectory);
+  const storedEditor = (): PersistedEditor =>
+    JSON.parse(readFileSync(path.join(folder, 'state.json'), 'utf8')) as PersistedEditor;
+  await expect(page.getByText(/Возможных первых платных запросов: 2/)).toBeVisible();
+  await page.getByRole('button', { name: 'Посмотреть план изображений' }).click();
+  await expect(page.getByText('Create a brand logo for "Северная студия". Tagline: "Дизайн для бизнеса". Language: ru.')).toBeVisible();
+  await page.getByRole('button', { name: 'Просмотреть и создать изображение' }).click();
+  const imageDialog = page.getByRole('dialog', { name: 'Сгенерировать изображение' });
+  await expect(imageDialog.getByRole('textbox', { name: 'Опишите нужное изображение' }))
+    .toHaveValue('Create a brand logo for "Северная студия". Tagline: "Дизайн для бизнеса". Language: ru.');
+  page.once('dialog', (dialog) => void dialog.dismiss());
+  await imageDialog.getByRole('button', { name: 'Сгенерировать изображение' }).click();
+  expect(imageRequests).toHaveLength(0);
+  expect(storedEditor().editor.brand.logo_path).toBeNull();
+
+  page.once('dialog', (dialog) => void dialog.accept());
+  await imageDialog.getByRole('button', { name: 'Сгенерировать изображение' }).click();
+  await expect(imageDialog.getByText('Сохранено в проекте, но не прикреплено')).toBeVisible();
+  expect(imageRequests).toHaveLength(1);
+  await expect.poll(() => imageDialog.locator('img.image-candidate')
+    .evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBe(1);
+  expect(storedEditor().editor.brand.logo_path).toBeNull();
+  expect(readdirSync(path.join(folder, 'assets'))).toHaveLength(1);
+  await imageDialog.getByRole('button', { name: 'Прикрепить и сохранить' }).click();
+  await expect(imageDialog).toHaveCount(0);
+  const logoPath = storedEditor().editor.brand.logo_path;
+  expect(logoPath).toMatch(/^assets\/[a-f0-9]{64}\.png$/);
+
+  await expect(page.getByRole('heading', { name: 'Северная студия / Услуги' })).toBeVisible();
+  await page.getByRole('button', { name: 'Просмотреть и создать изображение' }).click();
+  const sectionGenerate = imageDialog.getByRole('button', { name: 'Сгенерировать изображение' });
+  await expect(imageDialog.getByRole('textbox', { name: 'Опишите нужное изображение' }))
+    .toHaveValue('Create an image for page "Добро пожаловать", section "Услуги", brand "Северная студия". Language: ru.');
+  await expect(sectionGenerate).toBeDisabled();
+  await imageDialog.getByRole('textbox', { name: 'Введите описание изображения для секции.' })
+    .fill('Изображение тестовой секции');
+  await expect(sectionGenerate).toBeEnabled();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await sectionGenerate.click();
+  await expect(imageDialog.getByText('Сохранено в проекте, но не прикреплено')).toBeVisible();
+  expect(imageRequests).toHaveLength(2);
+  expect(storedEditor().editor.pages[0]?.sections[0]?.image_path).toBeNull();
+  await imageDialog.getByRole('button', { name: 'Прикрепить и сохранить' }).click();
+  await expect(imageDialog).toHaveCount(0);
+  const section = storedEditor().editor.pages[0]?.sections[0];
+  const sectionPath = section?.image_path;
+  expect(sectionPath).toMatch(/^assets\/[a-f0-9]{64}\.png$/);
+  if (!sectionPath) throw new Error('The section image was not saved');
+  expect(section?.image_alt).toBe('Изображение тестовой секции');
+  await expect(page.getByText('Все места в этом плане заполнены. Проект сохранён и готов к дальнейшему редактированию.')).toBeVisible();
+  expect(imageRequests).toHaveLength(2);
+
   await page.getByRole('button', { name: 'Перейти в редактор' }).click();
   await expect(page.getByRole('heading', { name: 'QA Browser Studio' })).toBeVisible();
   const body = page.getByRole('textbox', { name: 'Текст' });
@@ -93,8 +158,11 @@ test('one-prompt browser journey uses only isolated fake services', async ({ pag
     .toContain('Изменённый текст браузерного теста.');
 
   await page.getByRole('button', { name: 'Предпросмотр' }).click();
-  await expect(page.frameLocator('iframe[title="Предпросмотр"]')
-    .getByText('Изменённый текст браузерного теста.')).toBeVisible();
+  const preview = page.frameLocator('iframe[title="Предпросмотр"]');
+  await expect(preview.getByText('Изменённый текст браузерного теста.')).toBeVisible();
+  await expect(preview.getByRole('img', { name: 'Изображение тестовой секции' })).toBeVisible();
+  await expect.poll(() => preview.getByRole('img', { name: 'Изображение тестовой секции' })
+    .evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBe(1);
   await page.getByRole('button', { name: 'Экспорт и деплой' }).click();
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByRole('button', { name: 'Экспортировать папку сайта' }).click();
@@ -102,6 +170,9 @@ test('one-prompt browser journey uses only isolated fake services', async ({ pag
   expect(path.dirname(exportPath)).toBe(path.join(projectFolder(projectsDirectory), 'exports'));
   expect(readFileSync(path.join(exportPath, 'index.html'), 'utf8'))
     .toContain('Изменённый текст браузерного теста.');
+  expect(readFileSync(path.join(exportPath, 'index.html'), 'utf8')).toContain(sectionPath);
+  expect(readFileSync(path.join(exportPath, sectionPath)))
+    .toEqual(readFileSync(path.join(folder, sectionPath)));
   expect(readdirSync(exportPath)).toEqual(['assets', 'index.html']);
 
   const downloadPromise = page.waitForEvent('download');
@@ -116,6 +187,9 @@ test('one-prompt browser journey uses only isolated fake services', async ({ pag
   await page.getByRole('button', { name: 'Открыть' }).click();
   await expect(page.getByRole('textbox', { name: 'Текст' }))
     .toHaveValue('Изменённый текст браузерного теста.');
+  await expect(page.getByRole('img', { name: 'Изображение тестовой секции' })).toBeVisible();
+  expect(storedEditor().editor.brand.logo_path).toBe(logoPath);
+  expect(storedEditor().editor.pages[0]?.sections[0]?.image_path).toBe(sectionPath);
 
   for (const file of [path.join(dataRoot, 'settings.json'),
     path.join(projectFolder(projectsDirectory), 'aurora.project.json'),
