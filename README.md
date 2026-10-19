@@ -85,6 +85,13 @@ pnpm build
 Tests include one offline local-app journey from first-use settings through
 explicit draft/image acceptance, reopen and export, using temporary projects,
 fake credentials and fake provider responses. They do not prove that a live
-OpenAI request, Netlify deployment, real browser journey or the full clean-PC
-Windows acceptance path works. Every implementation module requires
+OpenAI request, Netlify deployment, or the full clean-PC Windows acceptance
+path works. Every implementation module requires
 its own approved contract and latest-head CI before merge.
+
+The separate Windows browser gate runs the actual React build in Chrome
+against an isolated local backend with fake OpenAI responses and fake
+credentials. It checks first-run settings, one-prompt text draft review and
+acceptance, editing, preview, folder/ZIP export and reopening after reload.
+Run it after a frontend build with `cd frontend; pnpm test:browser`. It does
+not use real keys or certify live providers or a clean target PC.
