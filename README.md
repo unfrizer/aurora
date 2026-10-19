@@ -69,6 +69,11 @@ not saved until accepted.
 The UI does not claim the deferred features exist. OpenAI and Netlify requests
 may incur charges or publish content; they run only on explicit user actions.
 
+For a separate clean-PC check of the portable candidate, use the
+[Windows MVP acceptance checklist](docs/acceptance/WINDOWS_MVP_ACCEPTANCE.md).
+It records the exact artifact and mandatory results; no clean-PC or live-provider
+PASS has been recorded yet.
+
 ## Validate
 
 ```powershell
