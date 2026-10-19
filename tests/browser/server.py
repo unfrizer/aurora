@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import struct
+import zlib
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,7 +29,18 @@ from src.preferences import PreferencesStore
 from src.site_export import StaticSiteBuild
 
 _ROOT_NAME = re.compile(r"browser-e2e-[0-9a-f-]{36}\Z")
-_IMAGE = b"\x89PNG\r\n\x1a\nsynthetic-browser-image"
+
+def _png_chunk(kind: bytes, payload: bytes) -> bytes:
+    body = kind + payload
+    return struct.pack(">I", len(payload)) + body + struct.pack(">I", zlib.crc32(body))
+
+
+_IMAGE = (
+    b"\x89PNG\r\n\x1a\n"
+    + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+    + _png_chunk(b"IDAT", zlib.compress(b"\x00\x5b\x4e\xe9\xff"))
+    + _png_chunk(b"IEND", b"")
+)
 
 
 class _FakeCredentials(WindowsCredentialStore):
