@@ -1,0 +1,125 @@
+import { spawn, type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { once } from 'node:events';
+import { mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import { expect, test } from '@playwright/test';
+
+const repository = path.resolve(import.meta.dirname, '../..');
+const origin = 'http://127.0.0.1:18765';
+let server: ChildProcess | null = null;
+let dataRoot = '';
+
+test.beforeAll(async () => {
+  let occupied = false;
+  try { await fetch(`${origin}/api/v1/health`); occupied = true; }
+  catch { /* The test port is not serving HTTP. */ }
+  if (occupied) throw new Error('The browser test port is already in use');
+  const build = path.join(repository, 'build');
+  mkdirSync(build, { recursive: true });
+  dataRoot = path.join(build, `browser-e2e-${randomUUID()}`);
+  server = spawn(path.join(repository, '.venv', 'Scripts', 'python.exe'),
+    ['-m', 'tests.browser.server'], {
+      cwd: repository,
+      env: { ...process.env, AURORA_E2E_ROOT: dataRoot, AURORA_E2E_PORT: '18765' },
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (server.exitCode !== null) throw new Error('Isolated browser test server exited early');
+    try {
+      const response = await fetch(`${origin}/api/v1/health`);
+      if (response.ok) return;
+    } catch { /* Wait for the local server to bind. */ }
+    await delay(100);
+  }
+  throw new Error('Isolated browser test server did not become ready');
+});
+
+test.afterAll(async () => {
+  if (server && server.exitCode === null) {
+    const exited = once(server, 'exit');
+    if (!server.kill()) throw new Error('Could not stop isolated browser test server');
+    await Promise.race([
+      exited,
+      delay(5_000).then(() => { throw new Error('Isolated browser test server did not stop'); }),
+    ]);
+  }
+});
+
+function projectFolder(projectsDirectory: string): string {
+  const names = readdirSync(projectsDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  expect(names).toHaveLength(1);
+  return path.join(projectsDirectory, names[0]!);
+}
+
+test('one-prompt browser journey uses only isolated fake services', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Русский' }).click();
+  await page.getByRole('button', { name: 'Начать' }).click();
+  await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Настройки' }).click();
+  const openAI = page.locator('.setting-secret').filter({ hasText: 'Ключ OpenAI' });
+  await openAI.getByLabel('Ключ OpenAI').fill('qa-only-fake-key');
+  await openAI.getByRole('button', { name: 'Сохранить ключ' }).click();
+  await expect(openAI.getByText('Подключено')).toBeVisible();
+  const projectsDirectory = await page.locator('label')
+    .filter({ hasText: 'Папка проектов (только просмотр)' }).locator('output').innerText();
+  expect(projectsDirectory).toBe(path.join(dataRoot, 'Projects'));
+
+  await page.getByRole('button', { name: 'Проекты' }).click();
+  await page.getByRole('textbox', { name: 'Название проекта' }).fill('QA Browser Studio');
+  await page.getByRole('textbox', { name: 'Опишите бизнес одним запросом' })
+    .fill('Создай сайт небольшой дизайн-студии.');
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByRole('button', { name: 'Создать из запроса' }).click();
+  await expect(page.getByRole('heading', { name: 'Просмотр черновика' })).toBeVisible();
+  await expect(page.getByText('Северная студия', { exact: true })).toBeVisible();
+  expect(readFileSync(path.join(projectFolder(projectsDirectory), 'state.json'), 'utf8'))
+    .not.toContain('"editor"');
+
+  await page.getByRole('button', { name: 'Принять и сохранить' }).click();
+  await expect(page.getByRole('heading', { name: 'Добавить изображения к проекту' })).toBeVisible();
+  await page.getByRole('button', { name: 'Перейти в редактор' }).click();
+  await expect(page.getByRole('heading', { name: 'QA Browser Studio' })).toBeVisible();
+  const body = page.getByRole('textbox', { name: 'Текст' });
+  await body.fill('Изменённый текст браузерного теста.');
+  await body.press('Tab');
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
+  await expect.poll(() => readFileSync(path.join(projectFolder(projectsDirectory), 'state.json'), 'utf8'))
+    .toContain('Изменённый текст браузерного теста.');
+
+  await page.getByRole('button', { name: 'Предпросмотр' }).click();
+  await expect(page.frameLocator('iframe[title="Предпросмотр"]')
+    .getByText('Изменённый текст браузерного теста.')).toBeVisible();
+  await page.getByRole('button', { name: 'Экспорт и деплой' }).click();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByRole('button', { name: 'Экспортировать папку сайта' }).click();
+  const exportPath = await page.getByRole('textbox', { name: 'Папка готового сайта' }).inputValue();
+  expect(path.dirname(exportPath)).toBe(path.join(projectFolder(projectsDirectory), 'exports'));
+  expect(readFileSync(path.join(exportPath, 'index.html'), 'utf8'))
+    .toContain('Изменённый текст браузерного теста.');
+  expect(readdirSync(exportPath)).toEqual(['assets', 'index.html']);
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Скачать ZIP сайта' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('aurora-site.zip');
+  expect(statSync(await download.path()).size).toBeGreaterThan(0);
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Добро пожаловать в AURORA' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Открыть' }).click();
+  await expect(page.getByRole('textbox', { name: 'Текст' }))
+    .toHaveValue('Изменённый текст браузерного теста.');
+
+  for (const file of [path.join(dataRoot, 'settings.json'),
+    path.join(projectFolder(projectsDirectory), 'aurora.project.json'),
+    path.join(projectFolder(projectsDirectory), 'state.json')]) {
+    expect(readFileSync(file, 'utf8')).not.toContain('qa-only-fake-key');
+  }
+});
