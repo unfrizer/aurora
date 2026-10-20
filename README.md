@@ -48,8 +48,10 @@ Netlify deployment is optional and requires its own token.
 The Windows portable CI smoke extracts and runs the actual packaged EXE with
 isolated temporary project/settings paths. It checks the bundled UI and local
 API, saves a synthetic project, restarts the EXE and verifies that the same
-project reopens. This does not exercise real credentials or providers and is
-not a clean-PC acceptance result.
+project reopens. Chrome then opens that packaged UI, initializes a blank site,
+edits and previews it, downloads a site ZIP and reopens the saved editor.
+This does not exercise real credentials or providers and is not a clean-PC
+acceptance result.
 
 The current UI can create and reopen local projects, generate a text-only
 brand/site/content/SEO draft from one prompt for explicit review and saving,
