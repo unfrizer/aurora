@@ -27,10 +27,10 @@ requires the frontend build above.
 The **Portable Windows** GitHub Actions workflow builds a Windows x64 ZIP
 containing `AURORA.exe`, its Python runtime dependencies and the compiled UI.
 After a successful workflow run, download its `AURORA-Windows-x64` artifact,
-extract the ZIP, and run `AURORA/AURORA.exe`. The target PC does not need
+extract the ZIP, and run `AURORA/AURORA.exe`. The target Windows OS does not need
 Python, uv, Node or pnpm. The app is foreground-only and opens its loopback UI
 in the default browser; close it with Ctrl+C in the console. It is an unsigned
-portable build, not an installer or a claim of clean-PC acceptance testing.
+portable build, not an installer or a claim of clean-target acceptance testing.
 
 To create the same ZIP locally on Windows x64 with Python 3.13, uv, Node 24
 and pnpm 11 installed, run from the repository root:
@@ -52,7 +52,7 @@ project reopens. Chrome then opens that packaged UI, initializes a blank site,
 edits and previews it, downloads a site ZIP and reopens the saved editor.
 The smoke then restarts the EXE again and verifies that the browser-saved text
 and RU/onboarding preferences survived. This does not exercise real
-credentials or providers and is not a clean-PC acceptance result.
+credentials or providers and is not a clean-target acceptance result.
 
 The current UI can create and reopen local projects, generate a text-only
 brand/site/content/SEO draft from one prompt for explicit review and saving,
@@ -73,15 +73,15 @@ guided optional step after accepting the text draft, not an unattended batch.
 It offers at most five empty targets and requires user-entered alt text for
 section images. Generated PNGs remain stored in the project even when
 discarded and count toward its asset quota. The portable ZIP is available,
-but the complete clean-PC journey is not yet certified. A generated draft is
+but the complete clean-target journey is not yet certified. A generated draft is
 not saved until accepted.
 The UI does not claim the deferred features exist. OpenAI and Netlify requests
 may incur charges or publish content; they run only on explicit user actions.
 
-For a separate clean-PC check of the portable candidate, use the
+For a separate clean physical PC or fresh isolated Windows VM check, use the
 [Windows MVP acceptance checklist](docs/acceptance/WINDOWS_MVP_ACCEPTANCE.md).
-It records the exact artifact and mandatory results; no clean-PC or live-provider
-PASS has been recorded yet.
+It records the exact artifact and mandatory results; no clean-target or
+live-provider PASS has been recorded yet.
 
 ## Validate
 
@@ -99,7 +99,7 @@ pnpm build
 Tests include one offline local-app journey from first-use settings through
 explicit draft/image acceptance, reopen and export, using temporary projects,
 fake credentials and fake provider responses. They do not prove that a live
-OpenAI request, Netlify deployment, or the full clean-PC Windows acceptance
+OpenAI request, Netlify deployment, or the full clean-target Windows acceptance
 path works. Every implementation module requires
 its own approved contract and latest-head CI before merge.
 
