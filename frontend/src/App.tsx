@@ -3,6 +3,7 @@ import { ApiError, createProject, deleteProject, generateProjectDraft, getPrefer
 import { DEFAULT_IMAGE_MODEL, DEFAULT_MODEL } from './config';
 import { blankEditor } from './editor';
 import { t } from './i18n';
+import { ImportValidationError, readPreparedEditor, sameEditor } from './project_import';
 import type { DraftResult, EditorDocument, Language, PreferencesSnapshot, ProjectDocument, ProjectMetadata, UserPreferences } from './types';
 import { parseEditor, validDraftInputs } from './types';
 import { ExportDeploy } from './components/ExportDeploy';
@@ -59,6 +60,7 @@ export default function App() {
   const imageLockRef = useRef(false);
   const preferencesRef = useRef<PreferencesSnapshot | null>(null);
   const preferencesBusyRef = useRef(false);
+  const importingRef = useRef(false);
   const revisionRef = useRef(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const lang = language ?? 'en';
@@ -174,6 +176,39 @@ export default function App() {
       setDocument(document, null); await refresh(); setScreen('workspace');
     } catch (reason) { onError(reason); }
     finally { setBusy(false); }
+  }
+
+  async function importPrepared(name: string, file: File) {
+    if (importingRef.current || busy) return;
+    importingRef.current = true; setBusy(true); setError('');
+    let createAttempted = false;
+    let created = false;
+    try {
+      const imported = await readPreparedEditor(file);
+      createAttempted = true;
+      const document = await createProject(name);
+      created = true;
+      const saved = await saveEditor(document.metadata.project_id, imported, document.metadata.updated_at);
+      const loaded = parseEditor(saved.state.editor);
+      if (saved.metadata.project_id !== document.metadata.project_id ||
+          !sameEditor(imported, loaded)) {
+        throw new Error('Saved import does not match');
+      }
+      setDocument(saved, loaded); setScreen('workspace');
+      try { await refresh(); } catch (reason) { onError(reason); }
+    } catch (reason) {
+      if (reason instanceof ImportValidationError) {
+        const labels = { size: 'importSize', encoding: 'importEncoding', json: 'importJson',
+          schema: 'importSchema', assets: 'importAssets', read: 'importRead' } as const;
+        setError(t(lang, labels[reason.reason]));
+      } else if (created) {
+        setError(t(lang, 'importSaveFailed'));
+        try { await refresh(); } catch { /* Preserve the import failure as the primary message. */ }
+      } else if (createAttempted) {
+        setError(t(lang, 'importCreateFailed'));
+        try { await refresh(); } catch { /* Preserve the import failure as the primary message. */ }
+      } else onError(reason);
+    } finally { importingRef.current = false; setBusy(false); }
   }
 
   async function runDraft(document: ProjectDocument, prompt: string) {
@@ -362,7 +397,7 @@ export default function App() {
       <button className="guide-link" disabled={busy || generating || accepting || imageLocked} onClick={() => setGuide(true)}>{t(lang, 'onboarding')}</button>
     </header>
     {error && <div className="error-banner" role="alert">{error}<button aria-label={t(lang, 'close')} onClick={() => setError('')}>×</button></div>}
-    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onGenerate={generateNew} onOpen={open} onDelete={remove} />}
+    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onGenerate={generateNew} onImport={importPrepared} onOpen={open} onDelete={remove} />}
     {screen === 'generation' && active && <ProjectGeneration language={lang} projectName={active.metadata.name}
       model={model} prompt={generationPrompt} candidate={candidate} failure={generationFailure}
       pending={generating} accepting={accepting} conflict={generationConflict}

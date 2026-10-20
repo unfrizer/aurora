@@ -68,6 +68,67 @@ independently collapsible panels. OpenAI text assist applies only to a selected
 section after user review. API keys are stored through Windows Credential
 Manager, not persisted in browser storage or project files.
 
+## Import a text-only site prepared in ChatGPT
+
+This is an optional no-API-key path. In ChatGPT, describe the business and
+ask for a JSON file using the prompt below. Save the **JSON only** as UTF-8
+(`site.json`, at most 1 MiB). In AURORA's Projects screen, enter a new project
+name, select that file and choose **Import prepared site**. Import creates a
+new project; it never replaces an existing one or contacts OpenAI. Review the
+brand, page text and SEO in the editor before building or publishing. An
+imported editor is a draft; the existing preview/build checks whether it can
+be published. Customer photographs are not imported by this JSON: upload and
+attach them separately in the editor. Do not place API keys, secrets, or
+private customer material in Git.
+
+Copy this prompt into ChatGPT, then add your own business brief:
+
+```text
+Prepare a text-only AURORA website draft from the business brief below.
+Return ONLY a UTF-8 JSON object, without Markdown, comments, HTML or code fences.
+Use exactly this structure and these field names; do not add other fields:
+{
+  "schema_version": 1,
+  "language": "ru",
+  "brand": {
+    "name": "Brand name",
+    "tagline": "Short tagline",
+    "primary_color": "#4F46E5",
+    "secondary_color": "#F59E0B",
+    "font_family": "system",
+    "logo_path": null
+  },
+  "pages": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "slug": "index",
+      "title": "Page SEO title",
+      "meta_description": "Page meta description",
+      "heading": "Visible page heading",
+      "sections": [
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "heading": "Section heading",
+          "body": "Section text",
+          "image_path": null,
+          "image_alt": ""
+        }
+      ]
+    }
+  ]
+}
+Choose "ru" or "en" for language. Write meaningful ordinary text for the
+brand, pages, sections and SEO; use 1–8 pages with exactly one "index" slug
+and 1–12 sections per page. Use a unique lowercase UUID in the shown format
+for every page and section; never reuse the sample IDs. Other page slugs must
+be distinct lowercase ASCII URL slugs. Keep logo_path and every image_path
+null, even if photographs were supplied in the brief. Use "system", "serif"
+or "monospace" for font_family and #RRGGBB colors. Do not include credentials.
+
+Business brief:
+[Paste only the brief you are permitted to share here.]
+```
+
 This is **not** the complete one-prompt usable MVP. Image completion is a
 guided optional step after accepting the text draft, not an unattended batch.
 It offers at most five empty targets and requires user-entered alt text for

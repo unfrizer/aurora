@@ -4,6 +4,13 @@ import userEvent from '@testing-library/user-event';
 import type { EditorDocument, ProjectDocument } from '../src/types';
 import { blankEditor } from '../src/editor';
 
+function importFile(editor: EditorDocument): File {
+  const bytes = new TextEncoder().encode(JSON.stringify(editor));
+  const selected = new File([Uint8Array.from(bytes).buffer], 'prepared.json', { type: 'application/json' });
+  Object.defineProperty(selected, 'arrayBuffer', { value: async () => Uint8Array.from(bytes).buffer });
+  return selected;
+}
+
 const mocks = vi.hoisted(() => ({
   getPreferences: vi.fn(), savePreferences: vi.fn(),
   listProjects: vi.fn(), createProject: vi.fn(), openProject: vi.fn(), saveEditor: vi.fn(),
@@ -59,6 +66,101 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe('UI-007 prepared site import', () => {
+  const importedId = '00000000-0000-4000-8000-000000000777';
+  const importedMetadata = { ...metadata, project_id: importedId, name: 'Imported', updated_at: '2026-10-20T01:00:00Z' };
+
+  async function select(editor: EditorDocument, language: 'ru' | 'en' = 'en') {
+    await enter(language);
+    fireEvent.change(screen.getByLabelText(language === 'en' ? 'Project name' : 'Название проекта'),
+      { target: { value: 'Imported' } });
+    fireEvent.change(screen.getByLabelText(language === 'en' ? 'Prepared site JSON file' : 'JSON-файл подготовленного сайта'),
+      { target: { files: [importFile(editor)] } });
+    fireEvent.click(screen.getByRole('button', {
+      name: language === 'en' ? 'Import prepared site' : 'Импортировать подготовленный сайт',
+    }));
+  }
+
+  it('creates a separate new project and versioned P7 save without provider or deployment calls', async () => {
+    const prepared = blankEditor('Imported', 'en');
+    mocks.createProject.mockResolvedValue({ metadata: importedMetadata, state: {} });
+    mocks.saveEditor.mockImplementation(async (_id: string, editor: EditorDocument) =>
+      ({ metadata: { ...importedMetadata, updated_at: '2026-10-20T02:00:00Z' }, state: { editor } }));
+    await select(prepared);
+    await screen.findByText('CONTENT BLOCKS');
+    expect(mocks.createProject).toHaveBeenCalledExactlyOnceWith('Imported');
+    expect(mocks.saveEditor).toHaveBeenCalledExactlyOnceWith(importedId, prepared, importedMetadata.updated_at);
+    expect(mocks.openProject).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+    expect(mocks.exportZip).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid selected file before any project mutation and shows safe bilingual copy', async () => {
+    await select({ ...blankEditor('Imported', 'ru'), schema_version: 2 } as unknown as EditorDocument, 'ru');
+    expect(await screen.findByRole('alert')).toHaveTextContent('не соответствует формату редактора AURORA v1');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(screen.getByText(/Импорт создаёт новый текстовый проект без AI-запроса/)).toBeInTheDocument();
+  });
+
+  it('reports a failed create and does not attempt editor save', async () => {
+    mocks.createProject.mockRejectedValue(new ApiError(503));
+    await select(blankEditor('Imported', 'en'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Project creation was not confirmed');
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Import prepared site' })).toBeEnabled();
+  });
+
+  it('allows only one pending import while the save is unresolved', async () => {
+    let finish: ((document: ProjectDocument) => void) | undefined;
+    const prepared = blankEditor('Imported', 'en');
+    mocks.createProject.mockResolvedValue({ metadata: importedMetadata, state: {} });
+    mocks.saveEditor.mockImplementation(() => new Promise<ProjectDocument>((resolve) => { finish = resolve; }));
+    await select(prepared);
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Import prepared site' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Import prepared site' }));
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+    finish?.({ metadata: importedMetadata, state: { editor: prepared } });
+    await screen.findByText('CONTENT BLOCKS');
+  });
+
+  it('reports a new project left after save failure and never claims import success', async () => {
+    mocks.createProject.mockResolvedValue({ metadata: importedMetadata, state: {} });
+    mocks.saveEditor.mockRejectedValue(new ApiError(409));
+    mocks.listProjects.mockResolvedValue([metadata, importedMetadata]);
+    await select(blankEditor('Imported', 'en'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('a new project may remain');
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('CONTENT BLOCKS')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Imported' })).toBeInTheDocument();
+    expect(mocks.deleteProject).not.toHaveBeenCalled();
+  });
+
+  it('refuses a mismatched save response instead of opening the workspace', async () => {
+    mocks.createProject.mockResolvedValue({ metadata: importedMetadata, state: {} });
+    const altered = blankEditor('Imported', 'en');
+    altered.brand.tagline = 'Changed by server';
+    mocks.saveEditor.mockResolvedValue({ metadata: importedMetadata, state: { editor: altered } });
+    await select(blankEditor('Imported', 'en'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Import is not confirmed');
+    expect(screen.queryByText('CONTENT BLOCKS')).not.toBeInTheDocument();
+  });
+
+  it('refuses a save response belonging to another project', async () => {
+    mocks.createProject.mockResolvedValue({ metadata: importedMetadata, state: {} });
+    const prepared = blankEditor('Imported', 'en');
+    mocks.saveEditor.mockResolvedValue({ metadata, state: { editor: prepared } });
+    await select(prepared);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Import is not confirmed');
+    expect(screen.queryByText('CONTENT BLOCKS')).not.toBeInTheDocument();
+  });
+});
 
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
