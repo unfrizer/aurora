@@ -238,4 +238,30 @@ test('one-prompt, image and editor browser journey uses only isolated fake servi
     path.join(projectFolder(projectsDirectory), 'state.json')]) {
     expect(readFileSync(file, 'utf8')).not.toContain('qa-only-fake-key');
   }
+
+  const settingsPath = path.join(dataRoot, 'settings.json');
+  const storedSettings = (): { language: string; onboarding_completed: boolean } =>
+    JSON.parse(readFileSync(settingsPath, 'utf8')) as { language: string; onboarding_completed: boolean };
+  await page.getByRole('button', { name: 'Настройки' }).click();
+  await page.getByRole('combobox', { name: 'Язык интерфейса' }).selectOption('en');
+  await expect(page.getByRole('heading', { name: 'Настройки' })).toBeVisible();
+  expect(storedSettings().language).toBe('ru');
+  await page.getByRole('button', { name: 'Сохранить настройки' }).click();
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  expect(storedSettings()).toMatchObject({ language: 'en', onboarding_completed: true });
+  expect(readFileSync(settingsPath, 'utf8')).not.toContain('qa-only-fake-key');
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Guide' }).click();
+  const guide = page.getByRole('dialog', { name: 'AURORA onboarding' });
+  await expect(guide.getByRole('heading', { name: 'Welcome to AURORA' })).toBeVisible();
+  await guide.getByRole('button', { name: 'Start' }).click();
+  await expect(guide).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
+  expect(storedSettings()).toMatchObject({ language: 'en', onboarding_completed: true });
+  expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
 });
