@@ -1,6 +1,7 @@
 # AURORA — first usable Windows acceptance
 
-This is a manual acceptance checklist for a **separate clean Windows x64 PC**.
+This is a manual acceptance checklist for a **separate clean Windows x64 PC or
+fresh isolated Windows x64 VM** under ADR-046.
 It is not a claim that the checks have passed. Automated offline browser tests
 and the packaged-executable CI smoke test do not substitute for this journey.
 Use a disposable test business idea and avoid entering private client data.
@@ -11,16 +12,22 @@ Use a disposable test business idea and avoid entering private client data.
    **Actions → Portable Windows** page, select a successful run for that SHA
    and download its `AURORA-Windows-x64` artifact. The artifact contains
    `AURORA-Windows-x64.zip`; it is not a GitHub Release or signed installer.
-2. On the target Windows x64 PC, confirm Python, uv, Node and pnpm are **not**
-   installed for this test. Record the Windows version and whether the PC is
-   new or merely an isolated profile. A profile on a developer PC does not
-   qualify as a clean-PC result.
+2. Use either a separate clean Windows x64 PC or a newly provisioned or
+   restored-to-clean Windows x64 VM, including Windows Sandbox if available.
+   A VM must be a distinct guest OS, not a second profile or browser context
+   on the developer host. Transfer only the portable artifact into the guest;
+   do not mount host AURORA projects, settings or credentials. Confirm Python,
+   uv, Node and pnpm are **not** installed, and that no AURORA source checkout
+   or prior project/settings data is present. Record the Windows version,
+   x64 confirmation, physical-PC or VM target type, and how its clean state
+   was established. A profile on a developer PC does not qualify.
 3. Extract the ZIP with Windows Explorer into a new directory. Do not run the
    executable inside the compressed archive. Run `AURORA\AURORA.exe`; verify
    that the local browser UI opens and that the console remains available to
-   stop the foreground app with Ctrl+C. If Windows security blocks an unsigned
-   executable, record **BLOCKED**; do not disable protection or describe the
-   build as signed.
+   stop the foreground app with Ctrl+C. In a VM, keep the same guest session
+   for the later AURORA restart and persistence check. If Windows security
+   blocks an unsigned executable, record **BLOCKED**; do not disable
+   protection or describe the build as signed.
 4. Verify the browser address is `http://127.0.0.1:<port>/`, not a public
    interface. Do not share the local URL or expose its port to the network.
 
@@ -71,7 +78,9 @@ account details. A maintainer may publish only a redacted summary.
 Candidate commit SHA:
 Portable Windows workflow run URL / artifact name:
 Target Windows version and x64 confirmation:
-Clean-PC status (not a developer PC):
+Target type (separate physical PC / fresh isolated VM):
+VM technology and clean-state evidence, if applicable:
+Developer tools and prior AURORA data absent:
 Tester and date:
 Mandatory results M01–M10:
 Optional results O01–O02:
@@ -80,8 +89,9 @@ Overall: PASS / FAIL / BLOCKED / NOT RUN
 ```
 
 Overall **PASS** requires M01–M10 to pass on the exact candidate with actual
-OpenAI text and image responses. O01–O02 are optional and must be reported
-separately. If any mandatory step is failed, blocked or not run, the first
-usable Windows journey remains **unverified**. A public release, signed-binary
-claim or production deployment requires its own decision and is not authorized
-by this checklist.
+OpenAI text and image responses on an eligible clean target. A VM result must
+be labelled **clean-VM acceptance**, not physical-PC testing. O01–O02 are
+optional and must be reported separately. If any mandatory step is failed,
+blocked or not run, the first usable Windows journey remains **unverified**.
+A public release, signed-binary claim or production deployment requires its
+own decision and is not authorized by this checklist.
