@@ -55,35 +55,74 @@ jobs:
           $env:LOCALAPPDATA = $localAppData
           $env:BROWSER = $noBrowser
           $exe = Join-Path $smoke 'AURORA/AURORA.exe'
-          $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
-          try {
-            $origin = $null
-            for ($attempt = 0; $attempt -lt 60 -and $null -eq $origin; $attempt++) {
+          function Wait-AuroraOrigin([System.Diagnostics.Process]$appProcess) {
+            for ($attempt = 0; $attempt -lt 60; $attempt++) {
               Start-Sleep -Milliseconds 250
-              if ($process.HasExited) { throw "Packaged AURORA exited with $($process.ExitCode)" }
-              $ids = @($process.Id)
-              $ids += @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($process.Id)" | ForEach-Object { [int]$_.ProcessId })
-              $listeners = Get-NetTCPConnection -State Listen -LocalAddress '127.0.0.1' | Where-Object { $ids -contains $_.OwningProcess }
+              if ($appProcess.HasExited) { throw "Packaged AURORA exited with $($appProcess.ExitCode)" }
+              $ids = @($appProcess.Id)
+              $ids += @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($appProcess.Id)" -ErrorAction SilentlyContinue | ForEach-Object { [int]$_.ProcessId })
+              $listeners = Get-NetTCPConnection -State Listen -LocalAddress '127.0.0.1' -ErrorAction SilentlyContinue | Where-Object { $ids -contains $_.OwningProcess }
               foreach ($listener in $listeners) {
                 $candidate = "http://127.0.0.1:$($listener.LocalPort)"
                 try {
                   $health = Invoke-RestMethod -Uri "$candidate/api/v1/health" -TimeoutSec 1
-                  if ($health.status -eq 'ok') { $origin = $candidate; break }
+                  if ($health.status -eq 'ok') { return $candidate }
                 } catch { }
               }
             }
-            if ($null -eq $origin) { throw 'Packaged health endpoint did not become ready' }
+            throw 'Packaged health endpoint did not become ready'
+          }
+          function Stop-AuroraProcess([System.Diagnostics.Process]$appProcess) {
+            $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($appProcess.Id)" -ErrorAction SilentlyContinue
+            foreach ($child in $children) { Stop-Process -Id $child.ProcessId -Force -ErrorAction SilentlyContinue }
+            Stop-Process -Id $appProcess.Id -Force -ErrorAction SilentlyContinue
+            if (-not $appProcess.WaitForExit(10000)) { throw 'Packaged AURORA did not stop' }
+          }
+          $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
+          try {
+            $origin = Wait-AuroraOrigin $process
             $index = Invoke-WebRequest -Uri $origin -TimeoutSec 3
             if ($index.StatusCode -ne 200 -or $index.Content -notmatch '<div id="root"></div>') {
               throw 'Packaged UI did not load'
             }
-            if (Test-Path -LiteralPath (Join-Path $profile 'Documents/AURORA/Projects')) {
+            $projectRoot = Join-Path $profile 'Documents/AURORA/Projects'
+            if (Test-Path -LiteralPath $projectRoot) {
               throw 'Smoke launch unexpectedly created project data'
             }
+            $headers = @{ Origin = $origin; 'X-Aurora-Request' = '1' }
+            $createdResponse = Invoke-WebRequest -Uri "$origin/api/v1/projects" -Method Post -Headers $headers -ContentType 'application/json' -Body '{"name":"Packaged Smoke"}'
+            $created = $createdResponse.Content | ConvertFrom-Json
+            if (-not $created.metadata.project_id -or $created.metadata.name -ne 'Packaged Smoke') {
+              throw 'Packaged project creation failed'
+            }
+            $projectId = [string]$created.metadata.project_id
+            $createdJson = [System.Text.Json.JsonDocument]::Parse($createdResponse.Content)
+            try {
+              $expectedUpdatedAt = $createdJson.RootElement.GetProperty('metadata').GetProperty('updated_at').GetString()
+            } finally {
+              $createdJson.Dispose()
+            }
+            $body = @{
+              name = 'Packaged Smoke'
+              state = @{ smoke = @{ portable_reopen = 'verified' } }
+              expected_updated_at = $expectedUpdatedAt
+            } | ConvertTo-Json -Depth 5 -Compress
+            $saved = Invoke-RestMethod -Uri "$origin/api/v1/projects/$projectId" -Method Put -Headers $headers -ContentType 'application/json' -Body $body
+            if ($saved.metadata.project_id -ne $projectId -or $saved.state.smoke.portable_reopen -ne 'verified') {
+              throw 'Packaged project save failed'
+            }
+            if (-not (Test-Path -LiteralPath $projectRoot -PathType Container)) {
+              throw 'Packaged project was not written to the isolated profile'
+            }
+            Stop-AuroraProcess $process
+            $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
+            $origin = Wait-AuroraOrigin $process
+            $reopened = Invoke-RestMethod -Uri "$origin/api/v1/projects/$projectId" -TimeoutSec 3
+            if ($reopened.metadata.project_id -ne $projectId -or $reopened.metadata.name -ne 'Packaged Smoke' -or $reopened.state.smoke.portable_reopen -ne 'verified') {
+              throw 'Packaged project did not reopen after process restart'
+            }
           } finally {
-            $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($process.Id)" -ErrorAction SilentlyContinue
-            foreach ($child in $children) { Stop-Process -Id $child.ProcessId -Force -ErrorAction SilentlyContinue }
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            Stop-AuroraProcess $process
           }
       - uses: actions/upload-artifact@v4
         with:
