@@ -57,12 +57,12 @@ function projectFolder(projectsDirectory: string): string {
 
 interface PersistedEditor {
   editor: {
-    brand: { logo_path: string | null };
-    pages: { sections: { image_path: string | null; image_alt: string }[] }[];
+    brand: { name: string; logo_path: string | null };
+    pages: { meta_description: string; sections: { image_path: string | null; image_alt: string }[] }[];
   };
 }
 
-test('one-prompt and guided-image browser journey uses only isolated fake services', async ({ page }) => {
+test('one-prompt, image and editor browser journey uses only isolated fake services', async ({ page }) => {
   const imageRequests: string[] = [];
   page.on('request', (request) => {
     if (request.method() === 'POST' && request.url().endsWith('/generation/image')) {
@@ -150,6 +150,30 @@ test('one-prompt and guided-image browser journey uses only isolated fake servic
 
   await page.getByRole('button', { name: 'Перейти в редактор' }).click();
   await expect(page.getByRole('heading', { name: 'QA Browser Studio' })).toBeVisible();
+  const brandName = page.locator('.side.right').getByRole('textbox', { name: 'Название бренда' });
+  await brandName.fill('Северная студия — обновлено');
+  await brandName.press('Tab');
+  await expect.poll(() => storedEditor().editor.brand.name).toBe('Северная студия — обновлено');
+
+  const seoDescription = page.locator('.page-title').getByRole('textbox', { name: 'Meta description' });
+  await seoDescription.fill('Обновлённое описание для браузерного теста.');
+  await seoDescription.press('Tab');
+  await expect.poll(() => storedEditor().editor.pages[0]?.meta_description)
+    .toBe('Обновлённое описание для браузерного теста.');
+
+  const workspace = page.locator('.workspace');
+  await page.getByRole('button', { name: 'Toggle Страницы' }).click();
+  await expect(workspace).toHaveClass(/left-collapsed/);
+  await expect(workspace).not.toHaveClass(/right-collapsed/);
+  await page.getByRole('button', { name: 'Toggle Инспектор / AI' }).click();
+  await expect(workspace).toHaveClass(/left-collapsed/);
+  await expect(workspace).toHaveClass(/right-collapsed/);
+  await page.getByRole('button', { name: 'Toggle Страницы' }).click();
+  await expect(workspace).not.toHaveClass(/left-collapsed/);
+  await expect(workspace).toHaveClass(/right-collapsed/);
+  await page.getByRole('button', { name: 'Toggle Инспектор / AI' }).click();
+  await expect(workspace).not.toHaveClass(/right-collapsed/);
+
   const body = page.getByRole('textbox', { name: 'Текст' });
   await body.fill('Изменённый текст браузерного теста.');
   await body.press('Tab');
@@ -160,9 +184,21 @@ test('one-prompt and guided-image browser journey uses only isolated fake servic
   await page.getByRole('button', { name: 'Предпросмотр' }).click();
   const preview = page.frameLocator('iframe[title="Предпросмотр"]');
   await expect(preview.getByText('Изменённый текст браузерного теста.')).toBeVisible();
+  await expect(preview.locator('meta[name="description"]'))
+    .toHaveAttribute('content', 'Обновлённое описание для браузерного теста.');
   await expect(preview.getByRole('img', { name: 'Изображение тестовой секции' })).toBeVisible();
   await expect.poll(() => preview.getByRole('img', { name: 'Изображение тестовой секции' })
     .evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBe(1);
+  await page.getByRole('button', { name: 'Телефон' }).click();
+  await expect(page.locator('.preview-frame.mobile')).toBeVisible();
+  await page.getByRole('button', { name: 'Компьютер' }).click();
+  await expect(page.locator('.preview-frame')).not.toHaveClass(/mobile/);
+  const previewTabPromise = page.waitForEvent('popup');
+  await page.getByRole('link', { name: 'Открыть в браузере' }).click();
+  const previewTab = await previewTabPromise;
+  await expect(previewTab).toHaveURL(new RegExp(`^${origin.replaceAll('.', '\\.')}/api/v1/projects/`));
+  await expect(previewTab.getByText('Изменённый текст браузерного теста.')).toBeVisible();
+  await previewTab.close();
   await page.getByRole('button', { name: 'Экспорт и деплой' }).click();
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByRole('button', { name: 'Экспортировать папку сайта' }).click();
@@ -170,6 +206,8 @@ test('one-prompt and guided-image browser journey uses only isolated fake servic
   expect(path.dirname(exportPath)).toBe(path.join(projectFolder(projectsDirectory), 'exports'));
   expect(readFileSync(path.join(exportPath, 'index.html'), 'utf8'))
     .toContain('Изменённый текст браузерного теста.');
+  expect(readFileSync(path.join(exportPath, 'index.html'), 'utf8'))
+    .toContain('Обновлённое описание для браузерного теста.');
   expect(readFileSync(path.join(exportPath, 'index.html'), 'utf8')).toContain(sectionPath);
   expect(readFileSync(path.join(exportPath, sectionPath)))
     .toEqual(readFileSync(path.join(folder, sectionPath)));
@@ -187,6 +225,10 @@ test('one-prompt and guided-image browser journey uses only isolated fake servic
   await page.getByRole('button', { name: 'Открыть' }).click();
   await expect(page.getByRole('textbox', { name: 'Текст' }))
     .toHaveValue('Изменённый текст браузерного теста.');
+  await expect(page.locator('.side.right').getByRole('textbox', { name: 'Название бренда' }))
+    .toHaveValue('Северная студия — обновлено');
+  await expect(page.locator('.page-title').getByRole('textbox', { name: 'Meta description' }))
+    .toHaveValue('Обновлённое описание для браузерного теста.');
   await expect(page.getByRole('img', { name: 'Изображение тестовой секции' })).toBeVisible();
   expect(storedEditor().editor.brand.logo_path).toBe(logoPath);
   expect(storedEditor().editor.pages[0]?.sections[0]?.image_path).toBe(sectionPath);
