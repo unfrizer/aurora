@@ -138,6 +138,30 @@ jobs:
               Pop-Location
               $env:USERPROFILE = $profile
             }
+            $expectedText = 'Текст из проверенной portable-сборки.'
+            $edited = Invoke-RestMethod -Uri "$origin/api/v1/projects/$projectId" -TimeoutSec 3
+            $preferences = Invoke-RestMethod -Uri "$origin/api/v1/preferences" -TimeoutSec 3
+            if ($edited.metadata.project_id -ne $projectId -or
+                $edited.state.editor.pages[0].sections[0].body -ne $expectedText) {
+              throw 'Packaged browser edit was not persisted before process restart'
+            }
+            if ($preferences.preferences.language -ne 'ru' -or
+                $preferences.preferences.onboarding_completed -ne $true) {
+              throw 'Packaged browser preferences were not persisted before process restart'
+            }
+            Stop-AuroraProcess $process
+            $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
+            $origin = Wait-AuroraOrigin $process
+            $restartedEdit = Invoke-RestMethod -Uri "$origin/api/v1/projects/$projectId" -TimeoutSec 3
+            $restartedPreferences = Invoke-RestMethod -Uri "$origin/api/v1/preferences" -TimeoutSec 3
+            if ($restartedEdit.metadata.project_id -ne $projectId -or
+                $restartedEdit.state.editor.pages[0].sections[0].body -ne $expectedText) {
+              throw 'Packaged browser edit did not survive process restart'
+            }
+            if ($restartedPreferences.preferences.language -ne 'ru' -or
+                $restartedPreferences.preferences.onboarding_completed -ne $true) {
+              throw 'Packaged browser preferences did not survive process restart'
+            }
           } finally {
             Stop-AuroraProcess $process
           }
