@@ -97,7 +97,8 @@ its own approved contract and latest-head CI before merge.
 The separate Windows browser gate runs the actual React build in Chrome
 against an isolated local backend with fake OpenAI responses and fake
 credentials. It checks first-run settings, one-prompt text draft review and
-acceptance, separate guided image consent/review/attachment, editing, preview,
+acceptance, separate guided image consent/review/attachment, brand/SEO/text
+editing, independent panel collapse, desktop/mobile and separate-tab preview,
 folder/ZIP export and reopening after reload.
 Run it after a frontend build with `cd frontend; pnpm test:browser`. It does
 not use real keys or certify image quality, live providers or a clean target PC.
