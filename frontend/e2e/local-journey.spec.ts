@@ -1,5 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -217,7 +217,19 @@ test('one-prompt, image and editor browser journey uses only isolated fake servi
   await page.getByRole('button', { name: 'Скачать ZIP сайта' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('aurora-site.zip');
-  expect(statSync(await download.path()).size).toBeGreaterThan(0);
+  const zipPath = await download.path();
+  expect(statSync(zipPath).size).toBeGreaterThan(0);
+  const inventory = JSON.parse(execFileSync(path.join(repository, '.venv', 'Scripts', 'python.exe'),
+    ['-m', 'tests.browser.inspect_zip', zipPath], {
+      cwd: repository, encoding: 'utf8', windowsHide: true,
+    })) as { names: string[]; sha256: Record<string, string> };
+  if (!logoPath) throw new Error('The logo image was not saved');
+  const expectedMembers = [...new Set(['index.html', 'assets/site.css', logoPath, sectionPath])].sort();
+  expect(inventory.names).toEqual(expectedMembers);
+  for (const name of expectedMembers) {
+    expect(inventory.sha256[name]).toBe(createHash('sha256')
+      .update(readFileSync(path.join(exportPath, name))).digest('hex'));
+  }
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
