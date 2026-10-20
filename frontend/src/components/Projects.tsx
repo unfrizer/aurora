@@ -10,20 +10,22 @@ interface Props {
   model: string;
   onCreate: (name: string) => Promise<void>;
   onGenerate: (name: string, prompt: string) => Promise<void>;
+  onImport: (name: string, file: File) => Promise<void>;
   onOpen: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<boolean>;
 }
 
-export function Projects({ language, projects, busy, model, onCreate, onGenerate, onOpen, onDelete }: Props) {
+export function Projects({ language, projects, busy, model, onCreate, onGenerate, onImport, onOpen, onDelete }: Props) {
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [deleting, setDeleting] = useState<ProjectMetadata | null>(null);
   const [confirmation, setConfirmation] = useState('');
   return <main className="projects-page">
     <div className="hero">
       <span className="eyebrow">PROJECTS / 01</span>
       <h1>{t(language, 'projects')}</h1>
-      <p>{t(language, 'noGeneration')}</p>
+      <p>{t(language, 'projectsIntro')}</p>
     </div>
     <div className="projects-grid">
       <form className="card new-project" onSubmit={(event) => {
@@ -38,6 +40,11 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
           <button className="primary" type="button" disabled={busy || !validDraftInputs(name, prompt, model)}
             onClick={() => void onGenerate(name, prompt)}>{t(language, 'generateDraft')}</button></div>
         <small>{t(language, 'generationScope')}</small>
+        <label>{t(language, 'importFile')}<input type="file" accept=".json,application/json"
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+        <div className="actions"><button type="button" disabled={busy || !name.trim() || !file}
+          onClick={() => { if (file) void onImport(name.trim(), file); }}>{t(language, 'importPrepared')}</button></div>
+        <small>{t(language, 'importScope')}</small>
       </form>
       <section className="project-list" aria-label={t(language, 'projects')}>
         {projects.length === 0 && <p className="muted">{t(language, 'noProjects')}</p>}
