@@ -60,8 +60,8 @@ jobs:
               Start-Sleep -Milliseconds 250
               if ($appProcess.HasExited) { throw "Packaged AURORA exited with $($appProcess.ExitCode)" }
               $ids = @($appProcess.Id)
-              $ids += @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($appProcess.Id)" | ForEach-Object { [int]$_.ProcessId })
-              $listeners = Get-NetTCPConnection -State Listen -LocalAddress '127.0.0.1' | Where-Object { $ids -contains $_.OwningProcess }
+              $ids += @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($appProcess.Id)" -ErrorAction SilentlyContinue | ForEach-Object { [int]$_.ProcessId })
+              $listeners = Get-NetTCPConnection -State Listen -LocalAddress '127.0.0.1' -ErrorAction SilentlyContinue | Where-Object { $ids -contains $_.OwningProcess }
               foreach ($listener in $listeners) {
                 $candidate = "http://127.0.0.1:$($listener.LocalPort)"
                 try {
