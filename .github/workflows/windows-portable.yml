@@ -51,6 +51,7 @@ jobs:
           New-Item -ItemType Directory -Path $profile, $localAppData | Out-Null
           $noBrowser = Join-Path $smoke 'no-browser.cmd'
           Set-Content -LiteralPath $noBrowser -Encoding ascii -Value '@echo off', 'exit /b 0'
+          $runnerProfile = $env:USERPROFILE
           $env:USERPROFILE = $profile
           $env:LOCALAPPDATA = $localAppData
           $env:BROWSER = $noBrowser
@@ -120,6 +121,22 @@ jobs:
             $reopened = Invoke-RestMethod -Uri "$origin/api/v1/projects/$projectId" -TimeoutSec 3
             if ($reopened.metadata.project_id -ne $projectId -or $reopened.metadata.name -ne 'Packaged Smoke' -or $reopened.state.smoke.portable_reopen -ne 'verified') {
               throw 'Packaged project did not reopen after process restart'
+            }
+            $env:AURORA_PORTABLE_ORIGIN = $origin
+            $browserTemp = Join-Path $smoke 'browser-temp'
+            New-Item -ItemType Directory -Path $browserTemp -ErrorAction Stop | Out-Null
+            $env:TEMP = $browserTemp
+            $env:TMP = $browserTemp
+            # Chrome rejects a redirected USERPROFILE even with Playwright's unique user-data-dir.
+            # The hosted runner profile is disposable; the EXE keeps its isolated launch environment.
+            $env:USERPROFILE = $runnerProfile
+            Push-Location frontend
+            try {
+              pnpm exec playwright test e2e/portable-journey.spec.ts
+              if ($LASTEXITCODE -ne 0) { throw 'Packaged browser journey failed' }
+            } finally {
+              Pop-Location
+              $env:USERPROFILE = $profile
             }
           } finally {
             Stop-AuroraProcess $process
