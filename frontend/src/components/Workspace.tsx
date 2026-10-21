@@ -4,6 +4,7 @@ import { assetName, move, nextPageSlug, replacePage, replaceSection } from '../e
 import { t } from '../i18n';
 import type { EditorDocument, EditorPage, EditorSection, Language, ProjectDocument } from '../types';
 import { ImageGeneration, type ImageSnapshot, type ImageTarget } from './ImageGeneration';
+import { PhotoTray, type PhotoAttachOutcome, type PhotoTarget } from './PhotoTray';
 import { TextAssist } from './TextAssist';
 
 interface Props {
@@ -58,6 +59,9 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
   const [newSection, setNewSection] = useState('');
   const [rename, setRename] = useState(projectName);
   const [imageDialog, setImageDialog] = useState<{ target: ImageTarget; label: string } | null>(null);
+  const [photoTrayOpen, setPhotoTrayOpen] = useState(false);
+  const [photoPending, setPhotoPending] = useState(false);
+  const photoPendingRef = useRef(false);
   const latestEditor = useRef(editor);
   latestEditor.current = editor;
   const page = editor.pages.find((item) => item.id === pageId) ?? editor.pages[0];
@@ -92,6 +96,41 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
     }
   }
 
+  async function attachPhoto(file: File, target: PhotoTarget): Promise<PhotoAttachOutcome> {
+    if (photoPendingRef.current) return 'upload-failed';
+    const current = latestEditor.current;
+    let old: string | null;
+    let apply: (path: string) => EditorDocument;
+    if (target.kind === 'logo') {
+      old = current.brand.logo_path;
+      apply = (path) => ({ ...current, brand: { ...current.brand, logo_path: path } });
+    } else {
+      const section = current.pages.find((page) => page.id === target.pageId)
+        ?.sections.find((entry) => entry.id === target.sectionId);
+      if (!section) return 'target-changed';
+      old = section.image_path;
+      apply = (path) => withSectionImage(current, target.pageId, target.sectionId, path);
+    }
+    photoPendingRef.current = true; setPhotoPending(true); onImageLock(true);
+    let uploaded = false;
+    try {
+      const path = await uploadRaster(projectId, file);
+      uploaded = true;
+      const next = apply(path);
+      if (!(await onCommit(next))) return 'save-failed';
+      if (old && old !== path && !assetReferenced(next, old)) {
+        const name = assetName(old);
+        if (name) try { await deleteRaster(projectId, name); } catch (error) { onError(error); }
+      }
+      return 'attached';
+    } catch (error) {
+      onError(error);
+      return uploaded ? 'save-failed' : 'upload-failed';
+    } finally {
+      photoPendingRef.current = false; setPhotoPending(false); onImageLock(false);
+    }
+  }
+
   async function showPreview() {
     const timestamp = await onFlush();
     if (timestamp && page) setPreview(`${previewUrl(projectId, page.slug)}?v=${encodeURIComponent(timestamp)}`);
@@ -108,7 +147,7 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
   }
 
   return <main className={`workspace ${leftOpen ? '' : 'left-collapsed'} ${rightOpen ? '' : 'right-collapsed'}`}>
-    <aside className="side left" inert={imageDialog !== null}>
+    <aside className="side left" inert={imageDialog !== null || photoPending}>
       <div className="side-head"><h2>{t(language, 'pages')}</h2><button aria-label={`Toggle ${t(language, 'pages')}`} onClick={() => setLeftOpen(!leftOpen)}>{leftOpen ? '‹' : '›'}</button></div>
       {leftOpen && <>
         <ol className="page-list">{editor.pages.map((item, index) => <li key={item.id} className={item.id === page?.id ? 'selected' : ''}>
@@ -129,17 +168,20 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
       </>}
     </aside>
     <section className="canvas" inert={imageDialog !== null}>
-      <div className="canvas-toolbar"><div><span className="eyebrow">EDITOR / {page?.slug ?? '—'}</span><h1>{projectName}</h1></div>
+      <div className="canvas-toolbar" inert={photoPending}><div><span className="eyebrow">EDITOR / {page?.slug ?? '—'}</span><h1>{projectName}</h1></div>
         <div className="actions"><span className={`save-state ${dirty ? 'dirty' : ''}`} role="status">{saving ? t(language, 'saving') : dirty ? t(language, 'unsaved') : t(language, 'saved')}</span>
           <button onClick={() => void onFlush()}>{t(language, 'save')}</button>
+          <button onClick={() => setPhotoTrayOpen(true)}>{t(language, 'photoTray')}</button>
           <button onClick={() => void onGuidedImages()}>{t(language, 'guidedTitle')}</button>
           <button onClick={() => void onReload()}>{t(language, 'reload')}</button></div></div>
+      {photoTrayOpen && <div inert={imageDialog !== null}><PhotoTray language={language} editor={editor}
+        onAttach={attachPhoto} onClose={() => setPhotoTrayOpen(false)} /></div>}
       {!page ? <p>{t(language, 'badEditor')}</p> : <>
-        <div className="tabline"><button className={preview ? '' : 'active'} onClick={() => setPreview('')}>{t(language, 'workspace')}</button>
+        <div className="tabline" inert={photoPending}><button className={preview ? '' : 'active'} onClick={() => setPreview('')}>{t(language, 'workspace')}</button>
           <button className={preview ? 'active' : ''} onClick={() => void showPreview()}>{t(language, 'preview')}</button>
           {preview && <><button onClick={() => setMobile(false)}>{t(language, 'desktop')}</button><button onClick={() => setMobile(true)}>{t(language, 'mobile')}</button>
             <a href={preview} target="_blank" rel="noopener noreferrer">{t(language, 'browser')}</a></>}</div>
-        {preview ? <div className={`preview-frame ${mobile ? 'mobile' : ''}`}><iframe title={t(language, 'preview')} sandbox="allow-same-origin" src={preview} /></div> : <div className="editor-surface">
+        {preview ? <div className={`preview-frame ${mobile ? 'mobile' : ''}`} inert={photoPending}><iframe title={t(language, 'preview')} sandbox="allow-same-origin" src={preview} /></div> : <div className="editor-surface" inert={photoPending}>
           <div className="page-title"><span className="eyebrow">PAGE SETTINGS</span>
             <Field label={t(language, 'title')} value={page.title} onCommit={(value) => changePage({ ...page, title: value })} />
             <Field label={t(language, 'heading')} value={page.heading} onCommit={(value) => changePage({ ...page, heading: value })} />
@@ -172,7 +214,7 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
         </div>}
       </>}
     </section>
-    <aside className="side right" inert={imageDialog !== null}><div className="side-head"><h2>{t(language, 'inspector')}</h2><button aria-label={`Toggle ${t(language, 'inspector')}`} onClick={() => setRightOpen(!rightOpen)}>{rightOpen ? '›' : '‹'}</button></div>
+    <aside className="side right" inert={imageDialog !== null || photoPending}><div className="side-head"><h2>{t(language, 'inspector')}</h2><button aria-label={`Toggle ${t(language, 'inspector')}`} onClick={() => setRightOpen(!rightOpen)}>{rightOpen ? '›' : '‹'}</button></div>
       {rightOpen && <div className="inspector-content">
         <section className="card"><span className="eyebrow">PROJECT</span>
           <label className="field">{t(language, 'projectName')}<input value={rename} onChange={(event) => setRename(event.target.value)}

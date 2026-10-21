@@ -4,6 +4,14 @@ import userEvent from '@testing-library/user-event';
 import type { EditorDocument, ProjectDocument } from '../src/types';
 import { blankEditor } from '../src/editor';
 
+const originalPhotoUrl = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+const originalPhotoRevoke = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+
+function stubPhotoUrls() {
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:customer-photo') });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+}
+
 function importFile(editor: EditorDocument): File {
   const bytes = new TextEncoder().encode(JSON.stringify(editor));
   const selected = new File([Uint8Array.from(bytes).buffer], 'prepared.json', { type: 'application/json' });
@@ -65,7 +73,92 @@ beforeEach(() => {
     source_updated_at: '2026-10-09T02:00:00Z', asset_path: `assets/${'a'.repeat(64)}.png`, failure: null });
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  if (originalPhotoUrl) Object.defineProperty(URL, 'createObjectURL', originalPhotoUrl);
+  else Reflect.deleteProperty(URL, 'createObjectURL');
+  if (originalPhotoRevoke) Object.defineProperty(URL, 'revokeObjectURL', originalPhotoRevoke);
+  else Reflect.deleteProperty(URL, 'revokeObjectURL');
+});
+
+describe('UI-008 customer photos', () => {
+  async function openTray(file: File) {
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    fireEvent.click(screen.getByRole('button', { name: 'Project photos' }));
+    fireEvent.change(screen.getByLabelText('Choose photos'), { target: { files: [file] } });
+  }
+
+  it('uploads only after manual destination selection, then saves without provider calls', async () => {
+    stubPhotoUrls();
+    const existing = blankEditor('Studio', 'en');
+    existing.pages[0]!.sections[0]!.image_alt = 'Customer-supplied image';
+    mocks.openProject.mockResolvedValue(withEditor(existing));
+    const path = `assets/${'a'.repeat(64)}.png`;
+    const steps: string[] = [];
+    mocks.uploadRaster.mockImplementation(async () => { steps.push('upload'); return path; });
+    mocks.saveEditor.mockImplementation(async (_projectId: string, next: EditorDocument) => {
+      steps.push('save'); return withEditor(next);
+    });
+    const file = new File(['png'], 'customer.png', { type: 'image/png' });
+    await openTray(file);
+    expect(mocks.uploadRaster).not.toHaveBeenCalled();
+    const page = existing.pages[0]!;
+    const section = page.sections[0]!;
+    fireEvent.change(screen.getByLabelText('Attach to'), { target: { value: `${page.id}/${section.id}` } });
+    fireEvent.click(screen.getByRole('button', { name: 'Attach photo' }));
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
+    expect(steps).toEqual(['upload', 'save']);
+    expect(mocks.uploadRaster).toHaveBeenCalledExactlyOnceWith(id, file);
+    expect(mocks.saveEditor.mock.calls[0]?.[2]).toBe('2026-10-09T02:00:00Z');
+    expect((mocks.saveEditor.mock.calls[0]?.[1] as EditorDocument).pages[0]?.sections[0])
+      .toMatchObject({ image_path: path, image_alt: 'Customer-supplied image' });
+    await waitFor(() => expect(screen.queryByText('customer.png')).not.toBeInTheDocument());
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+
+  it('keeps the selected photo after a failed save and does not retry or delete it', async () => {
+    stubPhotoUrls();
+    const path = `assets/${'b'.repeat(64)}.png`;
+    mocks.uploadRaster.mockResolvedValue(path);
+    mocks.saveEditor.mockRejectedValue(new ApiError(409));
+    await openTray(new File(['png'], 'waiting.png', { type: 'image/png' }));
+    fireEvent.change(screen.getByLabelText('Attach to'), { target: { value: 'logo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Attach photo' }));
+    expect(await screen.findByText(/Attachment is not confirmed/)).toBeInTheDocument();
+    expect(screen.getByText('waiting.png')).toBeInTheDocument();
+    expect(mocks.uploadRaster).toHaveBeenCalledTimes(1);
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+    expect(mocks.deleteRaster).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Projects' })).toBeEnabled());
+  });
+
+  it('deletes a replaced old asset only after a confirmed save and no remaining reference', async () => {
+    stubPhotoUrls();
+    const old = `assets/${'c'.repeat(64)}.png`;
+    const next = `assets/${'d'.repeat(64)}.png`;
+    const existing = blankEditor('Studio', 'en');
+    existing.brand.logo_path = old;
+    mocks.openProject.mockResolvedValue(withEditor(existing));
+    mocks.uploadRaster.mockResolvedValue(next);
+    const steps: string[] = [];
+    mocks.saveEditor.mockImplementation(async (_projectId: string, editor: EditorDocument) => {
+      steps.push('save'); return withEditor(editor);
+    });
+    mocks.deleteRaster.mockImplementation(async () => { steps.push('delete'); });
+    await openTray(new File(['png'], 'new-logo.png', { type: 'image/png' }));
+    fireEvent.change(screen.getByLabelText('Attach to'), { target: { value: 'logo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Attach photo' }));
+    await waitFor(() => expect(mocks.deleteRaster).toHaveBeenCalledWith(id, `${'c'.repeat(64)}.png`));
+    expect((mocks.saveEditor.mock.calls[0]?.[1] as EditorDocument).brand.logo_path).toBe(next);
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+    expect(steps).toEqual(['save', 'delete']);
+  });
+});
 
 describe('UI-007 prepared site import', () => {
   const importedId = '00000000-0000-4000-8000-000000000777';
