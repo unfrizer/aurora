@@ -71,10 +71,13 @@ Manager, not persisted in browser storage or project files.
 ## Import a text-only site prepared in ChatGPT
 
 This is an optional no-API-key path. In ChatGPT, describe the business and
-ask for a JSON file using the prompt below. Save the **JSON only** as UTF-8
-(`site.json`, at most 1 MiB). In AURORA's Projects screen, enter a new project
-name, select that file and choose **Import prepared site**. Import creates a
-new project; it never replaces an existing one or contacts OpenAI. Review the
+ask for JSON using the prompt below. In AURORA's Projects screen, enter a new
+project name. Either paste the **raw JSON only** (no Markdown or code fences)
+into **Paste prepared site JSON** and choose **Import pasted site**, or save
+it as UTF-8 (`site.json`) and choose **Import prepared site** after selecting
+the file. Both inputs accept at most 1 MiB of UTF-8 JSON and are separate
+actions. Import creates a new project; it never replaces an existing one or
+contacts OpenAI. Review the
 brand, page text and SEO in the editor before building or publishing. An
 imported editor is a draft; the existing preview/build checks whether it can
 be published. Customer photographs are not imported by this JSON: upload and
