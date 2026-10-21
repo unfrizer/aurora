@@ -289,7 +289,7 @@ describe('UI-009 direct prepared JSON paste', () => {
 
   it('rejects invalid pasted JSON before creating a project and leaves it editable', async () => {
     await paste('{ invalid', 'ru');
-    expect(await screen.findByRole('alert')).toHaveTextContent('не содержат корректный JSON');
+    expect(await screen.findByRole('alert')).toHaveTextContent('не содержит корректный JSON');
     expect(screen.getByLabelText('Вставьте JSON подготовленного сайта')).toHaveValue('{ invalid');
     expect(mocks.createProject).not.toHaveBeenCalled();
     expect(mocks.saveEditor).not.toHaveBeenCalled();
