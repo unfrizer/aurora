@@ -134,6 +134,8 @@ jobs:
             try {
               pnpm exec playwright test e2e/portable-journey.spec.ts
               if ($LASTEXITCODE -ne 0) { throw 'Packaged browser journey failed' }
+              pnpm exec playwright test e2e/portable-import-photos.spec.ts
+              if ($LASTEXITCODE -ne 0) { throw 'Packaged import/photo browser journey failed' }
             } finally {
               Pop-Location
               $env:USERPROFILE = $profile
@@ -149,6 +151,19 @@ jobs:
                 $preferences.preferences.onboarding_completed -ne $true) {
               throw 'Packaged browser preferences were not persisted before process restart'
             }
+            $allProjects = Invoke-RestMethod -Uri "$origin/api/v1/projects" -TimeoutSec 3
+            $importedMatches = @($allProjects | Where-Object { $_.name -eq 'Portable Customer Import' })
+            if ($importedMatches.Count -ne 1) { throw 'Expected exactly one packaged imported project' }
+            $importedId = [string]$importedMatches[0].project_id
+            $imported = Invoke-RestMethod -Uri "$origin/api/v1/projects/$importedId" -TimeoutSec 3
+            $importedLogo = [string]$imported.state.editor.brand.logo_path
+            $importedImage = [string]$imported.state.editor.pages[0].sections[0].image_path
+            if ($imported.state.editor.pages[0].sections[0].body -ne 'Сайт из локального JSON' -or
+                $imported.state.editor.pages[0].sections[0].image_alt -ne 'Фото работ клиента' -or
+                $importedLogo -notmatch '^assets/[a-f0-9]{64}\.png$' -or
+                $importedImage -notmatch '^assets/[a-f0-9]{64}\.png$') {
+              throw 'Packaged imported project was not persisted before process restart'
+            }
             Stop-AuroraProcess $process
             $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
             $origin = Wait-AuroraOrigin $process
@@ -161,6 +176,14 @@ jobs:
             if ($restartedPreferences.preferences.language -ne 'ru' -or
                 $restartedPreferences.preferences.onboarding_completed -ne $true) {
               throw 'Packaged browser preferences did not survive process restart'
+            }
+            $restartedImport = Invoke-RestMethod -Uri "$origin/api/v1/projects/$importedId" -TimeoutSec 3
+            if ($restartedImport.metadata.project_id -ne $importedId -or
+                $restartedImport.state.editor.pages[0].sections[0].body -ne 'Сайт из локального JSON' -or
+                $restartedImport.state.editor.pages[0].sections[0].image_alt -ne 'Фото работ клиента' -or
+                $restartedImport.state.editor.brand.logo_path -ne $importedLogo -or
+                $restartedImport.state.editor.pages[0].sections[0].image_path -ne $importedImage) {
+              throw 'Packaged imported project did not survive process restart'
             }
           } finally {
             Stop-AuroraProcess $process
