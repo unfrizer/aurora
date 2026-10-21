@@ -19,6 +19,7 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [pastedJson, setPastedJson] = useState('');
   const [deleting, setDeleting] = useState<ProjectMetadata | null>(null);
   const [confirmation, setConfirmation] = useState('');
   return <main className="projects-page">
@@ -44,6 +45,12 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
           onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
         <div className="actions"><button type="button" disabled={busy || !name.trim() || !file}
           onClick={() => { if (file) void onImport(name.trim(), file); }}>{t(language, 'importPrepared')}</button></div>
+        <label>{t(language, 'importPasteLabel')}<textarea value={pastedJson}
+          onChange={(event) => setPastedJson(event.target.value)} rows={6} /></label>
+        <div className="actions"><button type="button" disabled={busy || !name.trim() || !pastedJson.trim()}
+          onClick={() => void onImport(name.trim(), new File([pastedJson], 'pasted-site.json', { type: 'application/json' }))}>
+          {t(language, 'importPasteAction')}</button></div>
+        <small>{t(language, 'importPasteScope')}</small>
         <small>{t(language, 'importScope')}</small>
       </form>
       <section className="project-list" aria-label={t(language, 'projects')}>

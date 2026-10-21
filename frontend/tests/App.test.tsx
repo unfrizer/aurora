@@ -255,6 +255,85 @@ describe('UI-007 prepared site import', () => {
   });
 });
 
+describe('UI-009 direct prepared JSON paste', () => {
+  const importedId = '00000000-0000-4000-8000-000000000779';
+  const importedMetadata = { ...metadata, project_id: importedId, name: 'Pasted', updated_at: '2026-10-21T01:00:00Z' };
+
+  async function paste(value: string, language: 'ru' | 'en' = 'en') {
+    await enter(language);
+    fireEvent.change(screen.getByLabelText(language === 'en' ? 'Project name' : 'Название проекта'),
+      { target: { value: 'Pasted' } });
+    fireEvent.change(screen.getByLabelText(language === 'en' ? 'Paste prepared site JSON' : 'Вставьте JSON подготовленного сайта'),
+      { target: { value } });
+    fireEvent.click(screen.getByRole('button', {
+      name: language === 'en' ? 'Import pasted site' : 'Импортировать вставленный сайт',
+    }));
+  }
+
+  it('validates and saves pasted P7 as a separate project without AI or asset calls', async () => {
+    const prepared = blankEditor('Pasted', 'en');
+    mocks.createProject.mockResolvedValue({ metadata: importedMetadata, state: {} });
+    mocks.saveEditor.mockImplementation(async (_id: string, editor: EditorDocument) =>
+      ({ metadata: { ...importedMetadata, updated_at: '2026-10-21T02:00:00Z' }, state: { editor } }));
+    await paste(JSON.stringify(prepared));
+    await screen.findByText('CONTENT BLOCKS');
+    expect(mocks.createProject).toHaveBeenCalledExactlyOnceWith('Pasted');
+    expect(mocks.saveEditor).toHaveBeenCalledExactlyOnceWith(importedId, prepared, importedMetadata.updated_at);
+    expect(mocks.openProject).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    expect(mocks.uploadRaster).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid pasted JSON before creating a project and leaves it editable', async () => {
+    await paste('{ invalid', 'ru');
+    expect(await screen.findByRole('alert')).toHaveTextContent('не содержит корректный JSON');
+    expect(screen.getByLabelText('Вставьте JSON подготовленного сайта')).toHaveValue('{ invalid');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('applies the existing one MiB UTF-8 byte limit to pasted text', async () => {
+    await paste('я'.repeat(524289));
+    expect(await screen.findByRole('alert')).toHaveTextContent('no larger than 1 MiB');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('keeps file and paste actions independent and disables empty paste', async () => {
+    const fileEditor = blankEditor('File version', 'en');
+    await enter();
+    expect(screen.getByRole('button', { name: 'Import pasted site' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Pasted' } });
+    fireEvent.change(screen.getByLabelText('Prepared site JSON file'), { target: { files: [importFile(fileEditor)] } });
+    expect(screen.getByRole('button', { name: 'Import pasted site' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Paste prepared site JSON'), { target: { value: '   ' } });
+    expect(screen.getByRole('button', { name: 'Import pasted site' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Import prepared site' }));
+    await screen.findByText('CONTENT BLOCKS');
+    expect(mocks.saveEditor.mock.calls[0]?.[1]).toEqual(fileEditor);
+  });
+
+  it('uses pasted text rather than the selected file when the paste action is chosen', async () => {
+    const pastedEditor = blankEditor('Pasted version', 'en');
+    const fileEditor = blankEditor('File version', 'en');
+    mocks.createProject.mockResolvedValue({ metadata: importedMetadata, state: {} });
+    mocks.saveEditor.mockImplementation(async (_id: string, editor: EditorDocument) =>
+      ({ metadata: importedMetadata, state: { editor } }));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Pasted' } });
+    fireEvent.change(screen.getByLabelText('Prepared site JSON file'), { target: { files: [importFile(fileEditor)] } });
+    fireEvent.change(screen.getByLabelText('Paste prepared site JSON'),
+      { target: { value: JSON.stringify(pastedEditor) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import pasted site' }));
+    await screen.findByText('CONTENT BLOCKS');
+    expect(mocks.saveEditor.mock.calls[0]?.[1]).toEqual(pastedEditor);
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
