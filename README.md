@@ -81,6 +81,14 @@ be published. Customer photographs are not imported by this JSON: upload and
 attach them separately in the editor. Do not place API keys, secrets, or
 private customer material in Git.
 
+For customer photos, open the saved project in the editor and choose
+**Project photos**. Select up to 20 local PNG/JPEG/GIF/WebP files (up to 16 MiB
+each), then pick a logo or section destination and click **Attach photo** for
+each image. Merely selecting files does not upload them. AURORA keeps their
+original bytes and does not automatically analyze, compress, or place them.
+Unattached selections disappear when the workspace closes or reloads; a
+failed editor save can leave an uploaded but unattached asset in the project.
+
 Copy this prompt into ChatGPT, then add your own business brief:
 
 ```text
