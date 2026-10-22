@@ -20,6 +20,8 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [fileDragging, setFileDragging] = useState(false);
+  const [fileDropError, setFileDropError] = useState('');
   const [pastedJson, setPastedJson] = useState('');
   const [deleting, setDeleting] = useState<ProjectMetadata | null>(null);
   const [confirmation, setConfirmation] = useState('');
@@ -65,8 +67,23 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
                 onFocus={(event) => event.currentTarget.select()} />
             </label>
           </details>
-          <label>{t(language, 'importFile')}<input type="file" accept=".json,application/json"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+          <div className={`import-drop-zone${fileDragging ? ' dragging' : ''}`} role="region"
+            aria-label={t(language, 'importDropZone')}
+            onDragEnter={(event) => { event.preventDefault(); setFileDragging(true); }}
+            onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }}
+            onDragLeave={(event) => { event.preventDefault(); setFileDragging(false); }}
+            onDrop={(event) => {
+              event.preventDefault(); setFileDragging(false);
+              const selected = Array.from(event.dataTransfer.files);
+              if (selected.length !== 1) { setFileDropError(t(language, 'importDropInvalid')); return; }
+              setFile(selected[0] ?? null); setFileDropError('');
+            }}>
+            <p>{t(language, 'importDropNote')}</p>
+            <label>{t(language, 'importFile')}<input type="file" accept=".json,application/json"
+              onChange={(event) => { setFile(event.target.files?.[0] ?? null); setFileDropError(''); }} /></label>
+            {file && <small aria-live="polite">{t(language, 'importDropSelected')} {file.name}</small>}
+            {fileDropError && <p role="alert">{fileDropError}</p>}
+          </div>
           <div className="actions"><button type="button" disabled={busy || !name.trim() || !file}
             onClick={() => { if (file) void onImport(name.trim(), file); }}>{t(language, 'importPrepared')}</button></div>
           <label>{t(language, 'importPasteLabel')}<textarea value={pastedJson}

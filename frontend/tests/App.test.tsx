@@ -387,6 +387,82 @@ describe('UI-012 project creation path clarity', () => {
   });
 });
 
+describe('UI-013 prepared JSON drop selection', () => {
+  it('selects one dropped file but imports only after the explicit file action', async () => {
+    const prepared = blankEditor('Imported', 'en');
+    const importedId = '00000000-0000-4000-8000-000000000778';
+    const importedMetadata = { ...metadata, project_id: importedId, name: 'Imported' };
+    mocks.createProject.mockResolvedValue({ metadata: importedMetadata, state: {} });
+    mocks.saveEditor.mockImplementation(async (_id: string, editor: EditorDocument) =>
+      ({ metadata: importedMetadata, state: { editor } }));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Imported' } });
+    const zone = screen.getByRole('region', { name: 'JSON file selection area' });
+    expect(zone).toHaveTextContent('Dropping alone does not create a project');
+    fireEvent.dragEnter(zone);
+    expect(zone).toHaveClass('dragging');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    fireEvent.drop(zone, { dataTransfer: { files: [importFile(prepared)] } });
+    expect(zone).not.toHaveClass('dragging');
+    expect(within(zone).getByText('Selected file: prepared.json')).toBeInTheDocument();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Import pasted site' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Import prepared site' }));
+    await screen.findByText('CONTENT BLOCKS');
+    expect(mocks.createProject).toHaveBeenCalledExactlyOnceWith('Imported');
+    expect(mocks.saveEditor).toHaveBeenCalledExactlyOnceWith(importedId, prepared, importedMetadata.updated_at);
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.uploadRaster).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+
+  it('rejects multiple dropped files without replacing a previous picker selection', async () => {
+    await enter('ru');
+    fireEvent.change(screen.getByLabelText('Название проекта'), { target: { value: 'Импорт' } });
+    const zone = screen.getByRole('region', { name: 'Область выбора JSON-файла' });
+    fireEvent.change(within(zone).getByLabelText('JSON-файл подготовленного сайта'),
+      { target: { files: [new File(['old'], 'old.json')] } });
+    fireEvent.drop(zone, { dataTransfer: { files: [new File(['one'], 'one.json'),
+      new File(['two'], 'two.json')] } });
+    fireEvent.drop(zone, { dataTransfer: { files: [] } });
+    expect(within(zone).getByText('Выбран файл: old.json')).toBeInTheDocument();
+    expect(within(zone).getByRole('alert')).toHaveTextContent('Предыдущий выбор сохранён');
+    expect(screen.getByRole('button', { name: 'Импортировать подготовленный сайт' })).toBeEnabled();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('runs the existing strict validator on an explicitly imported dropped file', async () => {
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Imported' } });
+    fireEvent.drop(screen.getByRole('region', { name: 'JSON file selection area' }),
+      { dataTransfer: { files: [new File(['not JSON'], 'misleading.json', { type: 'application/json' })] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import prepared site' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('does not contain valid JSON');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('keeps a dropped file separate from the pasted JSON action', async () => {
+    const pasted = blankEditor('Pasted', 'en');
+    const importedId = '00000000-0000-4000-8000-000000000779';
+    const importedMetadata = { ...metadata, project_id: importedId, name: 'Pasted' };
+    mocks.createProject.mockResolvedValue({ metadata: importedMetadata, state: {} });
+    mocks.saveEditor.mockImplementation(async (_id: string, editor: EditorDocument) =>
+      ({ metadata: importedMetadata, state: { editor } }));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Pasted' } });
+    fireEvent.drop(screen.getByRole('region', { name: 'JSON file selection area' }),
+      { dataTransfer: { files: [new File(['not JSON'], 'invalid.json')] } });
+    fireEvent.change(screen.getByLabelText('Paste prepared site JSON'),
+      { target: { value: JSON.stringify(pasted) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import pasted site' }));
+    await screen.findByText('CONTENT BLOCKS');
+    expect(mocks.saveEditor).toHaveBeenCalledExactlyOnceWith(importedId, pasted, importedMetadata.updated_at);
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
