@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { t } from '../i18n';
+import { preparedSitePrompt } from '../prepared_site_prompt';
 import { validDraftInputs } from '../types';
 import type { Language, ProjectMetadata } from '../types';
 
@@ -41,6 +42,14 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
           <button className="primary" type="button" disabled={busy || !validDraftInputs(name, prompt, model)}
             onClick={() => void onGenerate(name, prompt)}>{t(language, 'generateDraft')}</button></div>
         <small>{t(language, 'generationScope')}</small>
+        <details>
+          <summary>{t(language, 'importGuide')}</summary>
+          <p>{t(language, 'importGuideNote')}</p>
+          <label>{t(language, 'importGuidePrompt')}
+            <textarea readOnly value={preparedSitePrompt(language)} rows={18}
+              onFocus={(event) => event.currentTarget.select()} />
+          </label>
+        </details>
         <label>{t(language, 'importFile')}<input type="file" accept=".json,application/json"
           onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
         <div className="actions"><button type="button" disabled={busy || !name.trim() || !file}
