@@ -39,7 +39,37 @@ afterEach(() => {
   else Reflect.deleteProperty(URL, 'revokeObjectURL');
 });
 
-describe('UI-008 local customer photo tray', () => {
+describe('UI-008 photo tray with UI-011 drop staging', () => {
+  it('stages dropped files through picker rules, with no upload from drag or drop', () => {
+    const onAttach = vi.fn();
+    render(<PhotoTray language="en" editor={editor} onAttach={onAttach} onClose={vi.fn()} />);
+    const zone = screen.getByRole('region', { name: 'Photo selection area' });
+    expect(screen.getByText(/Dropping does not upload or attach anything/)).toBeInTheDocument();
+    fireEvent.dragEnter(zone);
+    expect(zone).toHaveClass('dragging');
+    expect(screen.queryByRole('button', { name: 'Attach photo' })).not.toBeInTheDocument();
+    fireEvent.drop(zone, { dataTransfer: { files: [raster('drop.png')] } });
+    expect(zone).not.toHaveClass('dragging');
+    expect(screen.getByText('drop.png')).toBeInTheDocument();
+    expect(onAttach).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Choose photos')).toBeEnabled();
+  });
+
+  it('rejects invalid and over-capacity drops without changing staged photos', () => {
+    render(<PhotoTray language="en" editor={editor} onAttach={vi.fn()} onClose={vi.fn()} />);
+    const zone = screen.getByRole('region', { name: 'Photo selection area' });
+    select(raster('kept.png'));
+    fireEvent.drop(zone, { dataTransfer: { files: [raster('valid.jpg', 'image/jpeg'),
+      raster('bad.svg', 'image/svg+xml')] } });
+    expect(screen.getByText('kept.png')).toBeInTheDocument();
+    expect(screen.queryByText('valid.jpg')).not.toBeInTheDocument();
+    expect(createUrl).toHaveBeenCalledTimes(1);
+    fireEvent.drop(zone, { dataTransfer: { files: Array.from({ length: 20 }, (_, index) =>
+      raster(`excess-${index}.png`)) } });
+    expect(screen.getAllByRole('button', { name: 'Attach photo' })).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('Your previous selection remains');
+  });
+
   it('stages all four existing raster types without upload and rejects invalid additions atomically', () => {
     const onAttach = vi.fn();
     render(<PhotoTray language="en" editor={editor} onAttach={onAttach} onClose={vi.fn()} />);
@@ -92,6 +122,9 @@ describe('UI-008 local customer photo tray', () => {
     expect(within(row('second.png')).getByRole('button', { name: 'Attach photo' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
     expect(screen.getByLabelText('Choose photos')).toBeDisabled();
+    const zone = screen.getByRole('region', { name: 'Photo selection area' });
+    fireEvent.drop(zone, { dataTransfer: { files: [raster('blocked.png')] } });
+    expect(screen.queryByText('blocked.png')).not.toBeInTheDocument();
     expect(onAttach).toHaveBeenCalledTimes(1);
     finish?.('save-failed');
     expect(await screen.findByRole('alert')).toHaveTextContent('file may be stored');
@@ -123,6 +156,7 @@ describe('UI-008 local customer photo tray', () => {
   it('shows localized Russian guidance and requires a manual destination', () => {
     render(<PhotoTray language="ru" editor={editor} onAttach={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText(/Файлы загружаются только при прикреплении/)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Область выбора фотографий' })).toHaveTextContent('Перетаскивание ничего не загружает');
     fireEvent.change(screen.getByLabelText('Выбрать фотографии'),
       { target: { files: [raster('ru.png')] } });
     expect(within(row('ru.png')).getByRole('button', { name: 'Прикрепить фотографию' })).toBeDisabled();
