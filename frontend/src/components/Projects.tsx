@@ -37,30 +37,46 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
       }}>
         <span className="eyebrow">NEW PROJECT</span>
         <label>{t(language, 'projectName')}<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
-        <label>{t(language, 'businessPrompt')}<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} /></label>
-        <div className="actions"><button disabled={busy || !name.trim()}>{t(language, 'create')}</button>
-          <button className="primary" type="button" disabled={busy || !validDraftInputs(name, prompt, model)}
+        <section className="project-path" aria-labelledby="project-ai-path">
+          <div className="project-path-head"><h2 id="project-ai-path">{t(language, 'projectAiPath')}</h2>
+            <span className="badge">{t(language, 'projectAiBadge')}</span></div>
+          <p>{t(language, 'projectAiPathNote')}</p>
+          <label>{t(language, 'businessPrompt')}<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={5} /></label>
+          <div className="actions"><button className="primary" type="button"
+            disabled={busy || !validDraftInputs(name, prompt, model)}
             onClick={() => void onGenerate(name, prompt)}>{t(language, 'generateDraft')}</button></div>
-        <small>{t(language, 'generationScope')}</small>
-        <details>
-          <summary>{t(language, 'importGuide')}</summary>
-          <p>{t(language, 'importGuideNote')}</p>
-          <label>{t(language, 'importGuidePrompt')}
-            <textarea readOnly value={preparedSitePrompt(language)} rows={18}
-              onFocus={(event) => event.currentTarget.select()} />
-          </label>
-        </details>
-        <label>{t(language, 'importFile')}<input type="file" accept=".json,application/json"
-          onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
-        <div className="actions"><button type="button" disabled={busy || !name.trim() || !file}
-          onClick={() => { if (file) void onImport(name.trim(), file); }}>{t(language, 'importPrepared')}</button></div>
-        <label>{t(language, 'importPasteLabel')}<textarea value={pastedJson}
-          onChange={(event) => setPastedJson(event.target.value)} rows={6} /></label>
-        <div className="actions"><button type="button" disabled={busy || !name.trim() || !pastedJson.trim()}
-          onClick={() => void onImport(name.trim(), new File([pastedJson], 'pasted-site.json', { type: 'application/json' }))}>
-          {t(language, 'importPasteAction')}</button></div>
-        <small>{t(language, 'importPasteScope')}</small>
-        <small>{t(language, 'importScope')}</small>
+          <small>{t(language, 'generationScope')}</small>
+        </section>
+        <section className="project-path" aria-labelledby="project-blank-path">
+          <div className="project-path-head"><h2 id="project-blank-path">{t(language, 'projectBlankPath')}</h2>
+            <span className="badge good">{t(language, 'projectNoKeyBadge')}</span></div>
+          <p>{t(language, 'projectBlankPathNote')}</p>
+          <div className="actions"><button disabled={busy || !name.trim()}>{t(language, 'create')}</button></div>
+        </section>
+        <section className="project-path" aria-labelledby="project-import-path">
+          <div className="project-path-head"><h2 id="project-import-path">{t(language, 'projectImportPath')}</h2>
+            <span className="badge good">{t(language, 'projectNoKeyBadge')}</span></div>
+          <p>{t(language, 'projectImportPathNote')}</p>
+          <details>
+            <summary>{t(language, 'importGuide')}</summary>
+            <p>{t(language, 'importGuideNote')}</p>
+            <label>{t(language, 'importGuidePrompt')}
+              <textarea readOnly value={preparedSitePrompt(language)} rows={18}
+                onFocus={(event) => event.currentTarget.select()} />
+            </label>
+          </details>
+          <label>{t(language, 'importFile')}<input type="file" accept=".json,application/json"
+            onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+          <div className="actions"><button type="button" disabled={busy || !name.trim() || !file}
+            onClick={() => { if (file) void onImport(name.trim(), file); }}>{t(language, 'importPrepared')}</button></div>
+          <label>{t(language, 'importPasteLabel')}<textarea value={pastedJson}
+            onChange={(event) => setPastedJson(event.target.value)} rows={6} /></label>
+          <div className="actions"><button type="button" disabled={busy || !name.trim() || !pastedJson.trim()}
+            onClick={() => void onImport(name.trim(), new File([pastedJson], 'pasted-site.json', { type: 'application/json' }))}>
+            {t(language, 'importPasteAction')}</button></div>
+          <small>{t(language, 'importPasteScope')}</small>
+          <small>{t(language, 'importScope')}</small>
+        </section>
       </form>
       <section className="project-list" aria-label={t(language, 'projects')}>
         {projects.length === 0 && <p className="muted">{t(language, 'noProjects')}</p>}
