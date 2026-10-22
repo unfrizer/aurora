@@ -358,6 +358,35 @@ describe('UI-010 in-app prepared JSON guide', () => {
   });
 });
 
+describe('UI-012 project creation path clarity', () => {
+  it.each(['ru', 'en'] as const)('separates the three %s paths without triggering any action', async (language) => {
+    await enter(language);
+    const ai = screen.getByRole('region', { name: language === 'ru' ? 'Создать с OpenAI' : 'Generate with OpenAI' });
+    const blank = screen.getByRole('region', { name: language === 'ru' ? 'Начать вручную' : 'Start manually' });
+    const imported = screen.getByRole('region', { name: language === 'ru'
+      ? 'Импортировать подготовленный сайт' : 'Import a prepared site' });
+    expect(ai).toHaveTextContent(language === 'ru' ? 'Нужен ключ OpenAI' : 'OpenAI key required');
+    expect(ai).toHaveTextContent(language === 'ru' ? 'Запрос к провайдеру может быть платным'
+      : 'The provider request may incur a charge');
+    expect(blank).toHaveTextContent(language === 'ru' ? 'Без ключа OpenAI' : 'No OpenAI key required');
+    expect(imported).toHaveTextContent(language === 'ru' ? 'у внешнего инструмента могут быть свои условия и расходы'
+      : 'that external tool may have its own terms and costs');
+    expect(within(ai).getByRole('button', { name: language === 'ru' ? 'Создать из запроса' : 'Generate from prompt' })).toBeDisabled();
+    expect(within(blank).getByRole('button', { name: language === 'ru' ? 'Создать проект' : 'Create project' })).toBeDisabled();
+    expect(within(imported).getByRole('button', { name: language === 'ru'
+      ? 'Импортировать подготовленный сайт' : 'Import prepared site' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(language === 'ru' ? 'Название проекта' : 'Project name'),
+      { target: { value: 'Studio' } });
+    expect(within(blank).getByRole('button', { name: language === 'ru' ? 'Создать проект' : 'Create project' })).toBeEnabled();
+    expect(within(ai).getByRole('button', { name: language === 'ru' ? 'Создать из запроса' : 'Generate from prompt' })).toBeDisabled();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.uploadRaster).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
