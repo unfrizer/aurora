@@ -39,6 +39,7 @@ function targetFor(editor: EditorDocument, key: string): PhotoTarget | null {
 export function PhotoTray({ language, editor, onAttach, onClose }: Props) {
   const [items, setItems] = useState<TrayItem[]>([]);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [error, setError] = useState('');
   const urls = useRef(new Set<string>());
   const pending = useRef(false);
@@ -54,6 +55,7 @@ export function PhotoTray({ language, editor, onAttach, onClose }: Props) {
   }
 
   function add(files: FileList | null) {
+    if (pending.current) return;
     const selected = Array.from(files ?? []);
     if (!selected.length) return;
     if (items.length + selected.length > MAX_TRAY_ITEMS || selected.some((file) =>
@@ -82,7 +84,7 @@ export function PhotoTray({ language, editor, onAttach, onClose }: Props) {
     const target = targetFor(editor, item.targetKey);
     if (!target) { setError(t(language, 'photoTargetChanged')); return; }
     if (pending.current) return;
-    pending.current = true; setPendingId(item.id); setError('');
+    pending.current = true; setPendingId(item.id); setDragging(false); setError('');
     try {
       const outcome = await onAttach(item.file, target);
       if (outcome === 'attached') remove(item);
@@ -97,9 +99,17 @@ export function PhotoTray({ language, editor, onAttach, onClose }: Props) {
       <h2>{t(language, 'photoTray')}</h2></div>
       <button type="button" disabled={pendingId !== null} onClick={onClose}>{t(language, 'close')}</button></div>
     <p>{t(language, 'photoTrayNote')}</p>
-    <label>{t(language, 'photoChoose')}<input type="file" multiple
-      accept="image/png,image/jpeg,image/gif,image/webp" disabled={pendingId !== null}
-      onChange={(event) => { add(event.currentTarget.files); event.currentTarget.value = ''; }} /></label>
+    <div className={`photo-drop-zone${dragging ? ' dragging' : ''}`} role="region"
+      aria-label={t(language, 'photoDropZone')}
+      onDragEnter={(event) => { event.preventDefault(); if (!pending.current) setDragging(true); }}
+      onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = pending.current ? 'none' : 'copy'; }}
+      onDragLeave={(event) => { event.preventDefault(); setDragging(false); }}
+      onDrop={(event) => { event.preventDefault(); setDragging(false); add(event.dataTransfer.files); }}>
+      <p>{t(language, 'photoDropNote')}</p>
+      <label>{t(language, 'photoChoose')}<input type="file" multiple
+        accept="image/png,image/jpeg,image/gif,image/webp" disabled={pendingId !== null}
+        onChange={(event) => { add(event.currentTarget.files); event.currentTarget.value = ''; }} /></label>
+    </div>
     <small>{t(language, 'photoLimits')}</small>
     {error && <p role="alert" className="photo-tray-error">{error}</p>}
     {items.length === 0 && <p className="muted">{t(language, 'photoEmpty')}</p>}
