@@ -70,6 +70,11 @@ test('pasted P7 JSON creates, previews and reopens one offline project', async (
   await page.getByRole('textbox', { name: 'Название проекта' }).fill('Сайт из вставки');
   const paste = page.getByRole('textbox', { name: 'Вставьте JSON подготовленного сайта' });
   await paste.fill('{');
+  await page.getByRole('textbox', { name: 'Название проекта' }).press('Enter');
+  await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
+  expect(requests.filter((request) => request.method === 'POST' &&
+    request.url === `${origin}/api/v1/projects`)).toHaveLength(0);
+  if (existsSync(projectsRoot())) expect(readdirSync(projectsRoot())).toHaveLength(0);
   await page.getByRole('button', { name: 'Импортировать вставленный сайт' }).click();
   await expect(page.getByText('Файл импорта не содержит корректный JSON.')).toBeVisible();
   if (existsSync(projectsRoot())) expect(readdirSync(projectsRoot())).toHaveLength(0);
