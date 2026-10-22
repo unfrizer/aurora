@@ -136,6 +136,8 @@ jobs:
               if ($LASTEXITCODE -ne 0) { throw 'Packaged browser journey failed' }
               pnpm exec playwright test e2e/portable-import-photos.spec.ts
               if ($LASTEXITCODE -ne 0) { throw 'Packaged import/photo browser journey failed' }
+              pnpm exec playwright test e2e/portable-paste-import.spec.ts
+              if ($LASTEXITCODE -ne 0) { throw 'Packaged paste-import browser journey failed' }
             } finally {
               Pop-Location
               $env:USERPROFILE = $profile
@@ -164,6 +166,15 @@ jobs:
                 $importedImage -notmatch '^assets/[a-f0-9]{64}\.png$') {
               throw 'Packaged imported project was not persisted before process restart'
             }
+            $pastedMatches = @($allProjects | Where-Object { $_.name -eq 'Portable Pasted Import' })
+            if ($pastedMatches.Count -ne 1) { throw 'Expected exactly one packaged pasted project' }
+            $pastedId = [string]$pastedMatches[0].project_id
+            $pasted = Invoke-RestMethod -Uri "$origin/api/v1/projects/$pastedId" -TimeoutSec 3
+            if ($pasted.metadata.project_id -ne $pastedId -or
+                $pasted.state.editor.brand.name -ne 'Портативная студия' -or
+                $pasted.state.editor.pages[0].sections[0].body -ne 'Сайт из вставленного JSON') {
+              throw 'Packaged pasted project was not persisted before process restart'
+            }
             Stop-AuroraProcess $process
             $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
             $origin = Wait-AuroraOrigin $process
@@ -184,6 +195,12 @@ jobs:
                 $restartedImport.state.editor.brand.logo_path -ne $importedLogo -or
                 $restartedImport.state.editor.pages[0].sections[0].image_path -ne $importedImage) {
               throw 'Packaged imported project did not survive process restart'
+            }
+            $restartedPaste = Invoke-RestMethod -Uri "$origin/api/v1/projects/$pastedId" -TimeoutSec 3
+            if ($restartedPaste.metadata.project_id -ne $pastedId -or
+                $restartedPaste.state.editor.brand.name -ne 'Портативная студия' -or
+                $restartedPaste.state.editor.pages[0].sections[0].body -ne 'Сайт из вставленного JSON') {
+              throw 'Packaged pasted project did not survive process restart'
             }
           } finally {
             Stop-AuroraProcess $process
