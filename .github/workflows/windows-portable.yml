@@ -123,6 +123,7 @@ jobs:
               throw 'Packaged project did not reopen after process restart'
             }
             $env:AURORA_PORTABLE_ORIGIN = $origin
+            $env:AURORA_PORTABLE_PROJECTS_ROOT = $projectRoot
             $browserTemp = Join-Path $smoke 'browser-temp'
             New-Item -ItemType Directory -Path $browserTemp -ErrorAction Stop | Out-Null
             $env:TEMP = $browserTemp
@@ -138,6 +139,8 @@ jobs:
               if ($LASTEXITCODE -ne 0) { throw 'Packaged import/photo browser journey failed' }
               pnpm exec playwright test e2e/portable-paste-import.spec.ts
               if ($LASTEXITCODE -ne 0) { throw 'Packaged paste-import browser journey failed' }
+              pnpm exec playwright test e2e/portable-paste-photo-export.spec.ts
+              if ($LASTEXITCODE -ne 0) { throw 'Packaged paste/photo/export browser journey failed' }
             } finally {
               Pop-Location
               $env:USERPROFILE = $profile
@@ -175,6 +178,18 @@ jobs:
                 $pasted.state.editor.pages[0].sections[0].body -ne 'Сайт из вставленного JSON') {
               throw 'Packaged pasted project was not persisted before process restart'
             }
+            $exportedMatches = @($allProjects | Where-Object { $_.name -eq 'Portable Pasted Export' })
+            if ($exportedMatches.Count -ne 1) { throw 'Expected exactly one packaged pasted export project' }
+            $exportedId = [string]$exportedMatches[0].project_id
+            $exported = Invoke-RestMethod -Uri "$origin/api/v1/projects/$exportedId" -TimeoutSec 3
+            $exportedImage = [string]$exported.state.editor.pages[0].sections[0].image_path
+            if ($exported.metadata.project_id -ne $exportedId -or
+                $exported.state.editor.brand.name -ne 'Мастерская для ZIP' -or
+                $exported.state.editor.pages[0].sections[0].body -ne 'Сайт из portable JSON' -or
+                $exported.state.editor.pages[0].sections[0].image_alt -ne 'Фото работы клиента' -or
+                $exportedImage -notmatch '^assets/[a-f0-9]{64}\.png$') {
+              throw 'Packaged pasted export project was not persisted before process restart'
+            }
             Stop-AuroraProcess $process
             $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
             $origin = Wait-AuroraOrigin $process
@@ -201,6 +216,13 @@ jobs:
                 $restartedPaste.state.editor.brand.name -ne 'Портативная студия' -or
                 $restartedPaste.state.editor.pages[0].sections[0].body -ne 'Сайт из вставленного JSON') {
               throw 'Packaged pasted project did not survive process restart'
+            }
+            $restartedExport = Invoke-RestMethod -Uri "$origin/api/v1/projects/$exportedId" -TimeoutSec 3
+            if ($restartedExport.metadata.project_id -ne $exportedId -or
+                $restartedExport.state.editor.brand.name -ne 'Мастерская для ZIP' -or
+                $restartedExport.state.editor.pages[0].sections[0].body -ne 'Сайт из portable JSON' -or
+                $restartedExport.state.editor.pages[0].sections[0].image_path -ne $exportedImage) {
+              throw 'Packaged pasted export project did not survive process restart'
             }
           } finally {
             Stop-AuroraProcess $process
