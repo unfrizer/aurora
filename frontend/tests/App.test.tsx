@@ -334,6 +334,30 @@ describe('UI-009 direct prepared JSON paste', () => {
   });
 });
 
+describe('UI-010 in-app prepared JSON guide', () => {
+  it.each(['ru', 'en'] as const)('shows selectable %s guidance without using project actions', async (language) => {
+    await enter(language);
+    const summary = screen.getByText(language === 'ru'
+      ? 'Как подготовить JSON для импорта' : 'How to prepare import JSON');
+    const details = summary.closest('details');
+    expect(details).not.toHaveAttribute('open');
+    fireEvent.click(summary);
+    expect(details).toHaveAttribute('open');
+    const prompt = screen.getByLabelText(language === 'ru'
+      ? 'Шаблон запроса (выделяется при щелчке)' : 'Preparation prompt (click to select)');
+    expect(prompt).toHaveAttribute('readonly');
+    expect((prompt as HTMLTextAreaElement).value).toContain(`"language": "${language}"`);
+    fireEvent.change(screen.getByLabelText(language === 'ru' ? 'Опишите бизнес одним запросом'
+      : 'Describe your business in one prompt'), { target: { value: 'PRIVATE BRIEF' } });
+    expect((prompt as HTMLTextAreaElement).value).not.toContain('PRIVATE BRIEF');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.uploadRaster).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
