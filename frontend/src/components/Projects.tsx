@@ -32,11 +32,7 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
       <p>{t(language, 'projectsIntro')}</p>
     </div>
     <div className="projects-grid">
-      <form className="card new-project" onSubmit={(event) => {
-        event.preventDefault();
-        const trimmed = name.trim();
-        if (trimmed) void onCreate(trimmed);
-      }}>
+      <div className="card new-project">
         <span className="eyebrow">NEW PROJECT</span>
         <label>{t(language, 'projectName')}<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
         <section className="project-path" aria-labelledby="project-ai-path">
@@ -53,7 +49,9 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
           <div className="project-path-head"><h2 id="project-blank-path">{t(language, 'projectBlankPath')}</h2>
             <span className="badge good">{t(language, 'projectNoKeyBadge')}</span></div>
           <p>{t(language, 'projectBlankPathNote')}</p>
-          <div className="actions"><button disabled={busy || !name.trim()}>{t(language, 'create')}</button></div>
+          <div className="actions"><button type="button" disabled={busy || !name.trim()}
+            onClick={() => { const trimmed = name.trim(); if (trimmed) void onCreate(trimmed); }}>
+            {t(language, 'create')}</button></div>
         </section>
         <section className="project-path" aria-labelledby="project-import-path">
           <div className="project-path-head"><h2 id="project-import-path">{t(language, 'projectImportPath')}</h2>
@@ -94,7 +92,7 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
           <small>{t(language, 'importPasteScope')}</small>
           <small>{t(language, 'importScope')}</small>
         </section>
-      </form>
+      </div>
       <section className="project-list" aria-label={t(language, 'projects')}>
         {projects.length === 0 && <p className="muted">{t(language, 'noProjects')}</p>}
         {projects.map((project) => <article className="card project-card" key={project.project_id}>

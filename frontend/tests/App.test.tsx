@@ -463,6 +463,30 @@ describe('UI-013 prepared JSON drop selection', () => {
   });
 });
 
+describe('UI-014 explicit project creation', () => {
+  it('does not create a blank project when Enter is pressed in the shared name field', async () => {
+    await enter();
+    const keyboard = userEvent.setup();
+    fireEvent.change(screen.getByLabelText('Paste prepared site JSON'), { target: { value: '{}' } });
+    await keyboard.type(screen.getByLabelText('Project name'), 'Prepared site{Enter}');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(screen.getByRole('region', { name: 'Import a prepared site' })).toBeInTheDocument();
+  });
+
+  it('creates a blank project through focused keyboard activation of its own button', async () => {
+    await enter();
+    const keyboard = userEvent.setup();
+    await keyboard.type(screen.getByLabelText('Project name'), '  Studio  ');
+    const create = screen.getByRole('button', { name: 'Create project' });
+    create.focus();
+    await keyboard.keyboard('{Enter}');
+    await waitFor(() => expect(mocks.createProject).toHaveBeenCalledExactlyOnceWith('Studio'));
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
