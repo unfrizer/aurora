@@ -679,6 +679,75 @@ describe('UI-015 prepared JSON selection clear', () => {
   });
 });
 
+describe('UI-018 direct prepared JSON clear', () => {
+  it('clears only pasted JSON and preserves adjacent project-path inputs', async () => {
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Imported' } });
+    fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
+      { target: { value: 'Independent AI path' } });
+    fireEvent.change(screen.getByLabelText('Prepared site JSON file'),
+      { target: { files: [importFile(blankEditor('File version', 'en'))] } });
+    const zone = screen.getByRole('region', { name: 'JSON file selection area' });
+    fireEvent.drop(zone, { dataTransfer: { files: [] } });
+    fireEvent.click(screen.getByText('How to prepare import JSON'));
+    fireEvent.change(screen.getByLabelText('Brief for external preparation'),
+      { target: { value: 'External preparation brief' } });
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy preparation prompt' }));
+    await screen.findByText('Preparation prompt copied.');
+    const pasted = screen.getByLabelText('Paste prepared site JSON') as HTMLTextAreaElement;
+    fireEvent.change(pasted, { target: { value: '{}' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear pasted JSON' }));
+
+    expect(pasted).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Clear pasted JSON' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import pasted site' })).toBeDisabled();
+    expect(screen.getByLabelText('Project name')).toHaveValue('Imported');
+    expect(screen.getByLabelText('Describe your business in one prompt')).toHaveValue('Independent AI path');
+    expect(screen.getByText('Selected file: prepared.json')).toBeInTheDocument();
+    expect(within(zone).getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByLabelText('Brief for external preparation')).toHaveValue('External preparation brief');
+    expect(screen.getByText('Preparation prompt copied.')).toBeInTheDocument();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.uploadRaster).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+
+  it('offers a Russian clear action for whitespace without enabling import', async () => {
+    await enter('ru');
+    const pasted = screen.getByLabelText('Вставьте JSON подготовленного сайта');
+    expect(screen.queryByRole('button', { name: 'Очистить вставленный JSON' })).not.toBeInTheDocument();
+    fireEvent.change(pasted, { target: { value: '   ' } });
+    expect(screen.getByRole('button', { name: 'Импортировать вставленный сайт' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Очистить вставленный JSON' }));
+    expect(pasted).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Очистить вставленный JSON' })).not.toBeInTheDocument();
+  });
+
+  it('does not clear pasted JSON while another project operation is busy', async () => {
+    let finishCreate: ((document: ProjectDocument) => void) | undefined;
+    mocks.createProject.mockImplementation(() => new Promise<ProjectDocument>((resolve) => {
+      finishCreate = resolve;
+    }));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    const pasted = screen.getByLabelText('Paste prepared site JSON');
+    fireEvent.change(pasted, { target: { value: '{}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+    await waitFor(() => expect(mocks.createProject).toHaveBeenCalledTimes(1));
+    const clear = screen.getByRole('button', { name: 'Clear pasted JSON' });
+    expect(clear).toBeDisabled();
+    fireEvent.click(clear);
+    expect(pasted).toHaveValue('{}');
+    expect(finishCreate).toBeDefined();
+    finishCreate?.(empty);
+    await screen.findByRole('button', { name: 'Start blank site' });
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');

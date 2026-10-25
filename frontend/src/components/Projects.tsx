@@ -121,7 +121,9 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
             onChange={(event) => setPastedJson(event.target.value)} rows={6} /></label>
           <div className="actions"><button type="button" disabled={busy || !name.trim() || !pastedJson.trim()}
             onClick={() => void onImport(name.trim(), new File([pastedJson], 'pasted-site.json', { type: 'application/json' }))}>
-            {t(language, 'importPasteAction')}</button></div>
+            {t(language, 'importPasteAction')}</button>
+            {pastedJson.length > 0 && <button type="button" disabled={busy} onClick={() => setPastedJson('')}>
+              {t(language, 'importClearPasted')}</button>}</div>
           <small>{t(language, 'importPasteScope')}</small>
           <small>{t(language, 'importScope')}</small>
         </section>
