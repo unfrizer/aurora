@@ -24,8 +24,15 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
   const [fileDragging, setFileDragging] = useState(false);
   const [fileDropError, setFileDropError] = useState('');
   const [pastedJson, setPastedJson] = useState('');
+  const [guideCopy, setGuideCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [deleting, setDeleting] = useState<ProjectMetadata | null>(null);
   const [confirmation, setConfirmation] = useState('');
+  async function copyGuide() {
+    try {
+      await navigator.clipboard.writeText(preparedSitePrompt(language));
+      setGuideCopy('copied');
+    } catch { setGuideCopy('failed'); }
+  }
   return <main className="projects-page">
     <div className="hero">
       <span className="eyebrow">PROJECTS / 01</span>
@@ -65,6 +72,10 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
               <textarea readOnly value={preparedSitePrompt(language)} rows={18}
                 onFocus={(event) => event.currentTarget.select()} />
             </label>
+            <div className="actions"><button type="button" onClick={() => void copyGuide()}>
+              {t(language, 'importGuideCopy')}</button></div>
+            {guideCopy !== 'idle' && <p role="status">{t(language,
+              guideCopy === 'copied' ? 'importGuideCopied' : 'importGuideCopyFailed')}</p>}
           </details>
           <div className={`import-drop-zone${fileDragging ? ' dragging' : ''}`} role="region"
             aria-label={t(language, 'importDropZone')}

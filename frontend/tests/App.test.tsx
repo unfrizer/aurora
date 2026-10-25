@@ -34,6 +34,7 @@ vi.mock('../src/api', async (original) => ({ ...(await original<typeof import('.
 import App from '../src/App';
 import { ApiError } from '../src/api';
 import { ExportDeploy } from '../src/components/ExportDeploy';
+import { preparedSitePrompt } from '../src/prepared_site_prompt';
 
 const id = '00000000-0000-4000-8000-000000000111';
 const metadata = { project_id: id, name: 'Studio', format_version: '1', created_at: '2026-10-09T00:00:00Z', updated_at: '2026-10-09T01:00:00Z' };
@@ -355,6 +356,58 @@ describe('UI-010 in-app prepared JSON guide', () => {
     expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
     expect(mocks.uploadRaster).not.toHaveBeenCalled();
     expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+});
+
+describe('UI-016 prepared JSON guide copy', () => {
+  it.each(['ru', 'en'] as const)('copies only the exact static %s template', async (language) => {
+    const copy = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText: copy } });
+    await enter(language);
+    fireEvent.change(screen.getByLabelText(language === 'ru' ? 'Название проекта' : 'Project name'),
+      { target: { value: 'PRIVATE PROJECT' } });
+    fireEvent.change(screen.getByLabelText(language === 'ru' ? 'Опишите бизнес одним запросом'
+      : 'Describe your business in one prompt'), { target: { value: 'PRIVATE BRIEF' } });
+    fireEvent.change(screen.getByLabelText(language === 'ru' ? 'Вставьте JSON подготовленного сайта'
+      : 'Paste prepared site JSON'), { target: { value: 'PRIVATE JSON' } });
+    fireEvent.click(screen.getByText(language === 'ru'
+      ? 'Как подготовить JSON для импорта' : 'How to prepare import JSON'));
+    fireEvent.click(screen.getByRole('button', { name: language === 'ru'
+      ? 'Копировать шаблон запроса' : 'Copy preparation prompt' }));
+    await waitFor(() => expect(copy).toHaveBeenCalledExactlyOnceWith(preparedSitePrompt(language)));
+    expect(copy.mock.calls[0]?.[0]).not.toContain('PRIVATE PROJECT');
+    expect(copy.mock.calls[0]?.[0]).not.toContain('PRIVATE BRIEF');
+    expect(copy.mock.calls[0]?.[0]).not.toContain('PRIVATE JSON');
+    expect(screen.getByRole('status')).toHaveTextContent(language === 'ru'
+      ? 'Шаблон скопирован' : 'Preparation prompt copied');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+  });
+
+  it('keeps the prompt selectable and reports a denied clipboard write', async () => {
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
+    await enter();
+    fireEvent.click(screen.getByText('How to prepare import JSON'));
+    const prompt = screen.getByLabelText('Preparation prompt (click to select)') as HTMLTextAreaElement;
+    fireEvent.click(screen.getByRole('button', { name: 'Copy preparation prompt' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(/select the prompt and copy it manually/i);
+    expect(prompt).toHaveAttribute('readonly');
+    fireEvent.focus(prompt);
+    expect(prompt.selectionStart).toBe(0);
+    expect(prompt.selectionEnd).toBe(prompt.value.length);
+    expect(mocks.createProject).not.toHaveBeenCalled();
+  });
+
+  it('reports an unavailable clipboard API without changing the guide', async () => {
+    vi.stubGlobal('navigator', {});
+    await enter('ru');
+    fireEvent.click(screen.getByText('Как подготовить JSON для импорта'));
+    const prompt = screen.getByLabelText('Шаблон запроса (выделяется при щелчке)') as HTMLTextAreaElement;
+    fireEvent.click(screen.getByRole('button', { name: 'Копировать шаблон запроса' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('выделите шаблон и скопируйте вручную');
+    expect(prompt.value).toBe(preparedSitePrompt('ru'));
+    expect(mocks.createProject).not.toHaveBeenCalled();
   });
 });
 
