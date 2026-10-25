@@ -1,5 +1,7 @@
 import type { EditorDocument, Language } from './types';
 
+const BRIEF_PLACEHOLDER = '[Insert only the brief you are permitted to share with the external tool.]';
+
 export function preparedSitePrompt(language: Language): string {
   const example: EditorDocument = {
     schema_version: 1,
@@ -32,6 +34,10 @@ export function preparedSitePrompt(language: Language): string {
     'Use "system", "serif" or "monospace" for font_family and #RRGGBB colors.',
     'Do not include credentials, API keys or other secrets.',
     'Business brief:',
-    '[Insert only the brief you are permitted to share with the external tool.]',
+    BRIEF_PLACEHOLDER,
   ].join('\n');
+}
+
+export function preparedSitePromptWithBrief(language: Language, brief: string): string {
+  return preparedSitePrompt(language).replace(BRIEF_PLACEHOLDER, brief.trim());
 }

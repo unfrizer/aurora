@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { preparedSitePrompt } from '../src/prepared_site_prompt';
+import { preparedSitePrompt, preparedSitePromptWithBrief } from '../src/prepared_site_prompt';
 import { parseEditor } from '../src/types';
 import type { Language } from '../src/types';
 
@@ -23,5 +23,17 @@ describe('UI-010 preparation prompt', () => {
     expect(prompt).toContain('1–8 pages');
     expect(prompt).toContain('1–12 sections');
     expect(prompt).toContain('Do not include credentials');
+  });
+});
+
+describe('UI-017 preparation prompt with brief', () => {
+  it.each<Language>(['ru', 'en'])('replaces the one placeholder for %s without changing the template rules', (language) => {
+    const brief = '  Customer studio\nwith two locations  ';
+    const result = preparedSitePromptWithBrief(language, brief);
+    expect(result).toContain('Business brief:\nCustomer studio\nwith two locations');
+    expect(result).not.toContain('[Insert only the brief');
+    expect(result.split('Customer studio').length - 1).toBe(1);
+    expect(result).toContain(`"language": "${language}"`);
+    expect(result).toContain('Do not include credentials');
   });
 });

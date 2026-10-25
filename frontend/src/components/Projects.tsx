@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { t } from '../i18n';
-import { preparedSitePrompt } from '../prepared_site_prompt';
+import { preparedSitePrompt, preparedSitePromptWithBrief } from '../prepared_site_prompt';
 import { validDraftInputs } from '../types';
 import type { Language, ProjectMetadata } from '../types';
 
@@ -16,6 +16,13 @@ interface Props {
   onDelete: (id: string) => Promise<boolean>;
 }
 
+function validExternalBrief(value: string): boolean {
+  try {
+    encodeURIComponent(value);
+    return !!value.trim() && new TextEncoder().encode(value).length <= 8 * 1024;
+  } catch { return false; }
+}
+
 export function Projects({ language, projects, busy, model, onCreate, onGenerate, onImport, onOpen, onDelete }: Props) {
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -24,13 +31,14 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
   const [fileDragging, setFileDragging] = useState(false);
   const [fileDropError, setFileDropError] = useState('');
   const [pastedJson, setPastedJson] = useState('');
-  const [guideCopy, setGuideCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [externalBrief, setExternalBrief] = useState('');
+  const [guideCopy, setGuideCopy] = useState<'idle' | 'copied' | 'brief-copied' | 'failed'>('idle');
   const [deleting, setDeleting] = useState<ProjectMetadata | null>(null);
   const [confirmation, setConfirmation] = useState('');
-  async function copyGuide() {
+  async function copyGuide(value: string, outcome: 'copied' | 'brief-copied') {
     try {
-      await navigator.clipboard.writeText(preparedSitePrompt(language));
-      setGuideCopy('copied');
+      await navigator.clipboard.writeText(value);
+      setGuideCopy(outcome);
     } catch { setGuideCopy('failed'); }
   }
   return <main className="projects-page">
@@ -72,10 +80,18 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
               <textarea readOnly value={preparedSitePrompt(language)} rows={18}
                 onFocus={(event) => event.currentTarget.select()} />
             </label>
-            <div className="actions"><button type="button" onClick={() => void copyGuide()}>
+            <div className="actions"><button type="button"
+              onClick={() => void copyGuide(preparedSitePrompt(language), 'copied')}>
               {t(language, 'importGuideCopy')}</button></div>
+            <label>{t(language, 'importGuideBrief')}<textarea value={externalBrief} rows={6}
+              onChange={(event) => { setExternalBrief(event.target.value); setGuideCopy('idle'); }} /></label>
+            <small>{t(language, 'importGuideBriefNote')}</small>
+            <div className="actions"><button type="button" disabled={!validExternalBrief(externalBrief)}
+              onClick={() => void copyGuide(preparedSitePromptWithBrief(language, externalBrief), 'brief-copied')}>
+              {t(language, 'importGuideBriefCopy')}</button></div>
             {guideCopy !== 'idle' && <p role="status">{t(language,
-              guideCopy === 'copied' ? 'importGuideCopied' : 'importGuideCopyFailed')}</p>}
+              guideCopy === 'copied' ? 'importGuideCopied'
+                : guideCopy === 'brief-copied' ? 'importGuideBriefCopied' : 'importGuideCopyFailed')}</p>}
           </details>
           <div className={`import-drop-zone${fileDragging ? ' dragging' : ''}`} role="region"
             aria-label={t(language, 'importDropZone')}
