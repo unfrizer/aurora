@@ -487,6 +487,76 @@ describe('UI-014 explicit project creation', () => {
   });
 });
 
+describe('UI-015 prepared JSON selection clear', () => {
+  it('clears a picker selection and permits the same file to be selected again', async () => {
+    await enter();
+    const user = userEvent.setup();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Imported' } });
+    const input = screen.getByLabelText('Prepared site JSON file') as HTMLInputElement;
+    const selected = importFile(blankEditor('Imported', 'en'));
+    expect(screen.queryByRole('button', { name: 'Clear selected file' })).not.toBeInTheDocument();
+    await user.upload(input, selected);
+    expect(screen.getByText('Selected file: prepared.json')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import prepared site' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Clear selected file' }));
+    expect(input.value).toBe('');
+    expect(screen.queryByText('Selected file: prepared.json')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear selected file' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import prepared site' })).toBeDisabled();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    await user.upload(input, selected);
+    expect(screen.getByText('Selected file: prepared.json')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import prepared site' })).toBeEnabled();
+    expect(input.value).not.toBe('');
+    fireEvent.drop(screen.getByRole('region', { name: 'JSON file selection area' }),
+      { dataTransfer: { files: [new File(['replacement'], 'replacement.json')] } });
+    expect(input.value).toBe('');
+    expect(screen.getByText('Selected file: replacement.json')).toBeInTheDocument();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+  });
+
+  it('clears a dropped file without changing the pasted JSON path or project name', async () => {
+    await enter('ru');
+    fireEvent.change(screen.getByLabelText('Название проекта'), { target: { value: 'Импорт' } });
+    const pasted = screen.getByLabelText('Вставьте JSON подготовленного сайта') as HTMLTextAreaElement;
+    fireEvent.change(pasted, { target: { value: '{}' } });
+    const zone = screen.getByRole('region', { name: 'Область выбора JSON-файла' });
+    fireEvent.drop(zone, { dataTransfer: { files: [new File(['not JSON'], 'wrong.json')] } });
+    expect(within(zone).getByText('Выбран файл: wrong.json')).toBeInTheDocument();
+    fireEvent.drop(zone, { dataTransfer: { files: [] } });
+    expect(within(zone).getByRole('alert')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Снять выбор файла' }));
+    expect(within(zone).queryByText('Выбран файл: wrong.json')).not.toBeInTheDocument();
+    expect(within(zone).queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Импортировать подготовленный сайт' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Импортировать вставленный сайт' })).toBeEnabled();
+    expect((screen.getByLabelText('Название проекта') as HTMLInputElement).value).toBe('Импорт');
+    expect(pasted.value).toBe('{}');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('does not clear a staged file while its explicit import is in progress', async () => {
+    let finishCreate: ((document: ProjectDocument) => void) | undefined;
+    mocks.createProject.mockImplementation(() => new Promise<ProjectDocument>((resolve) => {
+      finishCreate = resolve;
+    }));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.change(screen.getByLabelText('Prepared site JSON file'),
+      { target: { files: [importFile(blankEditor('Studio', 'en'))] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import prepared site' }));
+    await waitFor(() => expect(mocks.createProject).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Clear selected file' })).toBeDisabled();
+    expect(screen.getByText('Selected file: prepared.json')).toBeInTheDocument();
+    expect(finishCreate).toBeDefined();
+    finishCreate?.(empty);
+    await screen.findByText('CONTENT BLOCKS');
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
