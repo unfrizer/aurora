@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { t } from '../i18n';
 import { preparedSitePrompt } from '../prepared_site_prompt';
 import { validDraftInputs } from '../types';
@@ -20,6 +20,7 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const filePicker = useRef<HTMLInputElement>(null);
   const [fileDragging, setFileDragging] = useState(false);
   const [fileDropError, setFileDropError] = useState('');
   const [pastedJson, setPastedJson] = useState('');
@@ -74,12 +75,17 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
               event.preventDefault(); setFileDragging(false);
               const selected = Array.from(event.dataTransfer.files);
               if (selected.length !== 1) { setFileDropError(t(language, 'importDropInvalid')); return; }
+              if (filePicker.current) filePicker.current.value = '';
               setFile(selected[0] ?? null); setFileDropError('');
             }}>
             <p>{t(language, 'importDropNote')}</p>
-            <label>{t(language, 'importFile')}<input type="file" accept=".json,application/json"
+            <label>{t(language, 'importFile')}<input ref={filePicker} type="file" accept=".json,application/json"
               onChange={(event) => { setFile(event.target.files?.[0] ?? null); setFileDropError(''); }} /></label>
             {file && <small aria-live="polite">{t(language, 'importDropSelected')} {file.name}</small>}
+            {file && <div className="actions"><button type="button" disabled={busy} onClick={() => {
+              setFile(null); setFileDropError('');
+              if (filePicker.current) filePicker.current.value = '';
+            }}>{t(language, 'importClearSelected')}</button></div>}
             {fileDropError && <p role="alert">{fileDropError}</p>}
           </div>
           <div className="actions"><button type="button" disabled={busy || !name.trim() || !file}
