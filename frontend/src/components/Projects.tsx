@@ -58,6 +58,12 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
     setExternalBrief(value);
     setGuideCopy('idle');
   }
+  function createBlank() {
+    const trimmed = name.trim();
+    if (busy || !trimmed) return;
+    if (offlineBrief.length > 0 && !window.confirm(t(language, 'blankDiscardsOfflineBrief'))) return;
+    void onCreate(trimmed);
+  }
   return <main className="projects-page">
     <div className="hero">
       <span className="eyebrow">PROJECTS / 01</span>
@@ -83,13 +89,15 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
             <span className="badge good">{t(language, 'projectNoKeyBadge')}</span></div>
           <p>{t(language, 'projectBlankPathNote')}</p>
           <div className="actions"><button type="button" disabled={busy || !name.trim()}
-            onClick={() => { const trimmed = name.trim(); if (trimmed) void onCreate(trimmed); }}>
+            onClick={createBlank}>
             {t(language, 'create')}</button></div>
           <label>{t(language, 'offlineBrief')}<textarea value={offlineBrief}
             onChange={(event) => setOfflineBrief(event.target.value)} rows={5} /></label>
           <small>{t(language, 'offlineBriefNote')}</small>
           <div className="actions"><button type="button" disabled={busy || !validOfflineBrief(name, offlineBrief)}
-            onClick={() => void onOffline(name, offlineBrief)}>{t(language, 'offlineStart')}</button></div>
+            onClick={() => void onOffline(name, offlineBrief)}>{t(language, 'offlineStart')}</button>
+            {offlineBrief.length > 0 && <button type="button" disabled={busy}
+              onClick={() => setOfflineBrief('')}>{t(language, 'offlineBriefClear')}</button>}</div>
         </section>
         <section className="project-path" aria-labelledby="project-import-path">
           <div className="project-path-head"><h2 id="project-import-path">{t(language, 'projectImportPath')}</h2>

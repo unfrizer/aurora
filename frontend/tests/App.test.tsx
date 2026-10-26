@@ -1104,6 +1104,81 @@ describe('UI-023 offline brief starter', () => {
   });
 });
 
+describe('UI-024 offline brief draft guard', () => {
+  it.each([
+    { language: 'en' as const, name: 'Project name', brief: 'Business brief for offline start',
+      create: 'Create project', clear: 'Clear offline brief', projects: 'Projects',
+      warning: 'A blank project will not save it' },
+    { language: 'ru' as const, name: 'Название проекта', brief: 'ТЗ для офлайн-старта',
+      create: 'Создать проект', clear: 'Очистить ТЗ для офлайн-старта', projects: 'Проекты',
+      warning: 'Пустой проект не сохранит его' },
+  ])('preserves a $language draft when blank creation is declined, then clears it explicitly',
+    async ({ language, name, brief, create, clear, projects, warning }) => {
+      const confirm = vi.fn().mockReturnValue(false);
+      vi.stubGlobal('confirm', confirm);
+      await enter(language);
+      fireEvent.change(screen.getByLabelText(name), { target: { value: '  Studio  ' } });
+      const input = screen.getByLabelText(brief);
+      fireEvent.change(input, { target: { value: 'Customer instructions' } });
+      fireEvent.click(screen.getByRole('button', { name: create }));
+      expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(warning));
+      expect(screen.getByRole('heading', { name: projects })).toBeInTheDocument();
+      expect(screen.getByLabelText(name)).toHaveValue('  Studio  ');
+      expect(input).toHaveValue('Customer instructions');
+      expect(mocks.createProject).not.toHaveBeenCalled();
+      expect(mocks.saveEditor).not.toHaveBeenCalled();
+      expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: clear }));
+      expect(input).toHaveValue('');
+      expect(screen.queryByRole('button', { name: clear })).not.toBeInTheDocument();
+      expect(mocks.createProject).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: create }));
+      await screen.findByRole('button', { name: language === 'en' ? 'Start blank site' : 'Начать с пустого сайта' });
+      expect(confirm).toHaveBeenCalledTimes(1);
+      expect(mocks.createProject).toHaveBeenCalledExactlyOnceWith('Studio');
+      expect(mocks.saveEditor).not.toHaveBeenCalled();
+    });
+
+  it('warns even for whitespace before an accepted blank creation and never saves an editor', async () => {
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('confirm', confirm);
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.change(screen.getByLabelText('Business brief for offline start'),
+      { target: { value: '   ' } });
+    expect(screen.getByRole('button', { name: 'Create project with brief' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Clear offline brief' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+    await screen.findByRole('button', { name: 'Start blank site' });
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('A blank project will not save it'));
+    expect(mocks.createProject).toHaveBeenCalledExactlyOnceWith('Studio');
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft and disables clearing while blank creation is in flight', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    let finishCreate: ((document: ProjectDocument) => void) | undefined;
+    mocks.createProject.mockImplementationOnce(() => new Promise<ProjectDocument>((resolve) => {
+      finishCreate = resolve;
+    }));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    const input = screen.getByLabelText('Business brief for offline start');
+    fireEvent.change(input, { target: { value: 'Keep during creation' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+    await waitFor(() => expect(mocks.createProject).toHaveBeenCalledTimes(1));
+    const clear = screen.getByRole('button', { name: 'Clear offline brief' });
+    expect(clear).toBeDisabled();
+    fireEvent.click(clear);
+    expect(input).toHaveValue('Keep during creation');
+    finishCreate?.(empty);
+    await screen.findByRole('button', { name: 'Start blank site' });
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
