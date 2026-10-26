@@ -1295,6 +1295,162 @@ describe('UI-025 manual site starter', () => {
   });
 });
 
+describe('UI-026 manual site draft guard', () => {
+  function typeManualDraft(language: 'en' | 'ru' = 'en', value = '  My draft  ') {
+    fireEvent.change(screen.getByLabelText(language === 'en' ? 'Project name' : 'Название проекта'),
+      { target: { value: 'Studio' } });
+    fireEvent.click(screen.getByText(language === 'en' ? 'Build a site from my text' : 'Собрать сайт из моих текстов'));
+    fireEvent.change(screen.getByLabelText(language === 'en' ? 'Site tagline (optional)' : 'Слоган для сайта (необязательно)'),
+      { target: { value } });
+  }
+
+  it.each(['en', 'ru'] as const)('warns before blank creation in $language and preserves the draft on decline', async (language) => {
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+    await enter(language);
+    typeManualDraft(language);
+    fireEvent.click(screen.getByRole('button', { name: language === 'en' ? 'Create project' : 'Создать проект' }));
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(language === 'en'
+      ? 'A blank project will not save it' : 'Пустой проект не сохранит его'));
+    expect(screen.getByLabelText(language === 'en' ? 'Site tagline (optional)' : 'Слоган для сайта (необязательно)'))
+      .toHaveValue('  My draft  ');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('uses one combined warning when blank creation would omit both drafts', async () => {
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('confirm', confirm);
+    await enter();
+    typeManualDraft();
+    fireEvent.change(screen.getByLabelText('Business brief for offline start'),
+      { target: { value: 'Customer brief' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+    await screen.findByRole('button', { name: 'Start blank site' });
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('save neither'));
+    expect(mocks.createProject).toHaveBeenCalledExactlyOnceWith('Studio');
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('combines the public brief warning with manual-draft loss and makes no request if declined', async () => {
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+    await enter();
+    typeManualDraft();
+    fireEvent.change(screen.getByLabelText('Business brief for offline start'),
+      { target: { value: 'Public brief' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project with brief' }));
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('site form text will not be saved'));
+    expect(confirm.mock.calls[0]?.[0]).toContain('appear unchanged in the site');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('combines paid-generation warning with manual-draft loss and makes no request if declined', async () => {
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+    await enter();
+    typeManualDraft();
+    fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
+      { target: { value: 'Make a bicycle repair site' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('site form text will not be saved'));
+    expect(confirm.mock.calls[0]?.[0]).toContain('may incur a charge');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+  });
+
+  it('continues an accepted paid start exactly once without saving the manual draft', async () => {
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('confirm', confirm);
+    await enter();
+    typeManualDraft();
+    fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
+      { target: { value: 'Make a bicycle repair site' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
+    await waitFor(() => expect(mocks.generateProjectDraft).toHaveBeenCalledTimes(1));
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('may incur a charge'));
+    expect(mocks.createProject).toHaveBeenCalledExactlyOnceWith('Studio');
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('guards import and opening another project without destroying the form on cancellation', async () => {
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+    await enter();
+    typeManualDraft();
+    fireEvent.change(screen.getByLabelText('Paste prepared site JSON'),
+      { target: { value: '{}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import pasted site' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('not saved yet'));
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.openProject).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Site tagline (optional)')).toHaveValue('  My draft  ');
+  });
+
+  it('warns on navigation and browser unload, then clears only the manual fields', async () => {
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+    await enter('ru');
+    typeManualDraft('ru', '  Текст сайта  ');
+    fireEvent.change(screen.getByLabelText('ТЗ для офлайн-старта'), { target: { value: 'ТЗ' } });
+    const unload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Настройки' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('ещё не сохранён')));
+    expect(screen.getByRole('heading', { name: 'Проекты' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Очистить текст сайта' }));
+    expect(screen.getByLabelText('Слоган для сайта (необязательно)')).toHaveValue('');
+    expect(screen.getByLabelText('ТЗ для офлайн-старта')).toHaveValue('ТЗ');
+    expect(screen.getByLabelText('Название проекта')).toHaveValue('Studio');
+    expect(screen.queryByRole('button', { name: 'Очистить текст сайта' })).not.toBeInTheDocument();
+    const afterClear = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(afterClear);
+    expect(afterClear.defaultPrevented).toBe(false);
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+  });
+
+  it('retains the draft and its guard after an unsuccessful open', async () => {
+    const confirm = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('confirm', confirm);
+    mocks.openProject.mockRejectedValueOnce(new ApiError(503));
+    await enter();
+    typeManualDraft();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('temporarily unavailable');
+    expect(screen.getByLabelText('Site tagline (optional)')).toHaveValue('  My draft  ');
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    await screen.findByRole('heading', { name: 'Settings' });
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it('disables clearing while manual-site creation is in flight', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    let finishCreate: ((value: ProjectDocument) => void) | undefined;
+    mocks.createProject.mockImplementationOnce(() => new Promise((resolve) => { finishCreate = resolve; }));
+    await enter();
+    typeManualDraft();
+    fireEvent.change(screen.getByLabelText('Main site headline'), { target: { value: 'Headline' } });
+    fireEvent.change(screen.getByLabelText('First section heading'), { target: { value: 'Services' } });
+    fireEvent.change(screen.getByLabelText('First section text'), { target: { value: 'Repairs' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create site from my text' }));
+    await waitFor(() => expect(mocks.createProject).toHaveBeenCalledTimes(1));
+    const clear = screen.getByRole('button', { name: 'Clear site text' });
+    expect(clear).toBeDisabled();
+    fireEvent.click(clear);
+    expect(screen.getByLabelText('Site tagline (optional)')).toHaveValue('  My draft  ');
+    finishCreate?.(empty);
+    await screen.findByText('CONTENT BLOCKS');
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
