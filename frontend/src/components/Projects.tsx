@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { t } from '../i18n';
+import { validOfflineBrief } from '../offline_starter';
 import { preparedSitePrompt, preparedSitePromptWithBrief } from '../prepared_site_prompt';
 import { validDraftInputs } from '../types';
 import type { Language, ProjectMetadata } from '../types';
@@ -10,6 +11,7 @@ interface Props {
   busy: boolean;
   model: string;
   onCreate: (name: string) => Promise<void>;
+  onOffline: (name: string, brief: string) => Promise<void>;
   onGenerate: (name: string, prompt: string) => Promise<void>;
   onImport: (name: string, file: File) => Promise<void>;
   onOpen: (id: string) => Promise<void>;
@@ -23,9 +25,10 @@ function validExternalBrief(value: string): boolean {
   } catch { return false; }
 }
 
-export function Projects({ language, projects, busy, model, onCreate, onGenerate, onImport, onOpen, onDelete }: Props) {
+export function Projects({ language, projects, busy, model, onCreate, onOffline, onGenerate, onImport, onOpen, onDelete }: Props) {
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [offlineBrief, setOfflineBrief] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const [fileDragging, setFileDragging] = useState(false);
@@ -82,6 +85,11 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
           <div className="actions"><button type="button" disabled={busy || !name.trim()}
             onClick={() => { const trimmed = name.trim(); if (trimmed) void onCreate(trimmed); }}>
             {t(language, 'create')}</button></div>
+          <label>{t(language, 'offlineBrief')}<textarea value={offlineBrief}
+            onChange={(event) => setOfflineBrief(event.target.value)} rows={5} /></label>
+          <small>{t(language, 'offlineBriefNote')}</small>
+          <div className="actions"><button type="button" disabled={busy || !validOfflineBrief(name, offlineBrief)}
+            onClick={() => void onOffline(name, offlineBrief)}>{t(language, 'offlineStart')}</button></div>
         </section>
         <section className="project-path" aria-labelledby="project-import-path">
           <div className="project-path-head"><h2 id="project-import-path">{t(language, 'projectImportPath')}</h2>

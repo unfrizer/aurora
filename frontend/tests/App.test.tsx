@@ -977,6 +977,133 @@ describe('UI-022 project updated time display', () => {
   });
 });
 
+describe('UI-023 offline brief starter', () => {
+  it.each([
+    { language: 'en' as const, label: 'Business brief for offline start', action: 'Create project with brief' },
+    { language: 'ru' as const, label: 'ТЗ для офлайн-старта', action: 'Создать проект с ТЗ' },
+  ])('requires a valid name and brief in $language without an implicit action', async ({ language, label, action }) => {
+    await enter(language);
+    const brief = screen.getByLabelText(label);
+    const button = screen.getByRole('button', { name: action });
+    expect(button).toBeDisabled();
+    expect(brief.closest('section')).toHaveTextContent(language === 'ru'
+      ? 'без AI' : 'without AI');
+    const name = screen.getByLabelText(language === 'ru' ? 'Название проекта' : 'Project name');
+    fireEvent.change(name, { target: { value: 'Studio' } });
+    fireEvent.change(brief, { target: { value: '   ' } });
+    expect(button).toBeDisabled();
+    fireEvent.change(brief, { target: { value: 'а'.repeat(4096) } });
+    expect(button).toBeEnabled();
+    fireEvent.change(brief, { target: { value: 'а'.repeat(4097) } });
+    expect(button).toBeDisabled();
+    fireEvent.change(brief, { target: { value: 'x'.repeat(8193) } });
+    expect(button).toBeDisabled();
+    fireEvent.change(brief, { target: { value: '\uD800' } });
+    expect(button).toBeDisabled();
+    fireEvent.change(brief, { target: { value: 'A local customer brief' } });
+    fireEvent.change(name, { target: { value: 'x'.repeat(256) } });
+    expect(button).toBeEnabled();
+    fireEvent.change(name, { target: { value: 'x'.repeat(257) } });
+    expect(button).toBeDisabled();
+    fireEvent.change(name, { target: { value: 'Studio' } });
+    expect(button).toBeEnabled();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('creates and verifies one saved editor with the verbatim brief and no provider request', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    await enter();
+    const brief = '  Build a bakery site.\nUse warm colors.  ';
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: '  Studio  ' } });
+    fireEvent.change(screen.getByLabelText('Business brief for offline start'), { target: { value: brief } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project with brief' }));
+    await screen.findByText('CONTENT BLOCKS');
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('will appear unchanged in the site'));
+    expect(mocks.createProject).toHaveBeenCalledExactlyOnceWith('Studio');
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+    const [projectId, editor, expected] = mocks.saveEditor.mock.calls[0] as [string, EditorDocument, string];
+    expect(projectId).toBe(id);
+    expect(expected).toBe(metadata.updated_at);
+    expect(editor).toMatchObject({ schema_version: 1, language: 'en',
+      pages: [{ slug: 'index', sections: [{ body: brief, image_path: null }] }] });
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    expect(mocks.uploadRaster).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+
+  it('keeps the user on Projects when saving may have failed and never deletes the new project', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    mocks.saveEditor.mockRejectedValueOnce(new ApiError(409));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    const brief = screen.getByLabelText('Business brief for offline start');
+    fireEvent.change(brief, { target: { value: 'Keep this brief' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project with brief' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The project was created, but the brief may not be saved');
+    expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument();
+    expect(brief).toHaveValue('Keep this brief');
+    expect(mocks.deleteProject).not.toHaveBeenCalled();
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports uncertain creation without saving or retrying', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    mocks.createProject.mockRejectedValueOnce(new TypeError('Connection lost'));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.change(screen.getByLabelText('Business brief for offline start'),
+      { target: { value: 'Customer brief' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project with brief' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Project creation is uncertain');
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('does not open an unverified server response or start a second in-flight create', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    let finishCreate: ((value: ProjectDocument) => void) | undefined;
+    mocks.createProject.mockImplementationOnce(() => new Promise((resolve) => { finishCreate = resolve; }));
+    mocks.saveEditor.mockImplementationOnce(async (_id: string, editor: EditorDocument) => {
+      const changed = { ...editor, pages: editor.pages.map((page) => ({ ...page,
+        sections: page.sections.map((section) => ({ ...section, body: 'Wrong result' })) })) };
+      return withEditor(changed);
+    });
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.change(screen.getByLabelText('Business brief for offline start'),
+      { target: { value: 'Original brief' } });
+    const button = screen.getByRole('button', { name: 'Create project with brief' });
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+    expect(finishCreate).toBeDefined();
+    finishCreate?.(empty);
+    expect(await screen.findByRole('alert')).toHaveTextContent('The project was created, but the brief may not be saved');
+    expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument();
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not create or save when the public-content warning is declined', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+    await enter('ru');
+    fireEvent.change(screen.getByLabelText('Название проекта'), { target: { value: 'Студия' } });
+    const brief = screen.getByLabelText('ТЗ для офлайн-старта');
+    fireEvent.change(brief, { target: { value: 'Текст для сайта' } });
+    expect(brief.closest('section')).toHaveTextContent('Это не приватная заметка');
+    fireEvent.click(screen.getByRole('button', { name: 'Создать проект с ТЗ' }));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('будет без изменений видно на сайте'));
+    expect(brief).toHaveValue('Текст для сайта');
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
