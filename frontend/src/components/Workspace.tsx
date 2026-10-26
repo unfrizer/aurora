@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { deleteRaster, previewUrl, rasterUrl, uploadRaster } from '../api';
+import { applyBrandPreset, brandPresetMatches, BRAND_PRESET_IDS } from '../brand_presets';
+import type { BrandPresetId } from '../brand_presets';
 import { assetName, move, nextPageSlug, replacePage, replaceSection } from '../editor';
 import { t } from '../i18n';
 import type { EditorDocument, EditorPage, EditorSection, Language, ProjectDocument } from '../types';
@@ -58,6 +60,7 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
   const [newPage, setNewPage] = useState('');
   const [newSection, setNewSection] = useState('');
   const [rename, setRename] = useState(projectName);
+  const [brandPreset, setBrandPreset] = useState<BrandPresetId | ''>('');
   const [imageDialog, setImageDialog] = useState<{ target: ImageTarget; label: string } | null>(null);
   const [photoTrayOpen, setPhotoTrayOpen] = useState(false);
   const [photoPending, setPhotoPending] = useState(false);
@@ -70,6 +73,12 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
   useEffect(() => { if (section && section.id !== sectionId) setSectionId(section.id); }, [section, sectionId]);
 
   function commit(next: EditorDocument) { setPreview(''); void onCommit(next); }
+  function applySelectedBrandPreset() {
+    if (!brandPreset) return;
+    const current = latestEditor.current;
+    if (brandPresetMatches(current.brand, brandPreset)) return;
+    commit(applyBrandPreset(current, brandPreset));
+  }
   function changePage(updated: EditorPage) { commit(replacePage(editor, updated)); }
   function changeSection(updated: EditorSection) { if (page) commit(replaceSection(editor, page.id, updated)); }
 
@@ -221,6 +230,14 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
             onBlur={() => { if (rename !== projectName) void onRename(rename).then((saved) => { if (!saved) setRename(projectName); }); }} /></label>
         </section>
         <section className="card"><span className="eyebrow">IDENTITY</span><h3>{t(language, 'brand')}</h3>
+          <label className="field">{t(language, 'brandPreset')}
+            <select value={brandPreset} onChange={(event) => setBrandPreset(event.target.value as BrandPresetId | '')}>
+              <option value="">{t(language, 'brandPresetChoose')}</option>
+              {BRAND_PRESET_IDS.map((id) => <option key={id} value={id}>{t(language, `brandPreset_${id}`)}</option>)}
+            </select></label>
+          <small>{t(language, 'brandPresetNote')}</small>
+          <div className="actions"><button type="button" disabled={!brandPreset || brandPresetMatches(editor.brand, brandPreset)}
+            onClick={applySelectedBrandPreset}>{t(language, 'brandPresetApply')}</button></div>
           <Field label={t(language, 'brandName')} value={editor.brand.name} onCommit={(value) => commit({ ...editor, brand: { ...editor.brand, name: value } })} />
           <Field label={t(language, 'tagline')} value={editor.brand.tagline} onCommit={(value) => commit({ ...editor, brand: { ...editor.brand, tagline: value } })} />
           <Field label={t(language, 'primary')} value={editor.brand.primary_color} onCommit={(value) => commit({ ...editor, brand: { ...editor.brand, primary_color: value } })} />

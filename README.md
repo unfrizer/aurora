@@ -79,6 +79,11 @@ generate copy, images or a design from a business brief. Review the result in
 the editor and preview before exporting or publishing. If creation or saving
 has an uncertain result, inspect the project list before retrying.
 
+In the editor's Brand inspector, you can choose a ready-made style and press
+**Apply style**. This changes only the site's two colors and font through the
+normal project save. Your text, pages and images remain in place, and you can
+edit the colors or font afterward. Choosing a style alone changes nothing.
+
 ## Start from a brief without an API key
 
 On the Projects screen, enter a project name and paste an ordinary customer
