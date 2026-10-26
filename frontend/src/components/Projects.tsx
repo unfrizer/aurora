@@ -145,10 +145,15 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
         </section>
       </div>
       <section className="project-list" aria-label={t(language, 'projects')}>
-        {projects.length > 0 && <label>{t(language, 'projectSearch')}
-          <input type="search" maxLength={128} value={projectSearch}
-            onChange={(event) => setProjectSearch(event.target.value)} />
-        </label>}
+        {projects.length > 0 && <>
+          <label>{t(language, 'projectSearch')}
+            <input type="search" maxLength={128} value={projectSearch}
+              onChange={(event) => setProjectSearch(event.target.value)} />
+          </label>
+          {projectSearch.length > 0 && <button type="button" onClick={() => setProjectSearch('')}>
+            {t(language, 'clearProjectSearch')}
+          </button>}
+        </>}
         {projects.length === 0 && <p className="muted">{t(language, 'noProjects')}</p>}
         {projects.length > 0 && visibleProjects.length === 0
           && <p className="muted" aria-live="polite">{t(language, 'noProjectMatches')}</p>}
