@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import type { EditorDocument, ProjectDocument } from '../src/types';
 import { blankEditor } from '../src/editor';
+import { applyBrandPreset, brandPresetMatches, BRAND_PRESET_IDS } from '../src/brand_presets';
 import { manualSiteStarter, validManualSite } from '../src/manual_site';
 
 const originalPhotoUrl = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
@@ -1292,6 +1293,77 @@ describe('UI-025 manual site starter', () => {
     expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument();
     expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
     expect(mocks.deleteProject).not.toHaveBeenCalled();
+  });
+});
+
+describe('UI-027 workspace brand presets', () => {
+  it('defines four exact combinations without changing unrelated editor fields', () => {
+    const original = blankEditor('Studio', 'en');
+    original.brand.tagline = 'Keep this tagline';
+    original.pages[0]!.sections[0]!.body = 'Keep this page';
+    const expected = {
+      indigo: ['#4F46E5', '#0F172A', 'system'],
+      ocean: ['#075985', '#0C4A6E', 'system'],
+      forest: ['#166534', '#14532D', 'serif'],
+      warm: ['#9A3412', '#7C2D12', 'serif'],
+    } as const;
+    expect(BRAND_PRESET_IDS).toEqual(['indigo', 'ocean', 'forest', 'warm']);
+    for (const id of BRAND_PRESET_IDS) {
+      const changed = applyBrandPreset(original, id);
+      expect([changed.brand.primary_color, changed.brand.secondary_color, changed.brand.font_family])
+        .toEqual(expected[id]);
+      expect(changed.brand.name).toBe(original.brand.name);
+      expect(changed.brand.tagline).toBe('Keep this tagline');
+      expect(changed.brand.logo_path).toBe(original.brand.logo_path);
+      expect(changed.pages).toBe(original.pages);
+      expect(brandPresetMatches(changed.brand, id)).toBe(true);
+      expect(applyBrandPreset(changed, id)).toBe(changed);
+    }
+    expect(original.brand).toMatchObject({ primary_color: '#4F46E5', secondary_color: '#0F172A', font_family: 'system' });
+    expect(() => applyBrandPreset(original, 'unknown' as never)).toThrow('Invalid brand preset');
+    expect(() => applyBrandPreset(original, 'toString' as never)).toThrow('Invalid brand preset');
+  });
+
+  it.each(['en', 'ru'] as const)('selects but does not apply until explicit action in $language', async (language) => {
+    const original = blankEditor('Studio', language);
+    original.brand.tagline = 'Existing tagline';
+    original.pages[0]!.sections[0]!.body = 'Existing content';
+    mocks.openProject.mockResolvedValueOnce(withEditor(original));
+    await enter(language);
+    fireEvent.click(screen.getByRole('button', { name: language === 'en' ? 'Open' : 'Открыть' }));
+    await screen.findByText('CONTENT BLOCKS');
+    const select = screen.getByRole('combobox', { name: language === 'en' ? 'Ready-made style' : 'Готовое оформление' });
+    const button = screen.getByRole('button', { name: language === 'en' ? 'Apply style' : 'Применить оформление' });
+    expect(button).toBeDisabled();
+    fireEvent.change(select, { target: { value: 'forest' } });
+    expect(button).toBeEnabled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
+    const [projectId, next, expected] = mocks.saveEditor.mock.calls[0] as [string, EditorDocument, string];
+    expect(projectId).toBe(id);
+    expect(expected).toBe('2026-10-09T02:00:00Z');
+    expect(next.brand).toMatchObject({ name: 'Studio', tagline: 'Existing tagline', primary_color: '#166534',
+      secondary_color: '#14532D', font_family: 'serif', logo_path: null });
+    expect(next.pages).toEqual(original.pages);
+    await waitFor(() => expect(button).toBeDisabled());
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+
+  it('retains the chosen colors as an unsaved draft on a version conflict', async () => {
+    mocks.saveEditor.mockRejectedValueOnce(new ApiError(409));
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Ready-made style' }), { target: { value: 'ocean' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply style' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Version conflict');
+    expect(screen.getByLabelText('Primary color')).toHaveValue('#075985');
+    expect(screen.getByLabelText('Secondary color')).toHaveValue('#0C4A6E');
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
   });
 });
 

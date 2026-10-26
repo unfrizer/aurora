@@ -78,7 +78,8 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   expect(projectDirectories).toHaveLength(1);
   const projectFolder = path.join(dataRoot, 'Projects', projectDirectories[0]!);
   const state = JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as {
-    editor: { brand: { tagline: string }; pages: { heading: string; meta_description: string;
+    editor: { brand: { tagline: string; primary_color: string; secondary_color: string; font_family: string };
+      pages: { heading: string; meta_description: string;
       sections: { heading: string; body: string }[] }[] };
   };
   expect(state.editor).toMatchObject({ brand: { tagline: 'Ваш велосипед в порядке' },
@@ -89,6 +90,19 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   expect(saves).toHaveLength(1);
   expect(new URL(saves[0]!.url).pathname).toBe(`/api/v1/projects/${created.metadata.project_id}/editor`);
 
+  const preset = page.getByRole('combobox', { name: 'Готовое оформление' });
+  await preset.selectOption('forest');
+  expect(requests.filter((request) => request.method === 'PUT' &&
+    /^\/api\/v1\/projects\/[^/]+\/editor$/.test(new URL(request.url).pathname))).toHaveLength(1);
+  const styleSave = page.waitForResponse((response) => response.request().method() === 'PUT' &&
+    new URL(response.url()).pathname === `/api/v1/projects/${created.metadata.project_id}/editor`);
+  await page.getByRole('button', { name: 'Применить оформление' }).click();
+  expect((await styleSave).ok()).toBe(true);
+  const styled = JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as typeof state;
+  expect(styled.editor.brand).toMatchObject({ tagline: 'Ваш велосипед в порядке',
+    primary_color: '#166534', secondary_color: '#14532D', font_family: 'serif' });
+  expect(styled.editor.pages).toEqual(state.editor.pages);
+
   await page.getByRole('button', { name: 'Предпросмотр' }).click();
   await expect(page.frameLocator('iframe[title="Предпросмотр"]').getByText('Диагностика и настройка')).toBeVisible();
   await page.getByRole('button', { name: 'Экспорт и деплой' }).click();
@@ -98,9 +112,14 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   const html = readFileSync(path.join(exportPath, 'index.html'), 'utf8');
   expect(html).toContain('Ремонт велосипедов');
   expect(html).toContain('Диагностика и настройка');
+  const css = readFileSync(path.join(exportPath, 'assets', 'site.css'), 'utf8');
+  expect(css).toContain('--primary: #166534');
+  expect(css).toContain('--secondary: #14532D');
+  expect(css).toContain('font-family: Georgia, serif');
   await page.reload();
   await page.getByRole('button', { name: 'Открыть' }).click();
   await expect(page.getByRole('textbox', { name: 'Текст' })).toHaveValue('Диагностика и настройка');
+  await expect(page.getByRole('textbox', { name: 'Основной цвет' })).toHaveValue('#166534');
   expect(requests.filter((request) => /\/(generation|deployments|credentials)(\/|$)/
     .test(new URL(request.url).pathname))).toEqual([]);
 });
