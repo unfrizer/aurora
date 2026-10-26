@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import { t } from '../i18n';
+import { validManualSite } from '../manual_site';
+import type { ManualSiteInput } from '../manual_site';
 import { validOfflineBrief } from '../offline_starter';
 import { preparedSitePrompt, preparedSitePromptWithBrief } from '../prepared_site_prompt';
 import { validDraftInputs } from '../types';
@@ -12,6 +14,7 @@ interface Props {
   model: string;
   onCreate: (name: string) => Promise<void>;
   onOffline: (name: string, brief: string) => Promise<void>;
+  onManual: (input: ManualSiteInput, hasOfflineBrief: boolean) => Promise<void>;
   onGenerate: (name: string, prompt: string) => Promise<void>;
   onImport: (name: string, file: File) => Promise<void>;
   onOpen: (id: string) => Promise<void>;
@@ -25,10 +28,17 @@ function validExternalBrief(value: string): boolean {
   } catch { return false; }
 }
 
-export function Projects({ language, projects, busy, model, onCreate, onOffline, onGenerate, onImport, onOpen, onDelete }: Props) {
+export function Projects({ language, projects, busy, model, onCreate, onOffline, onManual, onGenerate, onImport, onOpen, onDelete }: Props) {
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
   const [offlineBrief, setOfflineBrief] = useState('');
+  const [manual, setManual] = useState<Omit<ManualSiteInput, 'name'>>({
+    tagline: '', headline: '', sectionHeading: '', body: '', metaDescription: '',
+  });
+  const manualInput: ManualSiteInput = { name, ...manual };
+  function changeManual(field: keyof typeof manual, value: string) {
+    setManual((current) => ({ ...current, [field]: value }));
+  }
   const [file, setFile] = useState<File | null>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const [fileDragging, setFileDragging] = useState(false);
@@ -98,6 +108,23 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
             onClick={() => void onOffline(name, offlineBrief)}>{t(language, 'offlineStart')}</button>
             {offlineBrief.length > 0 && <button type="button" disabled={busy}
               onClick={() => setOfflineBrief('')}>{t(language, 'offlineBriefClear')}</button>}</div>
+          <details>
+            <summary>{t(language, 'manualSiteSummary')}</summary>
+            <p>{t(language, 'manualSiteNote')}</p>
+            <label>{t(language, 'manualTagline')}<input value={manual.tagline}
+              onChange={(event) => changeManual('tagline', event.target.value)} /></label>
+            <label>{t(language, 'manualHeadline')}<input value={manual.headline}
+              onChange={(event) => changeManual('headline', event.target.value)} /></label>
+            <label>{t(language, 'manualSectionHeading')}<input value={manual.sectionHeading}
+              onChange={(event) => changeManual('sectionHeading', event.target.value)} /></label>
+            <label>{t(language, 'manualBody')}<textarea value={manual.body} rows={6}
+              onChange={(event) => changeManual('body', event.target.value)} /></label>
+            <label>{t(language, 'manualMetaDescription')}<textarea value={manual.metaDescription} rows={3}
+              onChange={(event) => changeManual('metaDescription', event.target.value)} /></label>
+            <div className="actions"><button type="button" disabled={busy || !validManualSite(manualInput)}
+              onClick={() => void onManual(manualInput, offlineBrief.length > 0)}>
+              {t(language, 'manualSiteCreate')}</button></div>
+          </details>
         </section>
         <section className="project-path" aria-labelledby="project-import-path">
           <div className="project-path-head"><h2 id="project-import-path">{t(language, 'projectImportPath')}</h2>
