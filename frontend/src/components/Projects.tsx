@@ -15,6 +15,7 @@ interface Props {
   onCreate: (name: string) => Promise<void>;
   onOffline: (name: string, brief: string) => Promise<void>;
   onManual: (input: ManualSiteInput, hasOfflineBrief: boolean) => Promise<void>;
+  onManualDraftChange: (present: boolean) => void;
   onGenerate: (name: string, prompt: string) => Promise<void>;
   onImport: (name: string, file: File) => Promise<void>;
   onOpen: (id: string) => Promise<void>;
@@ -28,7 +29,7 @@ function validExternalBrief(value: string): boolean {
   } catch { return false; }
 }
 
-export function Projects({ language, projects, busy, model, onCreate, onOffline, onManual, onGenerate, onImport, onOpen, onDelete }: Props) {
+export function Projects({ language, projects, busy, model, onCreate, onOffline, onManual, onManualDraftChange, onGenerate, onImport, onOpen, onDelete }: Props) {
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
   const [offlineBrief, setOfflineBrief] = useState('');
@@ -36,8 +37,26 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
     tagline: '', headline: '', sectionHeading: '', body: '', metaDescription: '',
   });
   const manualInput: ManualSiteInput = { name, ...manual };
+  const manualDraftPresent = Object.values(manual).some((value) => value.length > 0);
   function changeManual(field: keyof typeof manual, value: string) {
-    setManual((current) => ({ ...current, [field]: value }));
+    const next = { ...manual, [field]: value };
+    setManual(next);
+    onManualDraftChange(Object.values(next).some((item) => item.length > 0));
+  }
+  function clearManual() {
+    setManual({ tagline: '', headline: '', sectionHeading: '', body: '', metaDescription: '' });
+    onManualDraftChange(false);
+  }
+  function allowDiscardManual(): boolean {
+    return !manualDraftPresent || window.confirm(t(language, 'manualDraftLoss'));
+  }
+  function importWithManualGuard(selected: File) {
+    if (busy || !allowDiscardManual()) return;
+    void onImport(name.trim(), selected);
+  }
+  function openWithManualGuard(id: string) {
+    if (busy || !allowDiscardManual()) return;
+    void onOpen(id);
   }
   const [file, setFile] = useState<File | null>(null);
   const filePicker = useRef<HTMLInputElement>(null);
@@ -71,7 +90,10 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
   function createBlank() {
     const trimmed = name.trim();
     if (busy || !trimmed) return;
-    if (offlineBrief.length > 0 && !window.confirm(t(language, 'blankDiscardsOfflineBrief'))) return;
+    const warning = manualDraftPresent
+      ? offlineBrief.length > 0 ? 'blankDiscardsBothDrafts' : 'blankDiscardsManualDraft'
+      : offlineBrief.length > 0 ? 'blankDiscardsOfflineBrief' : null;
+    if (warning && !window.confirm(t(language, warning))) return;
     void onCreate(trimmed);
   }
   return <main className="projects-page">
@@ -123,7 +145,9 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
               onChange={(event) => changeManual('metaDescription', event.target.value)} /></label>
             <div className="actions"><button type="button" disabled={busy || !validManualSite(manualInput)}
               onClick={() => void onManual(manualInput, offlineBrief.length > 0)}>
-              {t(language, 'manualSiteCreate')}</button></div>
+              {t(language, 'manualSiteCreate')}</button>
+              {manualDraftPresent && <button type="button" disabled={busy} onClick={clearManual}>
+                {t(language, 'manualSiteClear')}</button>}</div>
           </details>
         </section>
         <section className="project-path" aria-labelledby="project-import-path">
@@ -175,11 +199,11 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
             {fileDropError && <p role="alert">{fileDropError}</p>}
           </div>
           <div className="actions"><button type="button" disabled={busy || !name.trim() || !file}
-            onClick={() => { if (file) void onImport(name.trim(), file); }}>{t(language, 'importPrepared')}</button></div>
+            onClick={() => { if (file) importWithManualGuard(file); }}>{t(language, 'importPrepared')}</button></div>
           <label>{t(language, 'importPasteLabel')}<textarea value={pastedJson}
             onChange={(event) => setPastedJson(event.target.value)} rows={6} /></label>
           <div className="actions"><button type="button" disabled={busy || !name.trim() || !pastedJson.trim()}
-            onClick={() => void onImport(name.trim(), new File([pastedJson], 'pasted-site.json', { type: 'application/json' }))}>
+            onClick={() => importWithManualGuard(new File([pastedJson], 'pasted-site.json', { type: 'application/json' }))}>
             {t(language, 'importPasteAction')}</button>
             {pastedJson.length > 0 && <button type="button" disabled={busy} onClick={() => setPastedJson('')}>
               {t(language, 'importClearPasted')}</button>}</div>
@@ -210,7 +234,7 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
                   { dateStyle: 'medium', timeStyle: 'short' }).format(updated)}</time>
                 : t(language, 'unknownUpdateTime')}</small></div>
             <div className="actions">
-              <button onClick={() => void onOpen(project.project_id)} disabled={busy}>{t(language, 'open')}</button>
+              <button onClick={() => openWithManualGuard(project.project_id)} disabled={busy}>{t(language, 'open')}</button>
               <button className="danger-quiet" onClick={() => { setDeleting(project); setConfirmation(''); }} disabled={busy}>{t(language, 'delete')}</button>
             </div>
           </article>;

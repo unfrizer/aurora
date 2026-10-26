@@ -65,6 +65,7 @@ export default function App() {
   const preferencesBusyRef = useRef(false);
   const importingRef = useRef(false);
   const offlineStartingRef = useRef(false);
+  const manualDraftPresentRef = useRef(false);
   const revisionRef = useRef(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const lang = language ?? 'en';
@@ -142,13 +143,16 @@ export default function App() {
 
   useLayoutEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (dirtyRef.current || generating || accepting || candidate) { event.preventDefault(); event.returnValue = ''; }
+      if (dirtyRef.current || manualDraftPresentRef.current || generating || accepting || candidate) {
+        event.preventDefault(); event.returnValue = '';
+      }
     };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [generating, accepting, candidate]);
 
   function setDocument(document: ProjectDocument, loadedEditor: EditorDocument | null, bad = false) {
+    manualDraftPresentRef.current = false;
     docRef.current = document; editorRef.current = loadedEditor;
     setActive(document); setEditor(loadedEditor); setEditorError(bad);
     dirtyRef.current = false; blockedRef.current = false;
@@ -185,7 +189,8 @@ export default function App() {
   async function createWithBrief(name: string, brief: string) {
     if (offlineStartingRef.current || busy) return;
     if (!language || !validOfflineBrief(name, brief)) { setError(t(lang, 'error400')); return; }
-    if (!window.confirm(t(lang, 'offlinePublicConfirm'))) return;
+    if (!window.confirm(t(lang, manualDraftPresentRef.current
+      ? 'offlinePublicConfirmWithManual' : 'offlinePublicConfirm'))) return;
     offlineStartingRef.current = true; setBusy(true); setError('');
     let createAttempted = false;
     let created = false;
@@ -285,7 +290,8 @@ export default function App() {
 
   async function generateNew(name: string, prompt: string) {
     if (!language || !validDraftInputs(name, prompt, model)) { setError(t(lang, 'error400')); return; }
-    if (!window.confirm(t(lang, 'generationConfirm'))) return;
+    if (!window.confirm(t(lang, manualDraftPresentRef.current
+      ? 'generationConfirmWithManual' : 'generationConfirm'))) return;
     setBusy(true);
     try {
       const document = await createProject(name);
@@ -428,6 +434,8 @@ export default function App() {
   async function navigate(next: Screen) {
     if (busy || generating || accepting || imageLockRef.current) return;
     await queueRef.current;
+    if (screen === 'projects' && next !== 'projects' && manualDraftPresentRef.current &&
+        !window.confirm(t(lang, 'manualDraftLoss'))) return;
     if (dirtyRef.current && !window.confirm(t(lang, 'leaveConfirm'))) return;
     if (candidate && next !== 'generation') {
       if (!window.confirm(t(lang, 'discardConfirm'))) return;
@@ -436,6 +444,7 @@ export default function App() {
     }
     if (next === 'export' && !(await flush())) return;
     if (next === 'projects') try { await refresh(); } catch (reason) { onError(reason); }
+    if (screen === 'projects' && next !== 'projects') manualDraftPresentRef.current = false;
     setScreen(next);
   }
 
@@ -455,7 +464,7 @@ export default function App() {
       <button className="guide-link" disabled={busy || generating || accepting || imageLocked} onClick={() => setGuide(true)}>{t(lang, 'onboarding')}</button>
     </header>
     {error && <div className="error-banner" role="alert">{error}<button aria-label={t(lang, 'close')} onClick={() => setError('')}>×</button></div>}
-    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onOffline={createWithBrief} onManual={createWithManualSite} onGenerate={generateNew} onImport={importPrepared} onOpen={open} onDelete={remove} />}
+    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onOffline={createWithBrief} onManual={createWithManualSite} onManualDraftChange={(present) => { manualDraftPresentRef.current = present; }} onGenerate={generateNew} onImport={importPrepared} onOpen={open} onDelete={remove} />}
     {screen === 'generation' && active && <ProjectGeneration language={lang} projectName={active.metadata.name}
       model={model} prompt={generationPrompt} candidate={candidate} failure={generationFailure}
       pending={generating} accepting={accepting} conflict={generationConflict}
