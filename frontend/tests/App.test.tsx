@@ -836,6 +836,57 @@ describe('UI-019 prepared JSON brief clear', () => {
   });
 });
 
+describe('UI-020 local project list search', () => {
+  const bakery = { ...metadata, project_id: '00000000-0000-4000-8000-000000000222',
+    name: 'Bakery', updated_at: '2026-10-10T01:00:00Z' };
+  const studioNorth = { ...metadata, project_id: '00000000-0000-4000-8000-000000000333',
+    name: 'Studio North', updated_at: '2026-10-11T01:00:00Z' };
+
+  it('filters names case-insensitively without changing the returned order or calling an API', async () => {
+    mocks.listProjects.mockResolvedValue([studioNorth, bakery, metadata]);
+    const storage = vi.spyOn(Storage.prototype, 'setItem');
+    await enter();
+    const search = screen.getByLabelText('Search projects');
+    expect(search).toHaveAttribute('type', 'search');
+    expect(search).toHaveAttribute('maxlength', '128');
+    fireEvent.change(search, { target: { value: '  STUDIO  ' } });
+    const list = screen.getByRole('region', { name: 'Projects' });
+    expect(within(list).getAllByRole('heading').map((heading) => heading.textContent))
+      .toEqual(['Studio North', 'Studio']);
+    expect(within(list).queryByRole('heading', { name: 'Bakery' })).not.toBeInTheDocument();
+    expect(mocks.listProjects).toHaveBeenCalledTimes(1);
+    expect(mocks.openProject).not.toHaveBeenCalled();
+    expect(mocks.deleteProject).not.toHaveBeenCalled();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(storage).not.toHaveBeenCalled();
+    storage.mockRestore();
+  });
+
+  it('treats whitespace as an empty query and reports no matches in Russian', async () => {
+    mocks.listProjects.mockResolvedValue([metadata, bakery]);
+    await enter('ru');
+    const search = screen.getByLabelText('Поиск проектов');
+    fireEvent.change(search, { target: { value: '   ' } });
+    expect(screen.getByRole('heading', { name: 'Studio' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Bakery' })).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: 'нет такого проекта' } });
+    expect(screen.getByText('Подходящих проектов нет.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Studio' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Bakery' })).not.toBeInTheDocument();
+    expect(mocks.openProject).not.toHaveBeenCalled();
+    expect(mocks.deleteProject).not.toHaveBeenCalled();
+  });
+
+  it('keeps the canonical empty-repository state without a redundant search field', async () => {
+    mocks.listProjects.mockResolvedValue([]);
+    await enter();
+    expect(screen.getByText('No projects yet.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Search projects')).not.toBeInTheDocument();
+    expect(screen.queryByText('No matching projects.')).not.toBeInTheDocument();
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
