@@ -141,6 +141,8 @@ jobs:
               if ($LASTEXITCODE -ne 0) { throw 'Packaged paste-import browser journey failed' }
               pnpm exec playwright test e2e/portable-paste-photo-export.spec.ts
               if ($LASTEXITCODE -ne 0) { throw 'Packaged paste/photo/export browser journey failed' }
+              pnpm exec playwright test e2e/portable-offline-brief.spec.ts
+              if ($LASTEXITCODE -ne 0) { throw 'Packaged offline brief browser journey failed' }
             } finally {
               Pop-Location
               $env:USERPROFILE = $profile
@@ -190,6 +192,16 @@ jobs:
                 $exportedImage -notmatch '^assets/[a-f0-9]{64}\.png$') {
               throw 'Packaged pasted export project was not persisted before process restart'
             }
+            $briefMatches = @($allProjects | Where-Object { $_.name -eq 'Portable Brief Starter' })
+            if ($briefMatches.Count -ne 1) { throw 'Expected exactly one packaged offline brief project' }
+            $briefId = [string]$briefMatches[0].project_id
+            $expectedBrief = "  Настройка велосипедов`nРемонт и диагностика  "
+            $briefProject = Invoke-RestMethod -Uri "$origin/api/v1/projects/$briefId" -TimeoutSec 3
+            if ($briefProject.metadata.project_id -ne $briefId -or
+                $briefProject.state.editor.brand.name -ne 'Portable Brief Starter' -or
+                $briefProject.state.editor.pages[0].sections[0].body -cne $expectedBrief) {
+              throw 'Packaged offline brief was not persisted before process restart'
+            }
             Stop-AuroraProcess $process
             $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
             $origin = Wait-AuroraOrigin $process
@@ -223,6 +235,12 @@ jobs:
                 $restartedExport.state.editor.pages[0].sections[0].body -ne 'Сайт из portable JSON' -or
                 $restartedExport.state.editor.pages[0].sections[0].image_path -ne $exportedImage) {
               throw 'Packaged pasted export project did not survive process restart'
+            }
+            $restartedBrief = Invoke-RestMethod -Uri "$origin/api/v1/projects/$briefId" -TimeoutSec 3
+            if ($restartedBrief.metadata.project_id -ne $briefId -or
+                $restartedBrief.state.editor.brand.name -ne 'Portable Brief Starter' -or
+                $restartedBrief.state.editor.pages[0].sections[0].body -cne $expectedBrief) {
+              throw 'Packaged offline brief did not survive process restart'
             }
           } finally {
             Stop-AuroraProcess $process
