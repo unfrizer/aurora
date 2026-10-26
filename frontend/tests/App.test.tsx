@@ -887,6 +887,61 @@ describe('UI-020 local project list search', () => {
   });
 });
 
+describe('UI-021 local project search clear', () => {
+  const bakery = { ...metadata, project_id: '00000000-0000-4000-8000-000000000222',
+    name: 'Bakery', updated_at: '2026-10-10T01:00:00Z' };
+  const studioNorth = { ...metadata, project_id: '00000000-0000-4000-8000-000000000333',
+    name: 'Studio North', updated_at: '2026-10-11T01:00:00Z' };
+
+  it('clears a matching query and restores the original order without side effects', async () => {
+    mocks.listProjects.mockResolvedValue([studioNorth, bakery, metadata]);
+    const storage = vi.spyOn(Storage.prototype, 'setItem');
+    await enter();
+    const search = screen.getByLabelText('Search projects');
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+    fireEvent.change(search, { target: { value: 'bak' } });
+    expect(screen.getByRole('heading', { name: 'Bakery' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(search).toHaveValue('');
+    const list = screen.getByRole('region', { name: 'Projects' });
+    expect(within(list).getAllByRole('heading').map((heading) => heading.textContent))
+      .toEqual(['Studio North', 'Bakery', 'Studio']);
+    expect(mocks.listProjects).toHaveBeenCalledTimes(1);
+    expect(mocks.openProject).not.toHaveBeenCalled();
+    expect(mocks.deleteProject).not.toHaveBeenCalled();
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(storage).not.toHaveBeenCalled();
+    storage.mockRestore();
+  });
+
+  it('clears whitespace in Russian and stays available while busy', async () => {
+    mocks.listProjects.mockResolvedValue([metadata]);
+    let finishCreate: ((value: ProjectDocument) => void) | undefined;
+    mocks.createProject.mockImplementationOnce(() => new Promise((resolve) => { finishCreate = resolve; }));
+    await enter('ru');
+    fireEvent.change(screen.getByLabelText('Название проекта'), { target: { value: 'Занят' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Создать проект' }));
+    const search = screen.getByLabelText('Поиск проектов');
+    fireEvent.change(search, { target: { value: '   ' } });
+    const clear = screen.getByRole('button', { name: 'Очистить поиск' });
+    expect(clear).toBeEnabled();
+    fireEvent.click(clear);
+    expect(search).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Очистить поиск' })).not.toBeInTheDocument();
+    expect(finishCreate).toBeDefined();
+    finishCreate?.(empty);
+    await screen.findByRole('button', { name: 'Начать с пустого сайта' });
+  });
+
+  it('is absent with the search field for an empty repository', async () => {
+    mocks.listProjects.mockResolvedValue([]);
+    await enter('ru');
+    expect(screen.queryByRole('button', { name: 'Очистить поиск' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Поиск проектов')).not.toBeInTheDocument();
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
