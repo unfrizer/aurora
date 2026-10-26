@@ -36,6 +36,11 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
   const guideCopyRevision = useRef(0);
   const [deleting, setDeleting] = useState<ProjectMetadata | null>(null);
   const [confirmation, setConfirmation] = useState('');
+  const [projectSearch, setProjectSearch] = useState('');
+  const projectSearchKey = projectSearch.trim().toLowerCase();
+  const visibleProjects = projectSearchKey
+    ? projects.filter((project) => project.name.toLowerCase().includes(projectSearchKey))
+    : projects;
   async function copyGuide(value: string, outcome: 'copied' | 'brief-copied') {
     const revision = guideCopyRevision.current;
     try {
@@ -140,8 +145,14 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
         </section>
       </div>
       <section className="project-list" aria-label={t(language, 'projects')}>
+        {projects.length > 0 && <label>{t(language, 'projectSearch')}
+          <input type="search" maxLength={128} value={projectSearch}
+            onChange={(event) => setProjectSearch(event.target.value)} />
+        </label>}
         {projects.length === 0 && <p className="muted">{t(language, 'noProjects')}</p>}
-        {projects.map((project) => <article className="card project-card" key={project.project_id}>
+        {projects.length > 0 && visibleProjects.length === 0
+          && <p className="muted" aria-live="polite">{t(language, 'noProjectMatches')}</p>}
+        {visibleProjects.map((project) => <article className="card project-card" key={project.project_id}>
           <div><span className="eyebrow">AURORA PROJECT</span><h2>{project.name}</h2><small>{project.updated_at}</small></div>
           <div className="actions">
             <button onClick={() => void onOpen(project.project_id)} disabled={busy}>{t(language, 'open')}</button>
