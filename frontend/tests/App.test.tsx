@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import type { EditorDocument, ProjectDocument } from '../src/types';
 import { blankEditor } from '../src/editor';
+import { manualSiteStarter, validManualSite } from '../src/manual_site';
 
 const originalPhotoUrl = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
 const originalPhotoRevoke = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
@@ -1176,6 +1177,121 @@ describe('UI-024 offline brief draft guard', () => {
     await screen.findByRole('button', { name: 'Start blank site' });
     expect(mocks.createProject).toHaveBeenCalledTimes(1);
     expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+});
+
+describe('UI-025 manual site starter', () => {
+  const input = { name: '  Studio  ', tagline: '  Honest repairs  ', headline: '  Bicycle care  ',
+    sectionHeading: 'Services', body: '  Repairs\nfor everyone  ', metaDescription: '  Local repair studio  ' };
+
+  function fillManual(language: 'en' | 'ru' = 'en') {
+    fireEvent.change(screen.getByLabelText(language === 'en' ? 'Project name' : 'Название проекта'),
+      { target: { value: input.name } });
+    fireEvent.click(screen.getByText(language === 'en' ? 'Build a site from my text' : 'Собрать сайт из моих текстов'));
+    const labels = language === 'en'
+      ? ['Site tagline (optional)', 'Main site headline', 'First section heading', 'First section text', 'SEO description (optional)']
+      : ['Слоган для сайта (необязательно)', 'Главный заголовок сайта', 'Заголовок первого раздела', 'Текст первого раздела', 'SEO-описание (необязательно)'];
+    [input.tagline, input.headline, input.sectionHeading, input.body, input.metaDescription]
+      .forEach((value, index) => fireEvent.change(screen.getByLabelText(labels[index]!), { target: { value } }));
+  }
+
+  it('validates UTF-8 bounds and maps only supplied text into a detached P7 editor', () => {
+    expect(validManualSite(input)).toBe(true);
+    const editor = manualSiteStarter(input, 'en');
+    expect(editor).toMatchObject({ schema_version: 1, language: 'en',
+      brand: { name: 'Studio', tagline: input.tagline, logo_path: null },
+      pages: [{ slug: 'index', title: 'Studio', heading: input.headline,
+        meta_description: input.metaDescription,
+        sections: [{ heading: input.sectionHeading, body: input.body, image_path: null }] }] });
+    expect(editor.pages).toHaveLength(1);
+    expect(editor.pages[0]?.sections).toHaveLength(1);
+    expect(validManualSite({ ...input, body: 'а'.repeat(4096) })).toBe(true);
+    expect(validManualSite({ ...input, body: 'а'.repeat(4097) })).toBe(false);
+    expect(validManualSite({ ...input, name: 'x'.repeat(257) })).toBe(false);
+    expect(validManualSite({ ...input, tagline: '\uD800' })).toBe(false);
+    expect(validManualSite({ ...input, headline: '   ' })).toBe(false);
+    expect(validManualSite({ ...input, metaDescription: 'x'.repeat(321) })).toBe(false);
+    expect(() => manualSiteStarter({ ...input, body: '' }, 'en')).toThrow('Invalid manual site input');
+  });
+
+  it.each(['en', 'ru'] as const)('requires $language public consent and preserves input on decline', async (language) => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+    await enter(language);
+    fillManual(language);
+    const button = screen.getByRole('button', { name: language === 'en'
+      ? 'Create site from my text' : 'Создать сайт из моих текстов' });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(window.confirm).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(language === 'en'
+      ? 'will appear on the site' : 'будут видны на сайте'));
+    expect(screen.getByLabelText(language === 'en' ? 'First section text' : 'Текст первого раздела'))
+      .toHaveValue(input.body);
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
+  it('saves and verifies one versioned editor without provider calls', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    await enter();
+    fillManual();
+    fireEvent.click(screen.getByRole('button', { name: 'Create site from my text' }));
+    await screen.findByText('CONTENT BLOCKS');
+    expect(mocks.createProject).toHaveBeenCalledExactlyOnceWith('Studio');
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+    const [projectId, editor, expected] = mocks.saveEditor.mock.calls[0] as [string, EditorDocument, string];
+    expect(projectId).toBe(id);
+    expect(expected).toBe(metadata.updated_at);
+    expect(editor).toMatchObject({ brand: { tagline: input.tagline },
+      pages: [{ heading: input.headline, meta_description: input.metaDescription,
+        sections: [{ heading: input.sectionHeading, body: input.body }] }] });
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+
+  it('warns that a typed offline brief is not included', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+    await enter();
+    fillManual();
+    fireEvent.change(screen.getByLabelText('Business brief for offline start'),
+      { target: { value: 'Do not lose me' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create site from my text' }));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('offline brief will not be saved'));
+    expect(mocks.createProject).not.toHaveBeenCalled();
+  });
+
+  it('keeps the form and avoids retry or deletion on uncertain create', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    mocks.createProject.mockRejectedValueOnce(new TypeError('Connection lost'));
+    await enter();
+    fillManual();
+    fireEvent.click(screen.getByRole('button', { name: 'Create site from my text' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Project creation from your text is uncertain');
+    expect(screen.getByLabelText('First section text')).toHaveValue(input.body);
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.deleteProject).not.toHaveBeenCalled();
+  });
+
+  it('rejects an altered saved editor and blocks duplicate in-flight activation', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    let finishCreate: ((value: ProjectDocument) => void) | undefined;
+    mocks.createProject.mockImplementationOnce(() => new Promise((resolve) => { finishCreate = resolve; }));
+    mocks.saveEditor.mockImplementationOnce(async (_id: string, editor: EditorDocument) =>
+      withEditor({ ...editor, brand: { ...editor.brand, tagline: 'Wrong' } }));
+    await enter();
+    fillManual();
+    const button = screen.getByRole('button', { name: 'Create site from my text' });
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(mocks.createProject).toHaveBeenCalledTimes(1);
+    finishCreate?.(empty);
+    expect(await screen.findByRole('alert')).toHaveTextContent('your text may not be saved');
+    expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument();
+    expect(mocks.saveEditor).toHaveBeenCalledTimes(1);
+    expect(mocks.deleteProject).not.toHaveBeenCalled();
   });
 });
 

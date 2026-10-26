@@ -3,6 +3,8 @@ import { ApiError, createProject, deleteProject, generateProjectDraft, getPrefer
 import { DEFAULT_IMAGE_MODEL, DEFAULT_MODEL } from './config';
 import { blankEditor } from './editor';
 import { t } from './i18n';
+import { manualSiteStarter, validManualSite } from './manual_site';
+import type { ManualSiteInput } from './manual_site';
 import { offlineStarter, validOfflineBrief } from './offline_starter';
 import { ImportValidationError, readPreparedEditor, sameEditor } from './project_import';
 import type { DraftResult, EditorDocument, Language, PreferencesSnapshot, ProjectDocument, ProjectMetadata, UserPreferences } from './types';
@@ -202,6 +204,33 @@ export default function App() {
     } catch (reason) {
       if (created) setError(t(lang, 'offlineSaveUncertain'));
       else if (createAttempted) setError(t(lang, 'offlineCreateUncertain'));
+      else onError(reason);
+      if (createAttempted) try { await refresh(); } catch { /* Preserve the primary recovery message. */ }
+    } finally { offlineStartingRef.current = false; setBusy(false); }
+  }
+
+  async function createWithManualSite(input: ManualSiteInput, hasOfflineBrief: boolean) {
+    if (offlineStartingRef.current || busy) return;
+    if (!language || !validManualSite(input)) { setError(t(lang, 'error400')); return; }
+    if (!window.confirm(t(lang, hasOfflineBrief ? 'manualPublicConfirmWithBrief' : 'manualPublicConfirm'))) return;
+    offlineStartingRef.current = true; setBusy(true); setError('');
+    let createAttempted = false;
+    let created = false;
+    try {
+      const nextEditor = manualSiteStarter(input, language);
+      createAttempted = true;
+      const document = await createProject(input.name.trim());
+      created = true;
+      const saved = await saveEditor(document.metadata.project_id, nextEditor, document.metadata.updated_at);
+      const loaded = parseEditor(saved.state.editor);
+      if (saved.metadata.project_id !== document.metadata.project_id || !sameEditor(nextEditor, loaded)) {
+        throw new Error('Saved manual site does not match');
+      }
+      setDocument(saved, loaded); setScreen('workspace');
+      try { await refresh(); } catch (reason) { onError(reason); }
+    } catch (reason) {
+      if (created) setError(t(lang, 'manualSaveUncertain'));
+      else if (createAttempted) setError(t(lang, 'manualCreateUncertain'));
       else onError(reason);
       if (createAttempted) try { await refresh(); } catch { /* Preserve the primary recovery message. */ }
     } finally { offlineStartingRef.current = false; setBusy(false); }
@@ -426,7 +455,7 @@ export default function App() {
       <button className="guide-link" disabled={busy || generating || accepting || imageLocked} onClick={() => setGuide(true)}>{t(lang, 'onboarding')}</button>
     </header>
     {error && <div className="error-banner" role="alert">{error}<button aria-label={t(lang, 'close')} onClick={() => setError('')}>×</button></div>}
-    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onOffline={createWithBrief} onGenerate={generateNew} onImport={importPrepared} onOpen={open} onDelete={remove} />}
+    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onOffline={createWithBrief} onManual={createWithManualSite} onGenerate={generateNew} onImport={importPrepared} onOpen={open} onDelete={remove} />}
     {screen === 'generation' && active && <ProjectGeneration language={lang} projectName={active.metadata.name}
       model={model} prompt={generationPrompt} candidate={candidate} failure={generationFailure}
       pending={generating} accepting={accepting} conflict={generationConflict}

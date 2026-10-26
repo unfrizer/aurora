@@ -68,6 +68,17 @@ independently collapsible panels. OpenAI text assist applies only to a selected
 section after user review. API keys are stored through Windows Credential
 Manager, not persisted in browser storage or project files.
 
+## Build a site from your own text without an API key
+
+On the Projects screen, enter a project name, expand **Build a site from my
+text**, and supply a main headline, first section heading and section text.
+You can also add a tagline and SEO description. After you confirm that these
+fields are public site content, AURORA creates and saves a one-page editable
+site without contacting OpenAI. It places your text unchanged; it does not
+generate copy, images or a design from a business brief. Review the result in
+the editor and preview before exporting or publishing. If creation or saving
+has an uncertain result, inspect the project list before retrying.
+
 ## Start from a brief without an API key
 
 On the Projects screen, enter a project name and paste an ordinary customer
