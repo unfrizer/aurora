@@ -748,6 +748,94 @@ describe('UI-018 direct prepared JSON clear', () => {
   });
 });
 
+describe('UI-019 prepared JSON brief clear', () => {
+  it('clears only the brief and resets its copy status while preserving adjacent inputs', async () => {
+    const copy = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText: copy } });
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Imported' } });
+    fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
+      { target: { value: 'Independent AI prompt' } });
+    fireEvent.change(screen.getByLabelText('Prepared site JSON file'),
+      { target: { files: [importFile(blankEditor('File version', 'en'))] } });
+    fireEvent.change(screen.getByLabelText('Paste prepared site JSON'), { target: { value: '{}' } });
+    fireEvent.click(screen.getByText('How to prepare import JSON'));
+    const brief = screen.getByLabelText('Brief for external preparation');
+    fireEvent.change(brief, { target: { value: 'Customer brief' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt with brief' }));
+    expect(await screen.findByText('Prompt with brief copied.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear brief' }));
+
+    expect(brief).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Clear brief' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy prompt with brief' })).toBeDisabled();
+    expect(screen.queryByText('Prompt with brief copied.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Project name')).toHaveValue('Imported');
+    expect(screen.getByLabelText('Describe your business in one prompt')).toHaveValue('Independent AI prompt');
+    expect(screen.getByText('Selected file: prepared.json')).toBeInTheDocument();
+    expect(screen.getByLabelText('Paste prepared site JSON')).toHaveValue('{}');
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.uploadRaster).not.toHaveBeenCalled();
+  });
+
+  it('offers a Russian clear action for whitespace and invalid Unicode', async () => {
+    await enter('ru');
+    fireEvent.click(screen.getByText('Как подготовить JSON для импорта'));
+    const brief = screen.getByLabelText('ТЗ для внешней подготовки');
+    expect(screen.queryByRole('button', { name: 'Очистить ТЗ' })).not.toBeInTheDocument();
+    fireEvent.change(brief, { target: { value: '   ' } });
+    expect(screen.getByRole('button', { name: 'Копировать шаблон с ТЗ' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Очистить ТЗ' }));
+    expect(brief).toHaveValue('');
+    fireEvent.change(brief, { target: { value: '\uD800' } });
+    expect(screen.getByRole('button', { name: 'Копировать шаблон с ТЗ' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Очистить ТЗ' }));
+    expect(brief).toHaveValue('');
+  });
+
+  it('does not restore a stale status when a pre-clear clipboard write settles', async () => {
+    let finishCopy: (() => void) | undefined;
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn(() => new Promise<void>((resolve) => {
+      finishCopy = resolve;
+    })) } });
+    await enter();
+    fireEvent.click(screen.getByText('How to prepare import JSON'));
+    fireEvent.change(screen.getByLabelText('Brief for external preparation'),
+      { target: { value: 'Brief being copied' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt with brief' }));
+    expect(finishCopy).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear brief' }));
+    finishCopy?.();
+    await Promise.resolve();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('does not clear the brief while another project operation is busy', async () => {
+    let finishCreate: ((document: ProjectDocument) => void) | undefined;
+    mocks.createProject.mockImplementation(() => new Promise<ProjectDocument>((resolve) => {
+      finishCreate = resolve;
+    }));
+    await enter();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
+    fireEvent.click(screen.getByText('How to prepare import JSON'));
+    const brief = screen.getByLabelText('Brief for external preparation');
+    fireEvent.change(brief, { target: { value: 'Keep during operation' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+    await waitFor(() => expect(mocks.createProject).toHaveBeenCalledTimes(1));
+    const clear = screen.getByRole('button', { name: 'Clear brief' });
+    expect(clear).toBeDisabled();
+    fireEvent.click(clear);
+    expect(brief).toHaveValue('Keep during operation');
+    expect(finishCreate).toBeDefined();
+    finishCreate?.(empty);
+    await screen.findByRole('button', { name: 'Start blank site' });
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');

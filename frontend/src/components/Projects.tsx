@@ -33,13 +33,22 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
   const [pastedJson, setPastedJson] = useState('');
   const [externalBrief, setExternalBrief] = useState('');
   const [guideCopy, setGuideCopy] = useState<'idle' | 'copied' | 'brief-copied' | 'failed'>('idle');
+  const guideCopyRevision = useRef(0);
   const [deleting, setDeleting] = useState<ProjectMetadata | null>(null);
   const [confirmation, setConfirmation] = useState('');
   async function copyGuide(value: string, outcome: 'copied' | 'brief-copied') {
+    const revision = guideCopyRevision.current;
     try {
       await navigator.clipboard.writeText(value);
-      setGuideCopy(outcome);
-    } catch { setGuideCopy('failed'); }
+      if (guideCopyRevision.current === revision) setGuideCopy(outcome);
+    } catch {
+      if (guideCopyRevision.current === revision) setGuideCopy('failed');
+    }
+  }
+  function changeExternalBrief(value: string) {
+    guideCopyRevision.current += 1;
+    setExternalBrief(value);
+    setGuideCopy('idle');
   }
   return <main className="projects-page">
     <div className="hero">
@@ -84,11 +93,13 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
               onClick={() => void copyGuide(preparedSitePrompt(language), 'copied')}>
               {t(language, 'importGuideCopy')}</button></div>
             <label>{t(language, 'importGuideBrief')}<textarea value={externalBrief} rows={6}
-              onChange={(event) => { setExternalBrief(event.target.value); setGuideCopy('idle'); }} /></label>
+              onChange={(event) => changeExternalBrief(event.target.value)} /></label>
             <small>{t(language, 'importGuideBriefNote')}</small>
             <div className="actions"><button type="button" disabled={!validExternalBrief(externalBrief)}
               onClick={() => void copyGuide(preparedSitePromptWithBrief(language, externalBrief), 'brief-copied')}>
-              {t(language, 'importGuideBriefCopy')}</button></div>
+              {t(language, 'importGuideBriefCopy')}</button>
+              {externalBrief.length > 0 && <button type="button" disabled={busy}
+                onClick={() => changeExternalBrief('')}>{t(language, 'importGuideBriefClear')}</button>}</div>
             {guideCopy !== 'idle' && <p role="status">{t(language,
               guideCopy === 'copied' ? 'importGuideCopied'
                 : guideCopy === 'brief-copied' ? 'importGuideBriefCopied' : 'importGuideCopyFailed')}</p>}
