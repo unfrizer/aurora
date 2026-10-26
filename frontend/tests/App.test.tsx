@@ -942,6 +942,41 @@ describe('UI-021 local project search clear', () => {
   });
 });
 
+describe('UI-022 project updated time display', () => {
+  it.each([
+    { language: 'en' as const, label: 'Last updated', locale: 'en-US' },
+    { language: 'ru' as const, label: 'Изменён', locale: 'ru-RU' },
+  ])('labels and formats the original timestamp in $language', async ({ language, label, locale }) => {
+    mocks.listProjects.mockResolvedValue([metadata]);
+    const storage = vi.spyOn(Storage.prototype, 'setItem');
+    await enter(language);
+    const list = screen.getByRole('region', { name: language === 'ru' ? 'Проекты' : 'Projects' });
+    const timestamp = within(list).getByText(new Intl.DateTimeFormat(locale,
+      { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(metadata.updated_at)));
+    expect(timestamp.tagName).toBe('TIME');
+    expect(timestamp).toHaveAttribute('dateTime', metadata.updated_at);
+    expect(timestamp.parentElement).toHaveTextContent(label);
+    expect(mocks.listProjects).toHaveBeenCalledTimes(1);
+    expect(mocks.openProject).not.toHaveBeenCalled();
+    expect(mocks.deleteProject).not.toHaveBeenCalled();
+    expect(storage).not.toHaveBeenCalled();
+    storage.mockRestore();
+  });
+
+  it('uses a safe fallback for an invalid timestamp and preserves list order', async () => {
+    const bad = { ...metadata, project_id: '00000000-0000-4000-8000-000000000222',
+      name: 'Bakery', updated_at: 'not-a-date' };
+    mocks.listProjects.mockResolvedValue([bad, metadata]);
+    await enter();
+    const list = screen.getByRole('region', { name: 'Projects' });
+    expect(within(list).getAllByRole('heading').map((heading) => heading.textContent))
+      .toEqual(['Bakery', 'Studio']);
+    expect(within(list).getByText('Last updated: Unknown update time')).toBeInTheDocument();
+    expect(within(list).queryByText('not-a-date')).not.toBeInTheDocument();
+    expect(list.querySelectorAll('time')).toHaveLength(1);
+  });
+});
+
 describe('workspace flow', () => {
   it('chooses RU/EN, creates an empty project, then explicitly initializes P7', async () => {
     await enter('ru');
