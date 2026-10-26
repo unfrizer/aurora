@@ -157,13 +157,21 @@ export function Projects({ language, projects, busy, model, onCreate, onGenerate
         {projects.length === 0 && <p className="muted">{t(language, 'noProjects')}</p>}
         {projects.length > 0 && visibleProjects.length === 0
           && <p className="muted" aria-live="polite">{t(language, 'noProjectMatches')}</p>}
-        {visibleProjects.map((project) => <article className="card project-card" key={project.project_id}>
-          <div><span className="eyebrow">AURORA PROJECT</span><h2>{project.name}</h2><small>{project.updated_at}</small></div>
-          <div className="actions">
-            <button onClick={() => void onOpen(project.project_id)} disabled={busy}>{t(language, 'open')}</button>
-            <button className="danger-quiet" onClick={() => { setDeleting(project); setConfirmation(''); }} disabled={busy}>{t(language, 'delete')}</button>
-          </div>
-        </article>)}
+        {visibleProjects.map((project) => {
+          const updated = new Date(project.updated_at);
+          const validUpdated = Number.isFinite(updated.getTime());
+          return <article className="card project-card" key={project.project_id}>
+            <div><span className="eyebrow">AURORA PROJECT</span><h2>{project.name}</h2>
+              <small>{t(language, 'lastUpdated')} {validUpdated
+                ? <time dateTime={project.updated_at}>{new Intl.DateTimeFormat(language === 'ru' ? 'ru-RU' : 'en-US',
+                  { dateStyle: 'medium', timeStyle: 'short' }).format(updated)}</time>
+                : t(language, 'unknownUpdateTime')}</small></div>
+            <div className="actions">
+              <button onClick={() => void onOpen(project.project_id)} disabled={busy}>{t(language, 'open')}</button>
+              <button className="danger-quiet" onClick={() => { setDeleting(project); setConfirmation(''); }} disabled={busy}>{t(language, 'delete')}</button>
+            </div>
+          </article>;
+        })}
       </section>
     </div>
     {deleting && <div className="overlay" role="dialog" aria-modal="true" aria-label={t(language, 'delete')}>
