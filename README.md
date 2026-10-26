@@ -68,6 +68,20 @@ independently collapsible panels. OpenAI text assist applies only to a selected
 section after user review. API keys are stored through Windows Credential
 Manager, not persisted in browser storage or project files.
 
+## Start from a brief without an API key
+
+On the Projects screen, enter a project name and paste an ordinary customer
+brief into **Business brief for offline start**, then choose **Create project
+with brief**. AURORA saves the unchanged text in the first section of a new
+editable site. The text is visible in preview and will be included in site
+exports or deployment until you edit it; do not enter confidential customer
+material. AURORA asks you to confirm this consequence before creation. This
+action makes no AI request and needs no OpenAI key. It does not generate
+finished site copy, a visual brand, SEO or images: review and edit the starter
+in the workspace before building or publishing. If creation or
+saving reports an uncertain result, inspect the project list before retrying;
+the new project is never automatically deleted.
+
 ## Import a text-only site prepared in ChatGPT
 
 This is an optional no-API-key path. In ChatGPT, describe the business and

@@ -3,6 +3,7 @@ import { ApiError, createProject, deleteProject, generateProjectDraft, getPrefer
 import { DEFAULT_IMAGE_MODEL, DEFAULT_MODEL } from './config';
 import { blankEditor } from './editor';
 import { t } from './i18n';
+import { offlineStarter, validOfflineBrief } from './offline_starter';
 import { ImportValidationError, readPreparedEditor, sameEditor } from './project_import';
 import type { DraftResult, EditorDocument, Language, PreferencesSnapshot, ProjectDocument, ProjectMetadata, UserPreferences } from './types';
 import { parseEditor, validDraftInputs } from './types';
@@ -61,6 +62,7 @@ export default function App() {
   const preferencesRef = useRef<PreferencesSnapshot | null>(null);
   const preferencesBusyRef = useRef(false);
   const importingRef = useRef(false);
+  const offlineStartingRef = useRef(false);
   const revisionRef = useRef(0);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const lang = language ?? 'en';
@@ -176,6 +178,33 @@ export default function App() {
       setDocument(document, null); await refresh(); setScreen('workspace');
     } catch (reason) { onError(reason); }
     finally { setBusy(false); }
+  }
+
+  async function createWithBrief(name: string, brief: string) {
+    if (offlineStartingRef.current || busy) return;
+    if (!language || !validOfflineBrief(name, brief)) { setError(t(lang, 'error400')); return; }
+    if (!window.confirm(t(lang, 'offlinePublicConfirm'))) return;
+    offlineStartingRef.current = true; setBusy(true); setError('');
+    let createAttempted = false;
+    let created = false;
+    try {
+      const editor = offlineStarter(name, language, brief);
+      createAttempted = true;
+      const document = await createProject(name.trim());
+      created = true;
+      const saved = await saveEditor(document.metadata.project_id, editor, document.metadata.updated_at);
+      const loaded = parseEditor(saved.state.editor);
+      if (saved.metadata.project_id !== document.metadata.project_id || !sameEditor(editor, loaded)) {
+        throw new Error('Saved offline starter does not match');
+      }
+      setDocument(saved, loaded); setScreen('workspace');
+      try { await refresh(); } catch (reason) { onError(reason); }
+    } catch (reason) {
+      if (created) setError(t(lang, 'offlineSaveUncertain'));
+      else if (createAttempted) setError(t(lang, 'offlineCreateUncertain'));
+      else onError(reason);
+      if (createAttempted) try { await refresh(); } catch { /* Preserve the primary recovery message. */ }
+    } finally { offlineStartingRef.current = false; setBusy(false); }
   }
 
   async function importPrepared(name: string, file: File) {
@@ -397,7 +426,7 @@ export default function App() {
       <button className="guide-link" disabled={busy || generating || accepting || imageLocked} onClick={() => setGuide(true)}>{t(lang, 'onboarding')}</button>
     </header>
     {error && <div className="error-banner" role="alert">{error}<button aria-label={t(lang, 'close')} onClick={() => setError('')}>×</button></div>}
-    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onGenerate={generateNew} onImport={importPrepared} onOpen={open} onDelete={remove} />}
+    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onOffline={createWithBrief} onGenerate={generateNew} onImport={importPrepared} onOpen={open} onDelete={remove} />}
     {screen === 'generation' && active && <ProjectGeneration language={lang} projectName={active.metadata.name}
       model={model} prompt={generationPrompt} candidate={candidate} failure={generationFailure}
       pending={generating} accepting={accepting} conflict={generationConflict}
