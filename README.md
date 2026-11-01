@@ -84,6 +84,13 @@ In the editor's Brand inspector, you can choose a ready-made style and press
 normal project save. Your text, pages and images remain in place, and you can
 edit the colors or font afterward. Choosing a style alone changes nothing.
 
+Before export or deployment, AURORA shows an advisory checklist for missing
+brand, page, section, image-description and SEO content. It counts all gaps
+and shows the first 20 without displaying your site text. An empty checklist
+does not certify publication readiness: review the preview yourself. The
+checklist does not block export or deployment; the existing site validator
+still decides whether a build succeeds.
+
 ## Start from a brief without an API key
 
 On the Projects screen, enter a project name and paste an ordinary customer

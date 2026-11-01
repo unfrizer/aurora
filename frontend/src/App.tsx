@@ -487,7 +487,7 @@ export default function App() {
       projectId={active.metadata.project_id} editor={editor} model={imageModel}
       onSnapshot={imageSnapshot} onDocument={imageDocument} onLock={imageLock}
       onError={onError} onExit={() => setScreen('workspace')} />}
-    {screen === 'export' && active && editor && <ExportDeploy language={lang} projectId={active.metadata.project_id} ready={flush} onError={onError} />}
+    {screen === 'export' && active && editor && <ExportDeploy language={lang} projectId={active.metadata.project_id} editor={editor} ready={flush} onError={onError} />}
     {guide && <Onboarding language={language} busy={preferencesBusy} conflict={onboardingConflict}
       onLanguage={(value) => void chooseLanguage(value)} onClose={() => void closeGuide()}
       onReload={() => void reloadOnboarding()} />}
