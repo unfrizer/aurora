@@ -215,7 +215,15 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
               <Field label={t(language, 'body')} value={item.body} multiline onCommit={(value) => changeSection({ ...item, body: value })} />
               {item.image_path && <img className="asset-preview" src={rasterUrl(projectId, item.image_path)} alt={item.image_alt} />}
               <Field label={t(language, 'imageAlt')} value={item.image_alt} onCommit={(value) => changeSection({ ...item, image_alt: value })} />
-              <div className="actions"><label className="file-button">{t(language, 'upload')}<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => void image(event.target.files?.[0], item.image_path, (current, path) => withSectionImage(current, page.id, item.id, path))} /></label>
+              <div className="actions"><button type="button" disabled={page.sections.length >= 100} onClick={(event) => {
+                event.stopPropagation();
+                const id = crypto.randomUUID();
+                changePage({ ...page, sections: [
+                  ...page.sections.slice(0, index + 1), { ...item, id }, ...page.sections.slice(index + 1),
+                ] });
+                setSectionId(id);
+              }}>{t(language, 'duplicateSection')}</button>
+                <label className="file-button">{t(language, 'upload')}<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => void image(event.target.files?.[0], item.image_path, (current, path) => withSectionImage(current, page.id, item.id, path))} /></label>
                 <button onClick={() => startImage({ kind: 'section', pageId: page.id, sectionId: item.id }, `${page.title} / ${item.heading}`)}>{t(language, 'generateImage')}</button>
                 <button disabled={!item.image_path} onClick={() => void removeImage(item.image_path, (current, path) => withSectionImage(current, page.id, item.id, path))}>{t(language, 'removeImage')}</button></div>
             </article>)}

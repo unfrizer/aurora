@@ -97,6 +97,8 @@ still decides whether a build succeeds.
 
 In the editor, removing a page or content section asks for confirmation.
 Cancel leaves the project unchanged. The `index` homepage cannot be deleted.
+You can duplicate a section to reuse its text and image reference on the same
+page; the copy receives a new ID and can then be edited independently.
 
 ## Start from a brief without an API key
 

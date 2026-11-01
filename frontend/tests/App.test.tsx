@@ -1722,6 +1722,51 @@ describe('workspace flow', () => {
     expect(mocks.deleteRaster).not.toHaveBeenCalled();
   });
 
+  it('duplicates a section beside its source with a new ID and a shared image reference', async () => {
+    const original = blankEditor('Studio', 'en');
+    const source = original.pages[0]!.sections[0]!;
+    source.body = 'Reusable copy';
+    source.image_path = `assets/${'a'.repeat(64)}.png`;
+    source.image_alt = 'Workshop photo';
+    mocks.openProject.mockResolvedValue(withEditor(original));
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate section' }));
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
+    const duplicated = mocks.saveEditor.mock.calls[0]?.[1] as EditorDocument;
+    const [savedSource, copy] = duplicated.pages[0]!.sections;
+    expect(savedSource).toEqual(source);
+    expect(copy).toEqual({ ...source, id: expect.any(String) });
+    expect(copy!.id).not.toBe(source.id);
+    expect(copy!.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(original.pages[0]!.sections).toHaveLength(1);
+    expect(mocks.uploadRaster).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.querySelectorAll('.section-card')[1]).toHaveClass('selected'));
+
+    const firstCard = document.querySelectorAll('.section-card')[0] as HTMLElement;
+    fireEvent.click(within(firstCard).getByRole('button', { name: 'Remove image' }));
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(2));
+    const changed = mocks.saveEditor.mock.calls[1]?.[1] as EditorDocument;
+    expect(changed.pages[0]?.sections[0]?.image_path).toBeNull();
+    expect(changed.pages[0]?.sections[1]?.image_path).toBe(source.image_path);
+    expect(mocks.deleteRaster).not.toHaveBeenCalled();
+  });
+
+  it('disables duplication at the 100-section publication limit in Russian', async () => {
+    const original = blankEditor('Студия', 'ru');
+    const source = original.pages[0]!.sections[0]!;
+    original.pages[0]!.sections = Array.from({ length: 100 }, () => ({ ...source, id: crypto.randomUUID() }));
+    mocks.openProject.mockResolvedValue(withEditor(original));
+    await enter('ru');
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть' }));
+    await screen.findByText('CONTENT BLOCKS');
+    const buttons = screen.getAllByRole('button', { name: 'Дублировать секцию' });
+    expect(buttons).toHaveLength(100);
+    expect(buttons.every((button) => button.hasAttribute('disabled'))).toBe(true);
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
   it('applies paid text assistance only after explicit review', async () => {
     mocks.generateText.mockResolvedValue({ job_id: id, status: 'completed', result: { response_id: 'r', model: 'm', output_text: 'Suggested copy' }, failure: null });
     await enter();
