@@ -1,16 +1,26 @@
 import { useRef, useState } from 'react';
 import { ApiError, deployNetlify, exportFolder, exportZip } from '../api';
-import { t } from '../i18n';
-import type { Language } from '../types';
+import { t, type Label } from '../i18n';
+import { publicationChecklist, type PublicationGapKind } from '../publication_checklist';
+import type { EditorDocument, Language } from '../types';
+
+const gapLabels: Record<PublicationGapKind, Label> = {
+  brandName: 'checkBrandName', noPages: 'checkNoPages', pageTitle: 'checkPageTitle',
+  pageHeading: 'checkPageHeading', metaDescription: 'checkMetaDescription',
+  noSections: 'checkNoSections', sectionHeading: 'checkSectionHeading',
+  sectionBody: 'checkSectionBody', imageAlt: 'checkImageAlt',
+};
 
 interface Props {
   language: Language;
   projectId: string;
+  editor: EditorDocument;
   ready: () => Promise<string | null>;
   onError: (error: unknown) => void;
 }
 
-export function ExportDeploy({ language, projectId, ready, onError }: Props) {
+export function ExportDeploy({ language, projectId, editor, ready, onError }: Props) {
+  const checklist = publicationChecklist(editor);
   const [siteId, setSiteId] = useState('');
   const [url, setUrl] = useState('');
   const [recovery, setRecovery] = useState<{ site_id: string | null; deploy_id: string | null } | null>(null);
@@ -75,6 +85,19 @@ export function ExportDeploy({ language, projectId, ready, onError }: Props) {
   }
   return <main className="export-page">
     <span className="eyebrow">PUBLISH / 03</span><h1>{t(language, 'export')}</h1>
+    <section className="card" aria-label={t(language, 'checkTitle')}>
+      <h2>{t(language, 'checkTitle')}</h2>
+      <p>{t(language, 'checkNote')}</p>
+      {checklist.total === 0 ? <p role="status">{t(language, 'checkEmpty')}</p> : <>
+        <p>{t(language, 'checkCount').replace('{count}', String(checklist.total))}</p>
+        <ol>{checklist.shown.map((gap, index) => <li key={`${gap.kind}-${gap.page ?? 0}-${gap.section ?? 0}-${index}`}>
+          {gap.page !== null && <>{t(language, 'checkPage')} {gap.page}{gap.section !== null && <>, {t(language, 'checkSection')} {gap.section}</>}: </>}
+          {t(language, gapLabels[gap.kind])}
+        </li>)}</ol>
+        {checklist.total > checklist.shown.length &&
+          <p>{t(language, 'checkMore').replace('{count}', String(checklist.total - checklist.shown.length))}</p>}
+      </>}
+    </section>
     <div className="card"><h2>Static site</h2><p>{t(language, 'folderNote')}</p>
       <button className="primary" disabled={busy} onClick={() => void folder()}>{t(language, 'folder')}</button>
       <button disabled={busy} onClick={() => void zip()}>{t(language, 'zip')}</button>

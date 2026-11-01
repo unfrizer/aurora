@@ -106,6 +106,8 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   await page.getByRole('button', { name: 'Предпросмотр' }).click();
   await expect(page.frameLocator('iframe[title="Предпросмотр"]').getByText('Диагностика и настройка')).toBeVisible();
   await page.getByRole('button', { name: 'Экспорт и деплой' }).click();
+  await expect(page.getByRole('heading', { name: 'Проверка перед публикацией' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'В этом списке пропусков нет.' })).toBeVisible();
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByRole('button', { name: 'Экспортировать папку сайта' }).click();
   const exportPath = await page.getByRole('textbox', { name: 'Папка готового сайта' }).inputValue();

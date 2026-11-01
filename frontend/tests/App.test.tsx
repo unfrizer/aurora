@@ -5,6 +5,7 @@ import type { EditorDocument, ProjectDocument } from '../src/types';
 import { blankEditor } from '../src/editor';
 import { applyBrandPreset, brandPresetMatches, BRAND_PRESET_IDS } from '../src/brand_presets';
 import { manualSiteStarter, validManualSite } from '../src/manual_site';
+import { publicationChecklist } from '../src/publication_checklist';
 
 const originalPhotoUrl = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
 const originalPhotoRevoke = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
@@ -2013,13 +2014,71 @@ describe('persistent preferences composition', () => {
 });
 
 describe('publication controls', () => {
+  const publicationEditor = blankEditor('Studio', 'en');
+
+  it('lists every supported content gap with one-based positions without echoing site text', () => {
+    const editor = blankEditor('Studio', 'en');
+    const first = editor.pages[0]!;
+    const section = first.sections[0]!;
+    const result = publicationChecklist({ ...editor, brand: { ...editor.brand, name: '  ' },
+      pages: [{ ...first, title: ' ', heading: '\n', meta_description: '',
+        sections: [{ ...section, heading: '', body: ' ', image_path: 'assets/customer-photo.png', image_alt: '\t' }] },
+      { ...first, title: 'Private customer title', heading: 'Public heading', meta_description: 'Meta', sections: [] }] });
+    expect(result.total).toBe(8);
+    expect(result.shown).toEqual([
+      { kind: 'brandName', page: null, section: null },
+      { kind: 'pageTitle', page: 1, section: null },
+      { kind: 'pageHeading', page: 1, section: null },
+      { kind: 'metaDescription', page: 1, section: null },
+      { kind: 'sectionHeading', page: 1, section: 1 },
+      { kind: 'sectionBody', page: 1, section: 1 },
+      { kind: 'imageAlt', page: 1, section: 1 },
+      { kind: 'noSections', page: 2, section: null },
+    ]);
+    expect(JSON.stringify(result)).not.toContain('Private customer title');
+    expect(publicationChecklist({ ...editor, pages: [] }).shown).toEqual([
+      { kind: 'noPages', page: null, section: null },
+    ]);
+  });
+
+  it('counts all gaps but shows at most twenty and leaves publication actions available', () => {
+    const editor = blankEditor('Studio', 'en');
+    const emptyPage = { ...editor.pages[0]!, title: '', heading: '', meta_description: '', sections: [] };
+    const many = { ...editor, pages: Array.from({ length: 10 }, () => ({ ...emptyPage })) };
+    const result = publicationChecklist(many);
+    expect(result.total).toBe(40);
+    expect(result.shown).toHaveLength(20);
+    render(<ExportDeploy language="en" projectId={id} editor={many} ready={async () => metadata.updated_at} onError={vi.fn()} />);
+    expect(screen.getByText('Items to review: 40')).toBeInTheDocument();
+    expect(screen.getByText('And 20 more items.')).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: '' }).children).toHaveLength(20);
+    expect(screen.getByRole('button', { name: 'Export site folder' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Download site ZIP' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Deploy to Netlify' })).toBeEnabled();
+    expect(mocks.exportFolder).not.toHaveBeenCalled();
+    expect(mocks.exportZip).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+
+  it('renders localized empty guidance without a request', () => {
+    const editor = blankEditor('Studio', 'ru');
+    const complete = { ...editor, pages: editor.pages.map((page) => ({ ...page,
+      meta_description: 'Мастерская', sections: page.sections.map((section) => ({ ...section, body: 'Ремонт' })) })) };
+    render(<ExportDeploy language="ru" projectId={id} editor={complete} ready={async () => metadata.updated_at} onError={vi.fn()} />);
+    expect(screen.getByRole('heading', { name: 'Проверка перед публикацией' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Проверьте сайт в предпросмотре вручную.');
+    expect(mocks.exportFolder).not.toHaveBeenCalled();
+    expect(mocks.exportZip).not.toHaveBeenCalled();
+    expect(mocks.deployNetlify).not.toHaveBeenCalled();
+  });
+
   it('keeps ZIP download and revokes its object URL', async () => {
     const create = vi.fn(() => 'blob:local');
     const revoke = vi.fn();
     vi.stubGlobal('URL', { createObjectURL: create, revokeObjectURL: revoke });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     mocks.exportZip.mockResolvedValue(new Blob(['zip'], { type: 'application/zip' }));
-    render(<ExportDeploy language="en" projectId={id} ready={async () => metadata.updated_at} onError={vi.fn()} />);
+    render(<ExportDeploy language="en" projectId={id} editor={publicationEditor} ready={async () => metadata.updated_at} onError={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Download site ZIP' }));
     await waitFor(() => expect(mocks.exportZip).toHaveBeenCalledWith(id, metadata.updated_at));
     await waitFor(() => expect(revoke).toHaveBeenCalledWith('blob:local'));
@@ -2036,7 +2095,7 @@ describe('publication controls', () => {
     const path = 'C:\\Users\\Tester\\Documents\\AURORA\\Projects\\studio\\exports\\aurora-site-123';
     mocks.exportFolder.mockResolvedValue(path);
     const ready = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(metadata.updated_at);
-    render(<ExportDeploy language="en" projectId={id} ready={ready} onError={vi.fn()} />);
+    render(<ExportDeploy language="en" projectId={id} editor={publicationEditor} ready={ready} onError={vi.fn()} />);
     expect(mocks.exportFolder).not.toHaveBeenCalled();
     const button = screen.getByRole('button', { name: 'Export site folder' });
     fireEvent.click(button);
@@ -2060,7 +2119,7 @@ describe('publication controls', () => {
     vi.stubGlobal('confirm', vi.fn(() => true));
     vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
     mocks.exportFolder.mockResolvedValue('C:\\Projects\\exports\\aurora-site-123');
-    render(<ExportDeploy language="en" projectId={id} ready={async () => metadata.updated_at} onError={vi.fn()} />);
+    render(<ExportDeploy language="en" projectId={id} editor={publicationEditor} ready={async () => metadata.updated_at} onError={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Export site folder' }));
     await screen.findByDisplayValue('C:\\Projects\\exports\\aurora-site-123');
     fireEvent.click(screen.getByRole('button', { name: 'Copy path' }));
@@ -2073,7 +2132,7 @@ describe('publication controls', () => {
     mocks.exportFolder.mockImplementation(() => new Promise<string>((_resolve, reject) => { fail = reject; }));
     const onError = vi.fn();
     vi.stubGlobal('confirm', vi.fn(() => true));
-    render(<ExportDeploy language="en" projectId={id} ready={async () => metadata.updated_at} onError={onError} />);
+    render(<ExportDeploy language="en" projectId={id} editor={publicationEditor} ready={async () => metadata.updated_at} onError={onError} />);
     fireEvent.click(screen.getByRole('button', { name: 'Export site folder' }));
     await waitFor(() => expect(mocks.exportFolder).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('button', { name: 'Export site folder' })).toBeDisabled();
@@ -2091,7 +2150,7 @@ describe('publication controls', () => {
       vi.stubGlobal('confirm', vi.fn(() => true));
       mocks.exportFolder.mockRejectedValue(failure);
       const onError = vi.fn();
-      render(<ExportDeploy language="en" projectId={id} ready={async () => metadata.updated_at} onError={onError} />);
+      render(<ExportDeploy language="en" projectId={id} editor={publicationEditor} ready={async () => metadata.updated_at} onError={onError} />);
       fireEvent.click(screen.getByRole('button', { name: 'Export site folder' }));
       expect(await screen.findByText(/Inspect the project’s exports/)).toBeInTheDocument();
       expect(onError).toHaveBeenCalledWith(failure);
@@ -2101,7 +2160,7 @@ describe('publication controls', () => {
   );
 
   it('shows the fixed local destination in Russian without sending a request on render', () => {
-    render(<ExportDeploy language="ru" projectId={id} ready={async () => metadata.updated_at} onError={vi.fn()} />);
+    render(<ExportDeploy language="ru" projectId={id} editor={publicationEditor} ready={async () => metadata.updated_at} onError={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Экспортировать папку сайта' })).toBeInTheDocument();
     expect(screen.getByText(/новую папку в exports\//)).toBeInTheDocument();
     expect(mocks.exportFolder).not.toHaveBeenCalled();
@@ -2111,7 +2170,7 @@ describe('publication controls', () => {
     const confirm = vi.fn(() => false);
     vi.stubGlobal('confirm', confirm);
     mocks.deployNetlify.mockRejectedValue(new ApiError(503, { site_id: id, deploy_id: null }));
-    render(<ExportDeploy language="en" projectId={id} ready={async () => metadata.updated_at} onError={vi.fn()} />);
+    render(<ExportDeploy language="en" projectId={id} editor={publicationEditor} ready={async () => metadata.updated_at} onError={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Deploy to Netlify' }));
     expect(mocks.deployNetlify).not.toHaveBeenCalled();
     confirm.mockReturnValue(true);
