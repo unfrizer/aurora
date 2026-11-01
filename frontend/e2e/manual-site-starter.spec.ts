@@ -80,7 +80,7 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   const state = JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as {
     editor: { brand: { tagline: string; primary_color: string; secondary_color: string; font_family: string };
       pages: { heading: string; meta_description: string;
-      sections: { heading: string; body: string }[] }[] };
+      sections: { id: string; heading: string; body: string }[] }[] };
   };
   expect(state.editor).toMatchObject({ brand: { tagline: 'Ваш велосипед в порядке' },
     pages: [{ heading: 'Ремонт велосипедов', meta_description: 'Мастерская велосипедов',
@@ -107,6 +107,22 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
     new URL(request.url).pathname === `/api/v1/projects/${created.metadata.project_id}/editor`).length;
   const nextEditorSave = () => page.waitForResponse((response) => response.request().method() === 'PUT' &&
     new URL(response.url()).pathname === `/api/v1/projects/${created.metadata.project_id}/editor`);
+
+  const duplicateSave = nextEditorSave();
+  await page.locator('.section-card').first().getByRole('button', { name: 'Дублировать секцию' }).click();
+  expect((await duplicateSave).ok()).toBe(true);
+  const duplicated = JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as typeof state;
+  const [sourceSection, copySection] = duplicated.editor.pages[0]!.sections;
+  expect(duplicated.editor.pages[0]!.sections).toHaveLength(2);
+  expect(copySection).toMatchObject({ heading: sourceSection!.heading, body: sourceSection!.body });
+  expect(copySection!.id).not.toBe(sourceSection!.id);
+  await expect(page.locator('.section-card').nth(1)).toHaveClass(/selected/);
+  const removeDuplicateSave = nextEditorSave();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.locator('.section-card').nth(1).getByRole('button', { name: 'Удалить Наши услуги' }).click();
+  expect((await removeDuplicateSave).ok()).toBe(true);
+  expect((JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as typeof state)
+    .editor.pages[0]!.sections).toEqual(state.editor.pages[0]!.sections);
 
   await page.getByRole('textbox', { name: 'Заголовок секции' }).fill('Временная секция');
   const addSectionSave = nextEditorSave();
