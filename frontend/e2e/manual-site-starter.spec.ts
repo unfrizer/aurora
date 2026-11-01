@@ -103,6 +103,47 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
     primary_color: '#166534', secondary_color: '#14532D', font_family: 'serif' });
   expect(styled.editor.pages).toEqual(state.editor.pages);
 
+  const editorPuts = () => requests.filter((request) => request.method === 'PUT' &&
+    new URL(request.url).pathname === `/api/v1/projects/${created.metadata.project_id}/editor`).length;
+  const nextEditorSave = () => page.waitForResponse((response) => response.request().method() === 'PUT' &&
+    new URL(response.url()).pathname === `/api/v1/projects/${created.metadata.project_id}/editor`);
+
+  await page.getByRole('textbox', { name: 'Заголовок секции' }).fill('Временная секция');
+  const addSectionSave = nextEditorSave();
+  await page.getByRole('button', { name: 'Добавить секцию' }).click();
+  expect((await addSectionSave).ok()).toBe(true);
+  const removeSection = page.getByRole('button', { name: 'Удалить Временная секция' });
+  const beforeSectionCancel = editorPuts();
+  let sectionWarning = '';
+  page.once('dialog', (dialog) => { sectionWarning = dialog.message(); void dialog.dismiss(); });
+  await removeSection.click();
+  expect(sectionWarning).toContain('нет отмены');
+  expect(editorPuts()).toBe(beforeSectionCancel);
+  await expect(removeSection).toBeVisible();
+  const removeSectionSave = nextEditorSave();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await removeSection.click();
+  expect((await removeSectionSave).ok()).toBe(true);
+  await expect(removeSection).toHaveCount(0);
+
+  await page.getByRole('textbox', { name: 'Название страницы' }).fill('Временная страница');
+  const addPageSave = nextEditorSave();
+  await page.getByRole('button', { name: 'Добавить страницу' }).click();
+  expect((await addPageSave).ok()).toBe(true);
+  const removePage = page.getByRole('button', { name: 'Удалить Временная страница' });
+  const beforePageCancel = editorPuts();
+  let pageWarning = '';
+  page.once('dialog', (dialog) => { pageWarning = dialog.message(); void dialog.dismiss(); });
+  await removePage.click();
+  expect(pageWarning).toContain('нет отмены');
+  expect(editorPuts()).toBe(beforePageCancel);
+  await expect(removePage).toBeVisible();
+  const removePageSave = nextEditorSave();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await removePage.click();
+  expect((await removePageSave).ok()).toBe(true);
+  await expect(removePage).toHaveCount(0);
+
   await page.getByRole('button', { name: 'Предпросмотр' }).click();
   await expect(page.frameLocator('iframe[title="Предпросмотр"]').getByText('Диагностика и настройка')).toBeVisible();
   await page.getByRole('button', { name: 'Экспорт и деплой' }).click();

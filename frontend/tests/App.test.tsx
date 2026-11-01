@@ -1669,6 +1669,59 @@ describe('workspace flow', () => {
     expect(second.pages[0]?.slug).toBe('index');
   });
 
+  it('confirms page removal in English and preserves the editor on cancel', async () => {
+    const original = blankEditor('Studio', 'en');
+    const extra = { ...original.pages[0]!, id: crypto.randomUUID(), slug: 'page-1',
+      title: 'Services', heading: 'Services', sections: [] };
+    mocks.openProject.mockResolvedValue(withEditor({ ...original, pages: [...original.pages, extra] }));
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirm);
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    expect(screen.getByRole('button', { name: 'Delete Studio' })).toBeDisabled();
+    const remove = screen.getByRole('button', { name: 'Delete Services' });
+    fireEvent.click(remove);
+    expect(confirm).toHaveBeenCalledExactlyOnceWith('Delete this page and all its sections? There is no undo in the editor.');
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(remove).toBeInTheDocument();
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(remove);
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
+    expect((mocks.saveEditor.mock.calls[0]?.[1] as EditorDocument).pages).toEqual([original.pages[0]]);
+    expect(screen.queryByRole('button', { name: 'Delete Services' })).not.toBeInTheDocument();
+  });
+
+  it('confirms section removal in Russian without deleting its stored asset', async () => {
+    const original = blankEditor('Студия', 'ru');
+    const imagePath = `assets/${'a'.repeat(64)}.png`;
+    const first = original.pages[0]!.sections[0]!;
+    original.pages[0]!.sections.push({ ...first, id: crypto.randomUUID(), heading: 'Вторая',
+      image_path: imagePath, image_alt: 'Фото' });
+    mocks.openProject.mockResolvedValue(withEditor(original));
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirm);
+    await enter('ru');
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть' }));
+    await screen.findByText('CONTENT BLOCKS');
+    const firstCard = screen.getByRole('button', { name: 'Удалить О нас' }).closest('.section-card');
+    const remove = screen.getByRole('button', { name: 'Удалить Вторая' });
+    expect(firstCard).toHaveClass('selected');
+    fireEvent.click(remove);
+    expect(confirm).toHaveBeenCalledExactlyOnceWith('Удалить эту секцию и её содержимое? В редакторе нет отмены этого действия.');
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+    expect(remove).toBeInTheDocument();
+    expect(firstCard).toHaveClass('selected');
+    expect(remove.closest('.section-card')).not.toHaveClass('selected');
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(remove);
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
+    expect((mocks.saveEditor.mock.calls[0]?.[1] as EditorDocument).pages[0]?.sections).toEqual([first]);
+    expect(mocks.deleteRaster).not.toHaveBeenCalled();
+  });
+
   it('applies paid text assistance only after explicit review', async () => {
     mocks.generateText.mockResolvedValue({ job_id: id, status: 'completed', result: { response_id: 'r', model: 'm', output_text: 'Suggested copy' }, failure: null });
     await enter();

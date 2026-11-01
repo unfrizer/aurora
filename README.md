@@ -95,6 +95,9 @@ does not certify publication readiness: review the preview yourself. The
 checklist does not block export or deployment; the existing site validator
 still decides whether a build succeeds.
 
+In the editor, removing a page or content section asks for confirmation.
+Cancel leaves the project unchanged. The `index` homepage cannot be deleted.
+
 ## Start from a brief without an API key
 
 On the Projects screen, enter a project name and paste an ordinary customer

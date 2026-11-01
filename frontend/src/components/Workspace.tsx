@@ -164,7 +164,10 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
           <div className="tiny-actions">
             <button aria-label={`${t(language, 'up')} ${item.title}`} disabled={index === 0 || item.slug === 'index' || editor.pages[index - 1]?.slug === 'index'} onClick={() => commit({ ...editor, pages: move(editor.pages, index, -1) })}>↑</button>
             <button aria-label={`${t(language, 'down')} ${item.title}`} disabled={index === editor.pages.length - 1 || item.slug === 'index'} onClick={() => commit({ ...editor, pages: move(editor.pages, index, 1) })}>↓</button>
-            <button aria-label={`${t(language, 'remove')} ${item.title}`} disabled={item.slug === 'index' || editor.pages.length <= 1} onClick={() => commit({ ...editor, pages: editor.pages.filter((other) => other.id !== item.id) })}>×</button>
+            <button aria-label={`${t(language, 'remove')} ${item.title}`} disabled={item.slug === 'index' || editor.pages.length <= 1} onClick={() => {
+              if (window.confirm(t(language, 'removePageConfirm')))
+                commit({ ...editor, pages: editor.pages.filter((other) => other.id !== item.id) });
+            }}>×</button>
           </div>
         </li>)}</ol>
         <form className="add-form" onSubmit={(event) => { event.preventDefault(); if (!newPage.trim()) return;
@@ -202,7 +205,11 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
               <div className="section-actions"><span>0{index + 1} / SECTION</span><div className="tiny-actions">
                 <button aria-label={`${t(language, 'up')} ${item.heading}`} disabled={index === 0} onClick={() => changePage({ ...page, sections: move(page.sections, index, -1) })}>↑</button>
                 <button aria-label={`${t(language, 'down')} ${item.heading}`} disabled={index === page.sections.length - 1} onClick={() => changePage({ ...page, sections: move(page.sections, index, 1) })}>↓</button>
-                <button aria-label={`${t(language, 'remove')} ${item.heading}`} onClick={() => changePage({ ...page, sections: page.sections.filter((other) => other.id !== item.id) })}>×</button>
+                <button aria-label={`${t(language, 'remove')} ${item.heading}`} onClick={(event) => {
+                  event.stopPropagation();
+                  if (window.confirm(t(language, 'removeSectionConfirm')))
+                    changePage({ ...page, sections: page.sections.filter((other) => other.id !== item.id) });
+                }}>×</button>
               </div></div>
               <Field label={t(language, 'heading')} value={item.heading} onCommit={(value) => changeSection({ ...item, heading: value })} />
               <Field label={t(language, 'body')} value={item.body} multiline onCommit={(value) => changeSection({ ...item, body: value })} />

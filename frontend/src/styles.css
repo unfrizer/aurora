@@ -213,6 +213,9 @@ summary { cursor: pointer; color: #0c6570; font-weight: 650; }
 .side-head { border-bottom-color: #d9e7e9; }
 .side-head h2 { color: #294653; }
 .page-list li { background: transparent; }
+.page-list { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.page-list li { min-width: 0; }
+.page-list .tiny-actions { flex: 0 0 auto; }
 .page-list li.selected { background: #d2eeea; box-shadow: inset 3px 0 #168992; }
 .page-select { color: #183b47; }
 .tiny-actions button { color: #3d6773; }
