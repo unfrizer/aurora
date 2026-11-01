@@ -68,6 +68,10 @@ independently collapsible panels. OpenAI text assist applies only to a selected
 section after user review. API keys are stored through Windows Credential
 Manager, not persisted in browser storage or project files.
 
+The local application uses a responsive ink-and-teal interface for its
+Projects, Workspace, Settings and Export screens. This interface styling is
+separate from each project's brand styling and does not change exported sites.
+
 ## Build a site from your own text without an API key
 
 On the Projects screen, enter a project name, expand **Build a site from my
