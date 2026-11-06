@@ -79,7 +79,7 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   const projectFolder = path.join(dataRoot, 'Projects', projectDirectories[0]!);
   const state = JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as {
     editor: { brand: { tagline: string; primary_color: string; secondary_color: string; font_family: string };
-      pages: { heading: string; meta_description: string;
+      pages: { id: string; slug: string; title: string; heading: string; meta_description: string;
       sections: { id: string; heading: string; body: string }[] }[] };
   };
   expect(state.editor).toMatchObject({ brand: { tagline: 'Ваш велосипед в порядке' },
@@ -123,6 +123,25 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   expect((await removeDuplicateSave).ok()).toBe(true);
   expect((JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as typeof state)
     .editor.pages[0]!.sections).toEqual(state.editor.pages[0]!.sections);
+
+  const duplicatePageSave = nextEditorSave();
+  await page.getByRole('button', { name: 'Дублировать страницу Велостудия' }).click();
+  expect((await duplicatePageSave).ok()).toBe(true);
+  const copiedPages = (JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as typeof state)
+    .editor.pages;
+  expect(copiedPages).toHaveLength(2);
+  expect(copiedPages.map((item) => item.slug)).toEqual(['index', 'page-1']);
+  expect(copiedPages[1]).toMatchObject({ title: copiedPages[0]!.title,
+    heading: copiedPages[0]!.heading, sections: [{ heading: 'Наши услуги', body: 'Диагностика и настройка' }] });
+  expect(copiedPages[1]!.id).not.toBe(copiedPages[0]!.id);
+  expect(copiedPages[1]!.sections[0]!.id).not.toBe(copiedPages[0]!.sections[0]!.id);
+  await expect(page.locator('.page-list li').nth(1)).toHaveClass(/selected/);
+  const removeCopiedPageSave = nextEditorSave();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.locator('.page-list li').nth(1).getByRole('button', { name: 'Удалить Велостудия' }).click();
+  expect((await removeCopiedPageSave).ok()).toBe(true);
+  expect((JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as typeof state)
+    .editor.pages).toEqual(state.editor.pages);
 
   await page.getByRole('textbox', { name: 'Заголовок секции' }).fill('Временная секция');
   const addSectionSave = nextEditorSave();

@@ -164,18 +164,25 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
           <div className="tiny-actions">
             <button aria-label={`${t(language, 'up')} ${item.title}`} disabled={index === 0 || item.slug === 'index' || editor.pages[index - 1]?.slug === 'index'} onClick={() => commit({ ...editor, pages: move(editor.pages, index, -1) })}>↑</button>
             <button aria-label={`${t(language, 'down')} ${item.title}`} disabled={index === editor.pages.length - 1 || item.slug === 'index'} onClick={() => commit({ ...editor, pages: move(editor.pages, index, 1) })}>↓</button>
+            <button aria-label={`${t(language, 'duplicatePage')} ${item.title || item.slug}`} disabled={editor.pages.length >= 100} onClick={() => {
+              const id = crypto.randomUUID();
+              const copy = { ...item, id, slug: nextPageSlug(editor),
+                sections: item.sections.map((section) => ({ ...section, id: crypto.randomUUID() })) };
+              commit({ ...editor, pages: [...editor.pages.slice(0, index + 1), copy, ...editor.pages.slice(index + 1)] });
+              setPageId(id); setSectionId('');
+            }}>⧉</button>
             <button aria-label={`${t(language, 'remove')} ${item.title}`} disabled={item.slug === 'index' || editor.pages.length <= 1} onClick={() => {
               if (window.confirm(t(language, 'removePageConfirm')))
                 commit({ ...editor, pages: editor.pages.filter((other) => other.id !== item.id) });
             }}>×</button>
           </div>
         </li>)}</ol>
-        <form className="add-form" onSubmit={(event) => { event.preventDefault(); if (!newPage.trim()) return;
+        <form className="add-form" onSubmit={(event) => { event.preventDefault(); if (!newPage.trim() || editor.pages.length >= 100) return;
           const id = crypto.randomUUID();
           commit({ ...editor, pages: [...editor.pages, { id, slug: nextPageSlug(editor), title: newPage.trim(), meta_description: '', heading: newPage.trim(), sections: [] }] });
           setPageId(id); setNewPage(''); }}>
           <input aria-label={t(language, 'pageTitle')} placeholder={t(language, 'pageTitle')} value={newPage} onChange={(event) => setNewPage(event.target.value)} />
-          <button disabled={!newPage.trim()}>{t(language, 'addPage')}</button>
+          <button disabled={!newPage.trim() || editor.pages.length >= 100}>{t(language, 'addPage')}</button>
         </form>
       </>}
     </aside>
@@ -227,12 +234,12 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
                 <button onClick={() => startImage({ kind: 'section', pageId: page.id, sectionId: item.id }, `${page.title} / ${item.heading}`)}>{t(language, 'generateImage')}</button>
                 <button disabled={!item.image_path} onClick={() => void removeImage(item.image_path, (current, path) => withSectionImage(current, page.id, item.id, path))}>{t(language, 'removeImage')}</button></div>
             </article>)}
-            <form className="add-form" onSubmit={(event) => { event.preventDefault(); if (!newSection.trim()) return;
+            <form className="add-form" onSubmit={(event) => { event.preventDefault(); if (!newSection.trim() || page.sections.length >= 100) return;
               const id = crypto.randomUUID();
               changePage({ ...page, sections: [...page.sections, { id, heading: newSection.trim(), body: '', image_path: null, image_alt: '' }] });
               setSectionId(id); setNewSection(''); }}>
               <input aria-label={t(language, 'sectionTitle')} placeholder={t(language, 'sectionTitle')} value={newSection} onChange={(event) => setNewSection(event.target.value)} />
-              <button disabled={!newSection.trim()}>{t(language, 'addSection')}</button>
+              <button disabled={!newSection.trim() || page.sections.length >= 100}>{t(language, 'addSection')}</button>
             </form>
           </div>
         </div>}

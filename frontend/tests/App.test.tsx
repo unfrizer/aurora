@@ -1753,6 +1753,75 @@ describe('workspace flow', () => {
     expect(mocks.deleteRaster).not.toHaveBeenCalled();
   });
 
+  it('duplicates a page after its source with fresh IDs and shared image references', async () => {
+    const original = blankEditor('Studio', 'en');
+    const imagePath = `assets/${'a'.repeat(64)}.png`;
+    const source = { ...original.pages[0]!, id: crypto.randomUUID(), slug: 'page-1',
+      title: 'Services', heading: 'Our services', meta_description: 'Services SEO',
+      sections: [{ id: crypto.randomUUID(), heading: 'Design', body: 'Original copy',
+        image_path: imagePath, image_alt: 'Portfolio image' },
+      { id: crypto.randomUUID(), heading: 'Delivery', body: 'Second block',
+        image_path: null, image_alt: '' }] };
+    const following = { ...source, id: crypto.randomUUID(), slug: 'page-2', title: 'Contact', sections: [] };
+    original.pages.push(source, following);
+    mocks.openProject.mockResolvedValue(withEditor(original));
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate page Services' }));
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
+    const saved = mocks.saveEditor.mock.calls[0]?.[1] as EditorDocument;
+    expect(saved.pages.map((page) => page.slug)).toEqual(['index', 'page-1', 'page-3', 'page-2']);
+    expect(saved.pages[1]).toEqual(source);
+    expect(saved.pages[3]).toEqual(following);
+    const copy = saved.pages[2]!;
+    expect(copy).toMatchObject({ title: source.title, heading: source.heading,
+      meta_description: source.meta_description });
+    expect(copy.id).not.toBe(source.id);
+    expect(copy.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(copy.sections.map((section) => ({ ...section, id: '' })))
+      .toEqual(source.sections.map((section) => ({ ...section, id: '' })));
+    expect(copy.sections.every((section, index) => section.id !== source.sections[index]?.id)).toBe(true);
+    expect(copy.sections.every((section) => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(section.id))).toBe(true);
+    const sectionIds = saved.pages.flatMap((page) => page.sections.map((section) => section.id));
+    expect(new Set(sectionIds).size).toBe(sectionIds.length);
+    expect(original.pages).toHaveLength(3);
+    expect(mocks.uploadRaster).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.querySelectorAll('.page-list li')[2]).toHaveClass('selected'));
+  });
+
+  it('duplicates the homepage with a new slug while retaining the unique index', async () => {
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate page Studio' }));
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
+    const saved = mocks.saveEditor.mock.calls[0]?.[1] as EditorDocument;
+    expect(saved.pages.map((page) => page.slug)).toEqual(['index', 'page-1']);
+    expect(saved.pages[0]?.id).not.toBe(saved.pages[1]?.id);
+    expect(saved.pages[0]?.sections[0]?.id).not.toBe(saved.pages[1]?.sections[0]?.id);
+    expect(within(document.querySelector('.page-list li') as HTMLElement)
+      .getByRole('button', { name: 'Delete Studio' })).toBeDisabled();
+  });
+
+  it('disables page addition and duplication at the 100-page publication limit', async () => {
+    const original = blankEditor('Studio', 'en');
+    original.pages.push(...Array.from({ length: 99 }, (_, index) => ({
+      id: crypto.randomUUID(), slug: `page-${index + 1}`, title: `Page ${index + 1}`,
+      meta_description: '', heading: `Page ${index + 1}`, sections: [],
+    })));
+    mocks.openProject.mockResolvedValue(withEditor(original));
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    fireEvent.change(screen.getByLabelText('Page name'), { target: { value: 'Extra' } });
+    expect(screen.getByRole('button', { name: 'Add page' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /^Duplicate page (?:Studio|Page \d+)$/ })).toHaveLength(100);
+    expect(screen.getAllByRole('button', { name: /^Duplicate page (?:Studio|Page \d+)$/ })
+      .every((button) => button.hasAttribute('disabled'))).toBe(true);
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
   it('disables duplication at the 100-section publication limit in Russian', async () => {
     const original = blankEditor('Студия', 'ru');
     const source = original.pages[0]!.sections[0]!;
@@ -1764,6 +1833,8 @@ describe('workspace flow', () => {
     const buttons = screen.getAllByRole('button', { name: 'Дублировать секцию' });
     expect(buttons).toHaveLength(100);
     expect(buttons.every((button) => button.hasAttribute('disabled'))).toBe(true);
+    fireEvent.change(screen.getByLabelText('Заголовок секции'), { target: { value: 'Ещё секция' } });
+    expect(screen.getByRole('button', { name: 'Добавить секцию' })).toBeDisabled();
     expect(mocks.saveEditor).not.toHaveBeenCalled();
   });
 
