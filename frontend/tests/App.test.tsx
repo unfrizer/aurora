@@ -1753,6 +1753,21 @@ describe('workspace flow', () => {
     expect(mocks.deleteRaster).not.toHaveBeenCalled();
   });
 
+  it('keeps a duplicated section selected while its save is still pending', async () => {
+    let finishSave: (() => void) | undefined;
+    mocks.saveEditor.mockImplementationOnce((_projectId: string, next: EditorDocument) =>
+      new Promise<ProjectDocument>((resolve) => { finishSave = () => resolve(withEditor(next)); }));
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate section' }));
+    await waitFor(() => expect(mocks.saveEditor).toHaveBeenCalledTimes(1));
+    expect(document.querySelectorAll('.section-card')[1]).toHaveClass('selected');
+    finishSave?.();
+    await waitFor(() => expect(document.querySelector('.save-state')).toHaveTextContent('Saved'));
+    expect(document.querySelectorAll('.section-card')[1]).toHaveClass('selected');
+  });
+
   it('duplicates a page after its source with fresh IDs and shared image references', async () => {
     const original = blankEditor('Studio', 'en');
     const imagePath = `assets/${'a'.repeat(64)}.png`;

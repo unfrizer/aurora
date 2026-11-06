@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { deleteRaster, previewUrl, rasterUrl, uploadRaster } from '../api';
 import { applyBrandPreset, brandPresetMatches, BRAND_PRESET_IDS } from '../brand_presets';
 import type { BrandPresetId } from '../brand_presets';
@@ -69,8 +69,6 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
   latestEditor.current = editor;
   const page = editor.pages.find((item) => item.id === pageId) ?? editor.pages[0];
   const section = page?.sections.find((item) => item.id === sectionId) ?? page?.sections[0];
-  useEffect(() => { if (page && page.id !== pageId) setPageId(page.id); }, [page, pageId]);
-  useEffect(() => { if (section && section.id !== sectionId) setSectionId(section.id); }, [section, sectionId]);
 
   function commit(next: EditorDocument) { setPreview(''); void onCommit(next); }
   function applySelectedBrandPreset() {
