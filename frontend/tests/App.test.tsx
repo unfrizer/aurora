@@ -51,6 +51,7 @@ async function enter(language: 'ru' | 'en' = 'en') {
   render(<App />);
   fireEvent.click(await screen.findByRole('button', { name: language === 'en' ? 'English' : 'Русский' }));
   fireEvent.click(await screen.findByRole('button', { name: language === 'en' ? 'Start' : 'Начать' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'AURORA onboarding' })).not.toBeInTheDocument());
   await screen.findByRole('heading', { name: language === 'en' ? 'Projects' : 'Проекты' });
 }
 
@@ -2111,6 +2112,41 @@ describe('one-prompt project draft', () => {
 });
 
 describe('persistent preferences composition', () => {
+  it('shows failed first-use saves inside the dialog and recovers on explicit retry', async () => {
+    mocks.savePreferences.mockRejectedValueOnce(new ApiError(503));
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Русский' }));
+    const dialog = screen.getByRole('dialog', { name: 'AURORA onboarding' });
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Не удалось сохранить настройки');
+    expect(within(dialog).getByRole('button', { name: 'Русский' })).toBeEnabled();
+    expect(mocks.savePreferences).toHaveBeenCalledTimes(1);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Русский' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Начать' }));
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(mocks.savePreferences).toHaveBeenCalledTimes(3);
+  });
+
+  it('allows closing the initial language dialog and persists the default session language', async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Закрыть / Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mocks.savePreferences).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ language: 'en', onboarding_completed: true }), 'a'.repeat(64));
+    expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument();
+  });
+
+  it('closes a replayed guide with Escape even when settings writes are unavailable', async () => {
+    await enter();
+    const writes = mocks.savePreferences.mock.calls.length;
+    mocks.savePreferences.mockRejectedValue(new ApiError(503));
+    fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
+    const dialog = screen.getByRole('dialog', { name: 'AURORA onboarding' });
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.savePreferences).toHaveBeenCalledTimes(writes);
+    mocks.savePreferences.mockImplementation(async (preferences: object) => ({ preferences, revision: 'b'.repeat(64) }));
+  });
+
   it('reopens saved language and models without automatic onboarding and displays the server path read-only', async () => {
     const storage = vi.spyOn(Storage.prototype, 'setItem');
     mocks.getPreferences.mockResolvedValue({ preferences: {

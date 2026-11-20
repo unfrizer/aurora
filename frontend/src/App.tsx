@@ -118,7 +118,11 @@ export default function App() {
   async function closeGuide() {
     const current = preferencesRef.current;
     if (current) {
-      const outcome = await changePreferences({ ...current.preferences, onboarding_completed: true });
+      if (current.preferences.onboarding_completed && current.preferences.language) {
+        setGuide(false); return;
+      }
+      const outcome = await changePreferences({ ...current.preferences,
+        language: current.preferences.language ?? lang, onboarding_completed: true });
       if (outcome === 'ok') setGuide(false);
       if (outcome === 'conflict') setOnboardingConflict(true);
     }
@@ -454,6 +458,7 @@ export default function App() {
     <button onClick={() => void reloadPreferences(true)}>{t(lang, 'tryAgain')}</button></main>;
 
   return <div className="app-shell">
+    <div style={{ display: 'contents' }} inert={guide}>
     <header className="topbar"><button className="brandmark" disabled={busy || generating || accepting || imageLocked} onClick={() => void navigate('projects')}>✦ <span>AURORA</span></button>
       <nav aria-label="Main navigation">
         <button disabled={busy || generating || accepting || imageLocked} className={screen === 'projects' ? 'active' : ''} onClick={() => void navigate('projects')}>{t(lang, 'projects')}</button>
@@ -463,7 +468,7 @@ export default function App() {
       </nav>
       <button className="guide-link" disabled={busy || generating || accepting || imageLocked} onClick={() => setGuide(true)}>{t(lang, 'onboarding')}</button>
     </header>
-    {error && <div className="error-banner" role="alert">{error}<button aria-label={t(lang, 'close')} onClick={() => setError('')}>×</button></div>}
+    {error && !guide && <div className="error-banner" role="alert">{error}<button aria-label={t(lang, 'close')} onClick={() => setError('')}>×</button></div>}
     {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onOffline={createWithBrief} onManual={createWithManualSite} onManualDraftChange={(present) => { manualDraftPresentRef.current = present; }} onGenerate={generateNew} onImport={importPrepared} onOpen={open} onDelete={remove} />}
     {screen === 'generation' && active && <ProjectGeneration language={lang} projectName={active.metadata.name}
       model={model} prompt={generationPrompt} candidate={candidate} failure={generationFailure}
@@ -488,7 +493,8 @@ export default function App() {
       onSnapshot={imageSnapshot} onDocument={imageDocument} onLock={imageLock}
       onError={onError} onExit={() => setScreen('workspace')} />}
     {screen === 'export' && active && editor && <ExportDeploy language={lang} projectId={active.metadata.project_id} editor={editor} ready={flush} onError={onError} />}
-    {guide && <Onboarding language={language} busy={preferencesBusy} conflict={onboardingConflict}
+    </div>
+    {guide && <Onboarding language={language} busy={preferencesBusy} conflict={onboardingConflict} error={error}
       onLanguage={(value) => void chooseLanguage(value)} onClose={() => void closeGuide()}
       onReload={() => void reloadOnboarding()} />}
   </div>;
