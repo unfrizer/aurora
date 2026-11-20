@@ -76,12 +76,14 @@ separate from each project's brand styling and does not change exported sites.
 
 On the Projects screen, enter a project name, expand **Build a site from my
 text**, and supply a main headline, first section heading and section text.
-You can also add a tagline and SEO description. After you confirm that these
-fields are public site content, AURORA creates and saves a one-page editable
-site without contacting OpenAI. It places your text unchanged; it does not
-generate copy, images or a design from a business brief. Review the result in
-the editor and preview before exporting or publishing. If creation or saving
-has an uncertain result, inspect the project list before retrying.
+You can also add a tagline, SEO description, and optional Services and Contact
+page text. After you confirm that these fields are public site content, AURORA
+creates and saves an editable one-to-three-page site without contacting
+OpenAI. It places your text unchanged; it does not generate copy, images or a
+design from a business brief. SEO descriptions on optional pages start empty;
+add them in the editor. Review the result and preview before exporting or
+publishing. If creation or saving has an uncertain result, inspect the project
+list before retrying.
 
 In the editor's Brand inspector, you can choose a ready-made style and press
 **Apply style**. This changes only the site's two colors and font through the

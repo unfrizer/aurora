@@ -33,8 +33,9 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
   const [offlineBrief, setOfflineBrief] = useState('');
-  const [manual, setManual] = useState<Omit<ManualSiteInput, 'name'>>({
+  const [manual, setManual] = useState({
     tagline: '', headline: '', sectionHeading: '', body: '', metaDescription: '',
+    servicesBody: '', contactBody: '',
   });
   const manualInput: ManualSiteInput = { name, ...manual };
   const manualDraftPresent = Object.values(manual).some((value) => value.length > 0);
@@ -44,7 +45,8 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
     onManualDraftChange(Object.values(next).some((item) => item.length > 0));
   }
   function clearManual() {
-    setManual({ tagline: '', headline: '', sectionHeading: '', body: '', metaDescription: '' });
+    setManual({ tagline: '', headline: '', sectionHeading: '', body: '', metaDescription: '',
+      servicesBody: '', contactBody: '' });
     onManualDraftChange(false);
   }
   function allowDiscardManual(): boolean {
@@ -143,6 +145,10 @@ export function Projects({ language, projects, busy, model, onCreate, onOffline,
               onChange={(event) => changeManual('body', event.target.value)} /></label>
             <label>{t(language, 'manualMetaDescription')}<textarea value={manual.metaDescription} rows={3}
               onChange={(event) => changeManual('metaDescription', event.target.value)} /></label>
+            <label>{t(language, 'manualServicesBody')}<textarea value={manual.servicesBody} rows={4}
+              onChange={(event) => changeManual('servicesBody', event.target.value)} /></label>
+            <label>{t(language, 'manualContactBody')}<textarea value={manual.contactBody} rows={4}
+              onChange={(event) => changeManual('contactBody', event.target.value)} /></label>
             <div className="actions"><button type="button" disabled={busy || !validManualSite(manualInput)}
               onClick={() => void onManual(manualInput, offlineBrief.length > 0)}>
               {t(language, 'manualSiteCreate')}</button>
