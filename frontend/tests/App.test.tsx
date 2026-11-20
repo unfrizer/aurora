@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { EditorDocument, ProjectDocument } from '../src/types';
+import { parseEditor, type EditorDocument, type ProjectDocument } from '../src/types';
 import { blankEditor } from '../src/editor';
 import { applyBrandPreset, brandPresetMatches, BRAND_PRESET_IDS } from '../src/brand_presets';
 import { manualSiteStarter, validManualSite } from '../src/manual_site';
@@ -1214,6 +1214,30 @@ describe('UI-025 manual site starter', () => {
     expect(validManualSite({ ...input, headline: '   ' })).toBe(false);
     expect(validManualSite({ ...input, metaDescription: 'x'.repeat(321) })).toBe(false);
     expect(() => manualSiteStarter({ ...input, body: '' }, 'en')).toThrow('Invalid manual site input');
+  });
+
+  it('creates optional Services and Contact pages with exact user text and unique IDs', () => {
+    const servicesBody = '  Настройка и ремонт\nвелосипедов  ';
+    const contactBody = 'Напишите нам для записи';
+    const editor = manualSiteStarter({ ...input, servicesBody, contactBody }, 'ru');
+    expect(editor.pages.map((page) => page.slug)).toEqual(['index', 'services', 'contact']);
+    expect(editor.pages[1]).toMatchObject({ title: 'Studio — Услуги', heading: 'Услуги',
+      meta_description: '', sections: [{ heading: 'Услуги', body: servicesBody,
+        image_path: null, image_alt: '' }] });
+    expect(editor.pages[2]).toMatchObject({ title: 'Studio — Контакты', heading: 'Контакты',
+      meta_description: '', sections: [{ heading: 'Контакты', body: contactBody,
+        image_path: null, image_alt: '' }] });
+    const ids = editor.pages.flatMap((page) => [page.id, ...page.sections.map((section) => section.id)]);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(parseEditor(editor)).toEqual(editor);
+    expect(manualSiteStarter({ ...input, servicesBody: '   ', contactBody }, 'en')
+      .pages.map((page) => page.slug)).toEqual(['index', 'contact']);
+    expect(manualSiteStarter({ ...input, servicesBody, contactBody: '' }, 'en')
+      .pages.map((page) => page.slug)).toEqual(['index', 'services']);
+    expect(validManualSite({ ...input, servicesBody: 'а'.repeat(4096) })).toBe(true);
+    expect(validManualSite({ ...input, servicesBody: 'а'.repeat(4097) })).toBe(false);
+    expect(validManualSite({ ...input, contactBody: '\uD800' })).toBe(false);
+    expect(validManualSite({ ...input, contactBody: null as unknown as string })).toBe(false);
   });
 
   it.each(['en', 'ru'] as const)('requires $language public consent and preserves input on decline', async (language) => {

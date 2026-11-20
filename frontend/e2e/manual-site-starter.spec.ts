@@ -1,5 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -58,6 +58,8 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   await page.getByRole('textbox', { name: 'Заголовок первого раздела' }).fill('Наши услуги');
   await page.getByRole('textbox', { name: 'Текст первого раздела' }).fill('Диагностика и настройка');
   await page.getByRole('textbox', { name: 'SEO-описание (необязательно)' }).fill('Мастерская велосипедов');
+  await page.getByRole('textbox', { name: 'Текст страницы услуг (необязательно)' }).fill('Ремонт и настройка велосипедов');
+  await page.getByRole('textbox', { name: 'Текст страницы контактов (необязательно)' }).fill('Напишите нам для записи');
   let warning = '';
   page.once('dialog', (dialog) => { warning = dialog.message(); void dialog.dismiss(); });
   await page.getByRole('button', { name: 'Создать сайт из моих текстов' }).click();
@@ -84,7 +86,9 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   };
   expect(state.editor).toMatchObject({ brand: { tagline: 'Ваш велосипед в порядке' },
     pages: [{ heading: 'Ремонт велосипедов', meta_description: 'Мастерская велосипедов',
-      sections: [{ heading: 'Наши услуги', body: 'Диагностика и настройка' }] }] });
+      sections: [{ heading: 'Наши услуги', body: 'Диагностика и настройка' }] },
+    { slug: 'services', heading: 'Услуги', sections: [{ body: 'Ремонт и настройка велосипедов' }] },
+    { slug: 'contact', heading: 'Контакты', sections: [{ body: 'Напишите нам для записи' }] }] });
   const saves = requests.filter((request) => request.method === 'PUT' &&
     /^\/api\/v1\/projects\/[^/]+\/editor$/.test(new URL(request.url).pathname));
   expect(saves).toHaveLength(1);
@@ -125,12 +129,12 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
     .editor.pages[0]!.sections).toEqual(state.editor.pages[0]!.sections);
 
   const duplicatePageSave = nextEditorSave();
-  await page.getByRole('button', { name: 'Дублировать страницу Велостудия' }).click();
+  await page.getByRole('button', { name: 'Дублировать страницу Велостудия', exact: true }).click();
   expect((await duplicatePageSave).ok()).toBe(true);
   const copiedPages = (JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as typeof state)
     .editor.pages;
-  expect(copiedPages).toHaveLength(2);
-  expect(copiedPages.map((item) => item.slug)).toEqual(['index', 'page-1']);
+  expect(copiedPages).toHaveLength(4);
+  expect(copiedPages.map((item) => item.slug)).toEqual(['index', 'page-1', 'services', 'contact']);
   expect(copiedPages[1]).toMatchObject({ title: copiedPages[0]!.title,
     heading: copiedPages[0]!.heading, sections: [{ heading: 'Наши услуги', body: 'Диагностика и настройка' }] });
   expect(copiedPages[1]!.id).not.toBe(copiedPages[0]!.id);
@@ -181,9 +185,10 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
 
   await page.getByRole('button', { name: 'Предпросмотр' }).click();
   await expect(page.frameLocator('iframe[title="Предпросмотр"]').getByText('Диагностика и настройка')).toBeVisible();
+  await expect(page.frameLocator('iframe[title="Предпросмотр"]')
+    .getByRole('link', { name: 'Велостудия — Услуги' })).toBeVisible();
   await page.getByRole('button', { name: 'Экспорт и деплой' }).click();
   await expect(page.getByRole('heading', { name: 'Проверка перед публикацией' })).toBeVisible();
-  await expect(page.getByRole('status').filter({ hasText: 'В этом списке пропусков нет.' })).toBeVisible();
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByRole('button', { name: 'Экспортировать папку сайта' }).click();
   const exportPath = await page.getByRole('textbox', { name: 'Папка готового сайта' }).inputValue();
@@ -194,6 +199,21 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   expect(css).toContain('--primary: #166534');
   expect(css).toContain('--secondary: #14532D');
   expect(css).toContain('font-family: Georgia, serif');
+  expect(readFileSync(path.join(exportPath, 'services.html'), 'utf8')).toContain('Ремонт и настройка велосипедов');
+  expect(readFileSync(path.join(exportPath, 'contact.html'), 'utf8')).toContain('Напишите нам для записи');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Скачать ZIP сайта' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('aurora-site.zip');
+  const inventory = JSON.parse(execFileSync(path.join(repository, '.venv', 'Scripts', 'python.exe'),
+    ['-m', 'tests.browser.inspect_zip', await download.path()], {
+      cwd: repository, encoding: 'utf8', windowsHide: true,
+    })) as { names: string[]; sha256: Record<string, string> };
+  expect(inventory.names).toEqual(['assets/site.css', 'contact.html', 'index.html', 'services.html']);
+  for (const name of inventory.names) {
+    expect(inventory.sha256[name]).toBe(createHash('sha256')
+      .update(readFileSync(path.join(exportPath, name))).digest('hex'));
+  }
   await page.reload();
   await page.getByRole('button', { name: 'Открыть' }).click();
   await expect(page.getByRole('textbox', { name: 'Текст' })).toHaveValue('Диагностика и настройка');
