@@ -1,5 +1,6 @@
 import { t } from '../i18n';
 import { validDraftInputs, type DraftResult, type Language } from '../types';
+import { GenerationErrorNotice } from './GenerationErrorNotice';
 
 interface Props {
   language: Language;
@@ -45,7 +46,7 @@ export function ProjectGeneration({ language, projectName, model, prompt, candid
         </article>)}
       </section>)}
     </section> : <section className="card generation-input">
-      {failure && <p role="alert">{t(language, 'generationFailed')}: {failure.failure.category}</p>}
+      {failure && <GenerationErrorNotice language={language} title={t(language, 'generationFailed')} failure={failure.failure} />}
       <label>{t(language, 'businessPrompt')}<textarea value={prompt} onChange={(event) => onPrompt(event.target.value)} rows={6} /></label>
       <p className="muted">{t(language, 'generationScope')}</p>
       <button className="primary" disabled={!validDraftInputs(projectName, prompt, model)} onClick={onGenerate}>

@@ -11,6 +11,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from uuid import uuid4
 
+from src.generation.http_errors import quota_failure
 from src.generation.models import (
     GenerationErrorCategory,
     GenerationFailure,
@@ -58,12 +59,15 @@ class OpenAIResponsesClient:
         try:
             result = self._send(request)
         except HTTPError as error:
-            error.close()
+            try:
+                failure = quota_failure(error) or self._http_failure(error.code)
+            finally:
+                error.close()
             return GenerationJob(
                 job_id=job_id,
                 request=request,
                 status="failed",
-                failure=self._http_failure(error.code),
+                failure=failure,
             )
         except (OSError, URLError, HTTPException):
             return GenerationJob(

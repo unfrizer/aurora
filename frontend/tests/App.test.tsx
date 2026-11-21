@@ -1986,7 +1986,7 @@ describe('one-prompt project draft', () => {
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'), { target: { value: 'A studio' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('rate_limited');
+    expect(await screen.findByRole('alert')).toHaveTextContent('OpenAI limited this request');
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     expect(mocks.generateProjectDraft).toHaveBeenCalledTimes(1);
     expect(mocks.saveEditor).not.toHaveBeenCalled();
