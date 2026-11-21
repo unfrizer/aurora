@@ -20,6 +20,7 @@ function Secret({ name, label, language, onError }: { name: SecretName; label: s
   const input = useRef<HTMLInputElement>(null);
   const [configured, setConfigured] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [hasValue, setHasValue] = useState(false);
   useEffect(() => { void credentialStatus(name).then(setConfigured).catch(onError); }, [name, onError]);
   async function change(remove: boolean) {
     const value = input.current?.value ?? '';
@@ -30,12 +31,13 @@ function Secret({ name, label, language, onError }: { name: SecretName; label: s
       else await setCredential(name, value);
       setConfigured(!remove);
     } catch (error) { onError(error); }
-    finally { if (input.current) input.current.value = ''; setBusy(false); }
+    finally { if (input.current) input.current.value = ''; setHasValue(false); setBusy(false); }
   }
   return <div className="setting-secret">
     <div><strong>{label}</strong><span className={configured ? 'badge good' : 'badge'}>{configured ? t(language, 'connected') : t(language, 'disconnected')}</span></div>
-    <div className="actions"><input ref={input} type="password" autoComplete="off" aria-label={label} />
-      <button disabled={busy} onClick={() => void change(false)}>{t(language, 'connect')}</button>
+    <div className="actions"><input ref={input} type="password" autoComplete="off" aria-label={label}
+      onChange={(event) => setHasValue(event.target.value.length > 0)} />
+      <button disabled={busy || !hasValue} onClick={() => void change(false)}>{t(language, 'connect')}</button>
       <button disabled={busy || !configured} onClick={() => void change(true)}>{t(language, 'disconnect')}</button></div>
   </div>;
 }

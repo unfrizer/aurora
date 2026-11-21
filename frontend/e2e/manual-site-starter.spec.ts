@@ -51,6 +51,7 @@ test('manual public copy is saved, previewed, exported and reopened without AI',
   await page.goto(origin);
   await page.getByRole('button', { name: 'Русский' }).click();
   await page.getByRole('button', { name: 'Начать' }).click();
+  await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Название проекта' }).fill('Велостудия');
   await page.getByText('Собрать сайт из моих текстов').click();
   await page.getByRole('textbox', { name: 'Слоган для сайта (необязательно)' }).fill('Ваш велосипед в порядке');

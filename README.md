@@ -208,6 +208,13 @@ live-provider PASS has been recorded yet.
 
 ## Validate
 
+The first-use dialog supports its close button and Escape; closing before a
+language is selected uses English, which can be changed in Settings. A settings
+write failure is shown inside the dialog and can be retried. A completed guide
+can be reopened and closed without another settings write. The
+[user action check](docs/qa/USER_ACTIONS_CHECK_2026-11-20.md) records the latest
+browser, actual-user and packaged-EXE checks and their limits.
+
 ```powershell
 uv run --frozen ruff check .
 uv run --frozen pyright

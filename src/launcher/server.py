@@ -84,6 +84,7 @@ async def _serve(
 
 def run() -> None:
     """Start AURORA on Windows and block until the local server exits."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     if sys.platform != "win32":
         _LOGGER.error("The AURORA launcher requires Windows.")
         raise SystemExit(1)

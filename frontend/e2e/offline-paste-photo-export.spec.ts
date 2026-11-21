@@ -76,6 +76,7 @@ test('pasted site and manually attached photo export as a self-contained ZIP', a
   await page.goto(origin);
   await page.getByRole('button', { name: 'Русский' }).click();
   await page.getByRole('button', { name: 'Начать' }).click();
+  await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Название проекта' }).fill('Сайт для экспорта');
   await page.getByRole('textbox', { name: 'Вставьте JSON подготовленного сайта' })
     .fill(JSON.stringify(imported));

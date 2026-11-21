@@ -72,6 +72,7 @@ test('offline brief requires public-content consent and survives preview, export
   await page.goto(origin);
   await page.getByRole('button', { name: 'Русский' }).click();
   await page.getByRole('button', { name: 'Начать' }).click();
+  await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
   const name = page.getByRole('textbox', { name: 'Название проекта' });
   await name.fill('Веломастерская');
   await page.getByRole('textbox', { name: 'ТЗ для офлайн-старта' }).fill(brief);

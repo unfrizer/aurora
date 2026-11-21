@@ -23,6 +23,7 @@ test('packaged Windows UI can edit, preview, export and reopen a blank site', as
   await page.goto(origin);
   await page.getByRole('button', { name: 'Русский' }).click();
   await page.getByRole('button', { name: 'Начать' }).click();
+  await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
   await expect(page.locator('.project-card')).toHaveCount(1);
   await page.getByRole('button', { name: 'Открыть' }).click();

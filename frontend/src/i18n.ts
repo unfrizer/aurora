@@ -3,6 +3,7 @@ import type { Language } from './types';
 const strings = {
   ru: {
     projects: 'Проекты', workspace: 'Редактор', settings: 'Настройки', export: 'Экспорт и деплой',
+    onboardingSaveFailed: 'Не удалось сохранить настройки. Проверьте, что AURORA запущена от вашего пользователя и может записывать в папку настроек. Затем повторите действие.',
     welcome: 'Добро пожаловать в AURORA', chooseLanguage: 'Выберите язык интерфейса',
     start: 'Начать', onboarding: 'Инструкция', onboardingText: 'Создайте проект из запроса, импортируйте подготовленный JSON или начните с пустого сайта. Проверьте результат, затем редактируйте страницы и экспортируйте папку или ZIP.',
     close: 'Закрыть', projectName: 'Название проекта', create: 'Создать проект', open: 'Открыть',
@@ -168,6 +169,7 @@ const strings = {
   },
   en: {
     projects: 'Projects', workspace: 'Workspace', settings: 'Settings', export: 'Export & deploy',
+    onboardingSaveFailed: 'Could not save settings. Check that AURORA runs as your user and can write to its settings folder, then try again.',
     welcome: 'Welcome to AURORA', chooseLanguage: 'Choose your interface language',
     start: 'Start', onboarding: 'Guide', onboardingText: 'Create from one prompt, import prepared JSON, or start a blank site. Review the result, then edit pages and export a folder or ZIP.',
     close: 'Close', projectName: 'Project name', create: 'Create project', open: 'Open',

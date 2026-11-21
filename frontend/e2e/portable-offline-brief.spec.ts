@@ -49,6 +49,7 @@ test('packaged UI creates, exports and reopens an offline brief after explicit c
     if (await firstLaunch.isVisible()) {
       await firstLaunch.click();
       await page.getByRole('button', { name: 'Начать' }).click();
+      await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
     }
     await expect(projectsHeading).toBeVisible();
     const name = page.getByRole('textbox', { name: 'Название проекта' });
