@@ -44,6 +44,20 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('reviewed image generation', () => {
+  it('shows localized credit guidance and does not retry an exhausted image quota', async () => {
+    mocks.generateImage.mockResolvedValueOnce({ job_id: projectId, status: 'failed',
+      source_updated_at: timestamp, asset_path: null,
+      failure: { category: 'rate_limited', retryable: false, message: 'PRIVATE_PROVIDER_BODY' } });
+    harness({ kind: 'logo' }, 'ru');
+    fireEvent.change(screen.getByLabelText('Опишите нужное изображение'), { target: { value: 'Логотип' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сгенерировать изображение' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('API-кредитов');
+    expect(screen.getByRole('link', { name: 'Баланс API OpenAI' })).toHaveAttribute('target', '_blank');
+    expect(screen.queryByText('PRIVATE_PROVIDER_BODY')).not.toBeInTheDocument();
+    expect(mocks.generateImage).toHaveBeenCalledTimes(1);
+    expect(mocks.saveEditor).not.toHaveBeenCalled();
+  });
+
   it('requires bounded unchanged prompt, consent and a clean saved snapshot before one paid attempt', async () => {
     const confirm = vi.fn(() => false);
     vi.stubGlobal('confirm', confirm);
@@ -151,7 +165,7 @@ describe('reviewed image generation', () => {
     const { onError } = harness();
     fireEvent.change(screen.getByLabelText('Describe the image'), { target: { value: 'A logo' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate image' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Safe message');
+    expect(await screen.findByRole('alert')).toHaveTextContent('OpenAI limited this request');
     expect(mocks.generateImage).toHaveBeenCalledTimes(1);
     expect(mocks.saveEditor).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));

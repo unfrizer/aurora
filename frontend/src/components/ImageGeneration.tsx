@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { GenerationErrorNotice } from './GenerationErrorNotice';
 import { ApiError, generateImage, openProject, rasterUrl, saveEditor } from '../api';
 import { t } from '../i18n';
 import type { EditorDocument, ImageResult, Language, ProjectDocument } from '../types';
@@ -169,7 +170,7 @@ export function ImageGeneration({ language, projectId, target, targetLabel, mode
     </>}
     {phase === 'preparing' && <p role="status">{t(language, 'saving')}</p>}
     {phase === 'pending' && <><p role="status">{t(language, 'imagePending')}</p><p>{t(language, 'generationUncertain')}</p></>}
-    {phase === 'failed' && <><p role="alert">{t(language, 'imageFailed')}: {failure?.failure.message}</p>
+    {phase === 'failed' && <>{failure && <GenerationErrorNotice language={language} title={t(language, 'imageFailed')} failure={failure.failure} />}
       <div className="actions"><button onClick={close}>{t(language, 'close')}</button><button onClick={() => setPhase('form')}>{t(language, 'tryAgain')}</button></div></>}
     {phase === 'uncertain' && <><p role="alert">{t(language, 'imageUncertain')}</p>
       <div className="actions"><button onClick={close}>{t(language, 'close')}</button><button onClick={() => setPhase('form')}>{t(language, 'tryAgain')}</button></div></>}

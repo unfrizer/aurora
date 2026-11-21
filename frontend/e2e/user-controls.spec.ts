@@ -144,3 +144,31 @@ test('project CRUD, settings, structure, reload and publication cancellation wor
   await expect(page.getByText('No projects yet.')).toBeVisible();
   expect(paid).toEqual([]); expect(errors).toEqual([]);
 });
+
+test('an exhausted draft quota shows billing guidance without automatic retry', async ({ page }) => {
+  let attempts = 0;
+  await page.route('**/api/v1/projects/*/generation/draft', async (route) => {
+    attempts += 1;
+    const request = route.request().postDataJSON() as { expected_updated_at: string };
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      job_id: randomUUID(), status: 'failed', source_updated_at: request.expected_updated_at,
+      editor: null, failure: { category: 'rate_limited', retryable: false, message: 'PRIVATE_PROVIDER_BODY' },
+    }) });
+  });
+  await page.goto(origin);
+  await page.getByRole('button', { name: 'Русский', exact: true }).click();
+  await page.getByRole('button', { name: 'Начать', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Название проекта', exact: true }).fill('Quota guidance QA');
+  await page.getByRole('textbox', { name: 'Опишите бизнес одним запросом' }).fill('Сайт мастерской');
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByRole('button', { name: 'Создать из запроса', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('API-кредитов или квоты');
+  await expect(page.getByRole('link', { name: 'Баланс API OpenAI' })).toHaveAttribute('target', '_blank');
+  await expect(page.getByRole('link', { name: 'Лимиты OpenAI' })).toBeVisible();
+  await expect(page.getByText('PRIVATE_PROVIDER_BODY')).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Опишите бизнес одним запросом' })).toHaveValue('Сайт мастерской');
+  await page.getByRole('button', { name: 'Проекты', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Quota guidance QA', exact: true })).toBeVisible();
+  expect(attempts).toBe(1);
+});

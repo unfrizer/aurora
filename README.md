@@ -208,6 +208,15 @@ live-provider PASS has been recorded yet.
 
 ## Validate
 
+If OpenAI rejects generation with HTTP 429, AURORA distinguishes explicit
+credit/billing/usage-quota codes from temporary or unspecified limits. Account
+quota failures require restoring credits or limits before retrying; requests
+are never retried automatically. Draft, image and selected-text errors show
+localized guidance with Billing and Limits links. An unspecified 429 can still
+require checking both the request rate and API balance. ChatGPT subscriptions
+and API billing are separate; eligible subscriptions may offer API credits
+that must be activated for the receiving API organization.
+
 The first-use dialog supports its close button and Escape; closing before a
 language is selected uses English, which can be changed in Settings. A settings
 write failure is shown inside the dialog and can be retried. A completed guide

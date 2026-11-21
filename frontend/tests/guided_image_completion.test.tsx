@@ -219,7 +219,7 @@ describe('guided one-prompt image completion', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review image plan' }));
     fireEvent.click(screen.getByRole('button', { name: 'Review and generate image' }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate image' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Safe failure');
+    expect(await screen.findByRole('alert')).toHaveTextContent('OpenAI limited this request');
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(saved().state.editor).toEqual(editor);
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));

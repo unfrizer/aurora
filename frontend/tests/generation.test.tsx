@@ -1,13 +1,51 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ProjectGeneration } from '../src/components/ProjectGeneration';
+import { GenerationErrorNotice } from '../src/components/GenerationErrorNotice';
+import { TextAssist } from '../src/components/TextAssist';
 import { blankEditor } from '../src/editor';
 import { parseDraftResult, validDraftInputs, type DraftResult } from '../src/types';
 
 const id = '00000000-0000-4000-8000-000000000001';
 const source = '2026-10-12T12:00:00Z';
+const generateText = vi.hoisted(() => vi.fn());
+vi.mock('../src/api', async (original) => ({ ...(await original<typeof import('../src/api')>()), generateText }));
 
 describe('P6 project draft validation', () => {
+  it.each(['ru', 'en'] as const)('explains exhausted credits in %s without displaying provider text or retrying', (language) => {
+    const onGenerate = vi.fn();
+    render(<ProjectGeneration language={language} projectName="Studio" model="m" prompt="brief"
+      candidate={null} failure={{ job_id: id, status: 'failed', source_updated_at: source, editor: null,
+        failure: { category: 'rate_limited', retryable: false, message: 'PRIVATE_PROVIDER_BODY' } }}
+      pending={false} accepting={false} conflict={false} onPrompt={vi.fn()}
+      onGenerate={onGenerate} onAccept={vi.fn()} onDiscard={vi.fn()} onReload={vi.fn()} />);
+    expect(screen.getByRole('alert')).toHaveTextContent(language === 'ru' ? 'API-кредитов' : 'API credits');
+    expect(screen.queryByText('PRIVATE_PROVIDER_BODY')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: language === 'ru' ? 'Баланс API OpenAI' : 'OpenAI API balance' }))
+      .toHaveAttribute('href', 'https://platform.openai.com/settings/organization/billing/overview');
+    expect(onGenerate).not.toHaveBeenCalled();
+  });
+
+  it.each(['authentication', 'remote', 'network', 'invalid_response', '__proto__'])
+    ('uses localized guidance for %s without trusting provider output', (category) => {
+      render(<GenerationErrorNotice language="ru" title="Ошибка" failure={{ category, retryable: false }} />);
+      expect(screen.getByRole('alert').textContent!.length).toBeGreaterThan(30);
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    });
+
+  it('shows quota guidance for selected-block text assistance without generic server errors', async () => {
+    generateText.mockResolvedValueOnce({ job_id: id, status: 'failed', result: null,
+      failure: { category: 'rate_limited', retryable: false, message: 'PRIVATE_PROVIDER_BODY' } });
+    const onError = vi.fn();
+    render(<TextAssist language="ru" section={blankEditor('Studio', 'ru').pages[0]!.sections[0]!}
+      model="m" onAccept={vi.fn()} onError={onError} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Перепиши текст' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Создать вариант' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('API-кредитов');
+    expect(onError).not.toHaveBeenCalled();
+    expect(generateText).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('PRIVATE_PROVIDER_BODY')).not.toBeInTheDocument();
+  });
   it('enforces UTF-8 byte limits without altering accepted input', () => {
     expect(validDraftInputs('Studio', '  Prompt  ', 'model')).toBe(true);
     expect(validDraftInputs(' ', 'Prompt', 'model')).toBe(false);

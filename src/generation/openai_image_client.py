@@ -13,6 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from uuid import uuid4
 
+from src.generation.http_errors import quota_failure
 from src.generation.image_models import (
     ImageGenerationJob,
     ImageGenerationRequest,
@@ -56,9 +57,12 @@ class OpenAIImageClient:
         try:
             result = self._send(request)
         except HTTPError as error:
-            error.close()
+            try:
+                failure = quota_failure(error) or _http_failure(error.code)
+            finally:
+                error.close()
             return ImageGenerationJob(
-                job_id, request, "failed", failure=_http_failure(error.code)
+                job_id, request, "failed", failure=failure
             )
         except (OSError, URLError, HTTPException):
             return ImageGenerationJob(
