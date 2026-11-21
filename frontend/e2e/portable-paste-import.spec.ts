@@ -47,6 +47,7 @@ test('packaged UI pastes, previews and reopens a prepared site without a provide
   if (await firstLaunch.isVisible()) {
     await firstLaunch.click();
     await page.getByRole('button', { name: 'Начать' }).click();
+    await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
   }
   await expect(projectsHeading).toBeVisible();
   await page.getByRole('textbox', { name: 'Название проекта' }).fill(projectName);

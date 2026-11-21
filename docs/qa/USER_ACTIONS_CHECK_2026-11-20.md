@@ -52,3 +52,13 @@ projects were not modified. Temporary evidence is under ignored `build/`.
 These checks cover the implemented controls and exercised failure paths. They
 do not certify every possible input, a clean Windows installation, a paid
 OpenAI account/model combination or a live Netlify deployment.
+
+## Follow-up — 21 November 2026
+
+Hosted browser CI exposed a test synchronization problem: after clicking Start,
+some tests filled background fields before the asynchronous settings save had
+closed the dialog. Background controls are intentionally inert at that time.
+Every first-use browser journey now explicitly waits for dialog dismissal
+before filling the project form. The application behavior and protections were
+not weakened. All eight standard browser journeys and all five packaged-EXE
+journeys passed again with this wait, including process restart persistence.

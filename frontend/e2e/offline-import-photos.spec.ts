@@ -92,6 +92,7 @@ test('prepared JSON and two customer photos survive the offline browser journey'
   await page.goto(origin);
   await page.getByRole('button', { name: 'Русский' }).click();
   await page.getByRole('button', { name: 'Начать' }).click();
+  await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Название проекта' }).fill('Клиентский сайт');
   const filePicker = page.getByLabel('JSON-файл подготовленного сайта');

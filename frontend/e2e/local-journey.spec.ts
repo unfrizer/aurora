@@ -72,6 +72,7 @@ test('one-prompt, image and editor browser journey uses only isolated fake servi
   await page.goto('/');
   await page.getByRole('button', { name: 'Русский' }).click();
   await page.getByRole('button', { name: 'Начать' }).click();
+  await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Настройки' }).click();

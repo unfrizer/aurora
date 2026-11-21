@@ -87,6 +87,7 @@ test('project CRUD, settings, structure, reload and publication cancellation wor
   await page.goto(origin);
   await page.getByRole('button', { name: 'Русский', exact: true }).click();
   await page.getByRole('button', { name: 'Начать', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Настройки', exact: true }).click();
   await page.getByRole('combobox', { name: 'Язык интерфейса' }).selectOption('en');
   await page.getByRole('button', { name: 'Сохранить настройки', exact: true }).click();
