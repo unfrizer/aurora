@@ -18,6 +18,31 @@ async function fails(selected: File, reason: ImportValidationError['reason']) {
 }
 
 describe('UI-007 local text-only import boundary', () => {
+  it.each(['json', 'JSON', ''])('accepts a single %s code block without altering the editor', async (language) => {
+    const editor = blankEditor('Мастерская', 'ru');
+    const text = ` \n\`\`\`${language}\r\n${JSON.stringify(editor, null, 2)}\r\n\`\`\`\n `;
+    expect(await readPreparedEditor(file(encoder.encode(text)))).toEqual(editor);
+  });
+
+  it('rejects surrounding prose, multiple blocks and unsupported languages', async () => {
+    const payload = JSON.stringify(blankEditor('Studio', 'en'));
+    const block = `\`\`\`json\n${payload}\n\`\`\``;
+    for (const text of [`Here is your site:\n${block}`, `${block}\nDone!`, `${block}\n${block}`,
+      `\`\`\`html\n${payload}\n\`\`\``, `\`\`\`json\n${payload}`]) {
+      await fails(file(encoder.encode(text)), 'json');
+    }
+  });
+
+  it('applies the byte limit and strict schema to fenced input too', async () => {
+    const editor = blankEditor('Studio', 'en');
+    await fails(file(encoder.encode(`\`\`\`json\n${JSON.stringify({ ...editor, schema_version: 2 })}\n\`\`\``)), 'schema');
+    const payload = JSON.stringify(editor);
+    const padded = payload + ' '.repeat(MAX_IMPORT_BYTES - encoder.encode(payload).length);
+    await fails(file(encoder.encode(`\`\`\`json\n${padded}\n\`\`\``)), 'size');
+    await fails(file(encoder.encode(`\`\`\`json\n${JSON.stringify({ ...editor,
+      brand: { ...editor.brand, logo_path: 'assets/logo.png' } })}\n\`\`\``)), 'assets');
+  });
+
   it('accepts a valid editor regardless of filename/MIME and permits exactly 1 MiB', async () => {
     const editor = blankEditor('Studio', 'ru');
     expect(await readPreparedEditor(json(editor))).toEqual(editor);

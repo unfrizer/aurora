@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { expect, test } from '@playwright/test';
+import { preparedSitePromptWithBrief } from '../src/prepared_site_prompt';
 
 const repository = path.resolve(import.meta.dirname, '../..');
 const origin = 'http://127.0.0.1:18770';
@@ -57,8 +58,17 @@ test.afterAll(async () => {
   }
 });
 
-test('pasted site and manually attached photo export as a self-contained ZIP', async ({ page }) => {
+test('ChatGPT brief transfer, fenced response, editing and photos export without API calls', async ({ page }) => {
   const requests: { method: string; url: string }[] = [];
+  const errors: string[] = [];
+  const copied: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.exposeFunction('captureCopiedPrompt', (value: string) => { copied.push(value); });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      writeText: (value: string) => (window as unknown as { captureCopiedPrompt: (text: string) => Promise<void> }).captureCopiedPrompt(value),
+    } });
+  });
   page.on('request', (request) => requests.push({ method: request.method(), url: request.url() }));
   const pageId = randomUUID();
   const sectionId = randomUUID();
@@ -77,9 +87,20 @@ test('pasted site and manually attached photo export as a self-contained ZIP', a
   await page.getByRole('button', { name: 'Русский' }).click();
   await page.getByRole('button', { name: 'Начать' }).click();
   await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Создать с OpenAI' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Настройки', exact: true }).click();
+  await expect(page.getByRole('checkbox')).not.toBeChecked();
+  await expect(page.getByLabel('Ключ OpenAI')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Проекты', exact: true }).click();
+  const brief = 'Сайт мастерской: услуги, примеры работ и контакты. Тексты на русском.';
+  await page.getByRole('textbox', { name: 'ТЗ для внешней подготовки', exact: true }).fill(brief);
+  await page.getByRole('button', { name: 'Копировать шаблон с ТЗ', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Шаблон с ТЗ скопирован.');
+  expect(copied).toEqual([preparedSitePromptWithBrief('ru', brief)]);
+  await expect(page.getByRole('link', { name: 'Открыть ChatGPT', exact: true })).toHaveAttribute('href', 'https://chatgpt.com/');
   await page.getByRole('textbox', { name: 'Название проекта' }).fill('Сайт для экспорта');
   await page.getByRole('textbox', { name: 'Вставьте JSON подготовленного сайта' })
-    .fill(JSON.stringify(imported));
+    .fill(`\`\`\`json\n${JSON.stringify(imported, null, 2)}\n\`\`\``);
   await page.getByRole('button', { name: 'Импортировать вставленный сайт' }).click();
   await expect(page.getByRole('heading', { name: 'Сайт для экспорта' })).toBeVisible();
   const names = readdirSync(projectsRoot(), { withFileTypes: true })
@@ -89,6 +110,11 @@ test('pasted site and manually attached photo export as a self-contained ZIP', a
   const stored = (): PersistedState =>
     JSON.parse(readFileSync(path.join(projectFolder, 'state.json'), 'utf8')) as PersistedState;
   expect(stored().editor.pages[0]?.sections[0]?.image_path).toBeNull();
+  await expect(page.getByRole('button', { name: 'Сгенерировать изображение', exact: true })).toHaveCount(0);
+  const body = page.getByRole('textbox', { name: 'Текст', exact: true });
+  await body.fill('Текст клиента, отредактированный без API');
+  await body.blur();
+  await expect(page.getByText('Сохранено', { exact: true }).first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Фотографии проекта' }).click();
   await page.getByLabel('Выбрать фотографии').setInputFiles({
@@ -118,7 +144,7 @@ test('pasted site and manually attached photo export as a self-contained ZIP', a
   const exportPath = await page.getByRole('textbox', { name: 'Папка готового сайта' }).inputValue();
   expect(path.dirname(exportPath)).toBe(path.join(projectFolder, 'exports'));
   const html = readFileSync(path.join(exportPath, 'index.html'), 'utf8');
-  expect(html).toContain('Текст из подготовленного JSON');
+  expect(html).toContain('Текст клиента, отредактированный без API');
   expect(html).toContain('Услуги мастерской клиента');
   expect(html).toContain(imagePath);
   expect(readFileSync(path.join(exportPath, imagePath))).toEqual(photoBytes);
@@ -144,8 +170,11 @@ test('pasted site and manually attached photo export as a self-contained ZIP', a
   await page.getByRole('button', { name: 'Открыть' }).click();
   await expect(page.getByRole('heading', { name: 'Сайт для экспорта' })).toBeVisible();
   expect(stored().editor.pages[0]?.sections[0]?.image_path).toBe(imagePath);
+  await expect(page.getByRole('textbox', { name: 'Текст', exact: true })).toHaveValue('Текст клиента, отредактированный без API');
+  await expect(page.getByText('Без API-доплат', { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
   expect(requests.filter((request) => /^https?:/.test(request.url) && request.url !== origin &&
     !request.url.startsWith(`${origin}/`))).toEqual([]);
-  expect(requests.filter((request) => /\/(generation|deployments)(\/|$)/
+  expect(requests.filter((request) => /\/(generation|deployments|credentials)(\/|$)/
     .test(new URL(request.url).pathname))).toEqual([]);
 });

@@ -11,6 +11,7 @@ import { TextAssist } from './TextAssist';
 
 interface Props {
   language: Language;
+  apiEnabled: boolean;
   projectId: string;
   projectName: string;
   editor: EditorDocument;
@@ -49,7 +50,7 @@ function withSectionImage(editor: EditorDocument, pageId: string, sectionId: str
   return replaceSection(editor, pageId, { ...section, image_path: path });
 }
 
-export function Workspace({ language, projectId, projectName, editor, model, imageModel, dirty, saving,
+export function Workspace({ language, apiEnabled, projectId, projectName, editor, model, imageModel, dirty, saving,
   onCommit, onFlush, onImageSnapshot, onImageDocument, onImageLock, onRename, onReload, onGuidedImages, onError }: Props) {
   const [pageId, setPageId] = useState(editor.pages[0]?.id ?? '');
   const [sectionId, setSectionId] = useState('');
@@ -144,6 +145,7 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
   }
 
   function startImage(target: ImageTarget, label: string) {
+    if (!apiEnabled) return;
     onImageLock(true);
     setImageDialog({ target, label });
   }
@@ -189,7 +191,7 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
         <div className="actions"><span className={`save-state ${dirty ? 'dirty' : ''}`} role="status">{saving ? t(language, 'saving') : dirty ? t(language, 'unsaved') : t(language, 'saved')}</span>
           <button onClick={() => void onFlush()}>{t(language, 'save')}</button>
           <button onClick={() => setPhotoTrayOpen(true)}>{t(language, 'photoTray')}</button>
-          <button onClick={() => void onGuidedImages()}>{t(language, 'guidedTitle')}</button>
+          {apiEnabled && <button onClick={() => void onGuidedImages()}>{t(language, 'guidedTitle')}</button>}
           <button onClick={() => void onReload()}>{t(language, 'reload')}</button></div></div>
       {photoTrayOpen && <div inert={imageDialog !== null}><PhotoTray language={language} editor={editor}
         onAttach={attachPhoto} onClose={() => setPhotoTrayOpen(false)} /></div>}
@@ -229,7 +231,7 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
                 setSectionId(id);
               }}>{t(language, 'duplicateSection')}</button>
                 <label className="file-button">{t(language, 'upload')}<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => void image(event.target.files?.[0], item.image_path, (current, path) => withSectionImage(current, page.id, item.id, path))} /></label>
-                <button onClick={() => startImage({ kind: 'section', pageId: page.id, sectionId: item.id }, `${page.title} / ${item.heading}`)}>{t(language, 'generateImage')}</button>
+                {apiEnabled && <button onClick={() => startImage({ kind: 'section', pageId: page.id, sectionId: item.id }, `${page.title} / ${item.heading}`)}>{t(language, 'generateImage')}</button>}
                 <button disabled={!item.image_path} onClick={() => void removeImage(item.image_path, (current, path) => withSectionImage(current, page.id, item.id, path))}>{t(language, 'removeImage')}</button></div>
             </article>)}
             <form className="add-form" onSubmit={(event) => { event.preventDefault(); if (!newSection.trim() || page.sections.length >= 100) return;
@@ -266,10 +268,10 @@ export function Workspace({ language, projectId, projectName, editor, model, ima
             <option value="system">System</option><option value="serif">Serif</option><option value="monospace">Monospace</option></select></label>
           {editor.brand.logo_path && <img className="asset-preview" src={rasterUrl(projectId, editor.brand.logo_path)} alt={editor.brand.name} />}
           <div className="actions"><label className="file-button">{t(language, 'logo')}<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => void image(event.target.files?.[0], editor.brand.logo_path, (current, path) => ({ ...current, brand: { ...current.brand, logo_path: path } }))} /></label>
-            <button onClick={() => startImage({ kind: 'logo' }, t(language, 'imageLogoTarget'))}>{t(language, 'generateImage')}</button>
+            {apiEnabled && <button onClick={() => startImage({ kind: 'logo' }, t(language, 'imageLogoTarget'))}>{t(language, 'generateImage')}</button>}
             <button disabled={!editor.brand.logo_path} onClick={() => void removeImage(editor.brand.logo_path, (current, path) => ({ ...current, brand: { ...current.brand, logo_path: path } }))}>{t(language, 'removeImage')}</button></div>
         </section>
-        {section && <TextAssist key={section.id} language={language} section={section} model={model} onAccept={(body) => changeSection({ ...section, body })} onError={onError} />}
+        {apiEnabled && section && <TextAssist key={section.id} language={language} section={section} model={model} onAccept={(body) => changeSection({ ...section, body })} onError={onError} />}
       </div>}
     </aside>
     {imageDialog && <ImageGeneration language={language} projectId={projectId} target={imageDialog.target}

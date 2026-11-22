@@ -47,11 +47,21 @@ function withEditor(editor: EditorDocument): ProjectDocument {
   return { metadata: { ...metadata, updated_at: '2026-10-09T02:00:00Z' }, state: { editor } };
 }
 
-async function enter(language: 'ru' | 'en' = 'en') {
+async function enter(language: 'ru' | 'en' = 'en', apiEnabled = false) {
   render(<App />);
   fireEvent.click(await screen.findByRole('button', { name: language === 'en' ? 'English' : 'Русский' }));
   fireEvent.click(await screen.findByRole('button', { name: language === 'en' ? 'Start' : 'Начать' }));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'AURORA onboarding' })).not.toBeInTheDocument());
+  await screen.findByRole('heading', { name: language === 'en' ? 'Projects' : 'Проекты' });
+  if (apiEnabled) await enableApi(language);
+}
+
+async function enableApi(language: 'ru' | 'en' = 'en') {
+  fireEvent.click(screen.getByRole('button', { name: language === 'en' ? 'Settings' : 'Настройки' }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: language === 'en'
+    ? 'Enable direct AI API requests (billed separately)'
+    : 'Включить прямые AI-запросы через API (оплачиваются отдельно)' }));
+  fireEvent.click(screen.getByRole('button', { name: language === 'en' ? 'Projects' : 'Проекты' }));
   await screen.findByRole('heading', { name: language === 'en' ? 'Projects' : 'Проекты' });
 }
 
@@ -84,6 +94,58 @@ afterEach(() => {
   else Reflect.deleteProperty(URL, 'createObjectURL');
   if (originalPhotoRevoke) Object.defineProperty(URL, 'revokeObjectURL', originalPhotoRevoke);
   else Reflect.deleteProperty(URL, 'revokeObjectURL');
+});
+
+describe('no-API-charge workflow', () => {
+  it.each(['ru', 'en'] as const)('starts in %s without paid controls, even with a saved credential', async (language) => {
+    mocks.credentialStatus.mockResolvedValue(true);
+    await enter(language);
+    expect(screen.queryByRole('region', { name: language === 'ru' ? 'Создать с OpenAI' : 'Generate with OpenAI' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: language === 'ru' ? '1. Вставьте ТЗ заказчика' : '1. Paste the customer brief' })).toBeVisible();
+    expect(screen.getByRole('link', { name: language === 'ru' ? 'Открыть ChatGPT' : 'Open ChatGPT' })).toHaveAttribute('href', 'https://chatgpt.com/');
+    fireEvent.click(screen.getByRole('button', { name: language === 'ru' ? 'Настройки' : 'Settings' }));
+    expect(await screen.findByRole('checkbox')).not.toBeChecked();
+    expect(screen.queryByLabelText(language === 'ru' ? 'Ключ OpenAI' : 'OpenAI key')).not.toBeInTheDocument();
+    expect(mocks.credentialStatus).not.toHaveBeenCalled();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+  });
+
+  it('requires an explicit session opt-in for paid editor controls and can turn them off again', async () => {
+    await enter();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await screen.findByText('CONTENT BLOCKS');
+    expect(screen.queryByRole('button', { name: 'Complete project images' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Generate image' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Generate proposal' })).not.toBeInTheDocument();
+    await enableApi();
+    expect(screen.getByRole('region', { name: 'Generate with OpenAI' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace' }));
+    expect(await screen.findByRole('button', { name: 'Complete project images' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(await screen.findByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace' }));
+    await screen.findByText('CONTENT BLOCKS');
+    expect(screen.queryByRole('button', { name: 'Complete project images' })).not.toBeInTheDocument();
+    expect(mocks.generateProjectDraft).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+  });
+
+  it('opens the complete brief prompt for manual copying if clipboard access fails', async () => {
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
+    await enter();
+    fireEvent.change(screen.getByLabelText('Brief for external preparation'), { target: { value: 'Customer website brief' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt with brief' }));
+    await screen.findByRole('status');
+    const prompt = screen.getByLabelText('Preparation prompt (click to select)') as HTMLTextAreaElement;
+    expect(prompt.closest('details')).toHaveAttribute('open');
+    expect(prompt.value).toBe(preparedSitePromptWithBrief('en', 'Customer website brief'));
+    fireEvent.focus(prompt);
+    expect(prompt.selectionEnd).toBe(prompt.value.length);
+    expect(mocks.createProject).not.toHaveBeenCalled();
+  });
 });
 
 describe('UI-008 customer photos', () => {
@@ -341,7 +403,7 @@ describe('UI-009 direct prepared JSON paste', () => {
 
 describe('UI-010 in-app prepared JSON guide', () => {
   it.each(['ru', 'en'] as const)('shows selectable %s guidance without using project actions', async (language) => {
-    await enter(language);
+    await enter(language, true);
     const summary = screen.getByText(language === 'ru'
       ? 'Как подготовить JSON для импорта' : 'How to prepare import JSON');
     const details = summary.closest('details');
@@ -367,7 +429,7 @@ describe('UI-016 prepared JSON guide copy', () => {
   it.each(['ru', 'en'] as const)('copies only the exact static %s template', async (language) => {
     const copy = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText: copy } });
-    await enter(language);
+    await enter(language, true);
     fireEvent.change(screen.getByLabelText(language === 'ru' ? 'Название проекта' : 'Project name'),
       { target: { value: 'PRIVATE PROJECT' } });
     fireEvent.change(screen.getByLabelText(language === 'ru' ? 'Опишите бизнес одним запросом'
@@ -419,7 +481,7 @@ describe('UI-017 prepared JSON brief copy', () => {
   it.each(['ru', 'en'] as const)('copies one explicit %s brief without mixing other inputs', async (language) => {
     const copy = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText: copy } });
-    await enter(language);
+    await enter(language, true);
     fireEvent.change(screen.getByLabelText(language === 'ru' ? 'Название проекта' : 'Project name'),
       { target: { value: 'PRIVATE PROJECT' } });
     fireEvent.change(screen.getByLabelText(language === 'ru' ? 'Опишите бизнес одним запросом'
@@ -486,7 +548,7 @@ describe('UI-017 prepared JSON brief copy', () => {
 
 describe('UI-012 project creation path clarity', () => {
   it.each(['ru', 'en'] as const)('separates the three %s paths without triggering any action', async (language) => {
-    await enter(language);
+    await enter(language, true);
     const ai = screen.getByRole('region', { name: language === 'ru' ? 'Создать с OpenAI' : 'Generate with OpenAI' });
     const blank = screen.getByRole('region', { name: language === 'ru' ? 'Начать вручную' : 'Start manually' });
     const imported = screen.getByRole('region', { name: language === 'ru'
@@ -685,7 +747,7 @@ describe('UI-015 prepared JSON selection clear', () => {
 
 describe('UI-018 direct prepared JSON clear', () => {
   it('clears only pasted JSON and preserves adjacent project-path inputs', async () => {
-    await enter();
+    await enter('en', true);
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Imported' } });
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
       { target: { value: 'Independent AI path' } });
@@ -756,7 +818,7 @@ describe('UI-019 prepared JSON brief clear', () => {
   it('clears only the brief and resets its copy status while preserving adjacent inputs', async () => {
     const copy = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText: copy } });
-    await enter();
+    await enter('en', true);
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Imported' } });
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
       { target: { value: 'Independent AI prompt' } });
@@ -1447,7 +1509,7 @@ describe('UI-026 manual site draft guard', () => {
   it('combines paid-generation warning with manual-draft loss and makes no request if declined', async () => {
     const confirm = vi.fn().mockReturnValue(false);
     vi.stubGlobal('confirm', confirm);
-    await enter();
+    await enter('en', true);
     typeManualDraft();
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
       { target: { value: 'Make a bicycle repair site' } });
@@ -1461,7 +1523,7 @@ describe('UI-026 manual site draft guard', () => {
   it('continues an accepted paid start exactly once without saving the manual draft', async () => {
     const confirm = vi.fn().mockReturnValue(true);
     vi.stubGlobal('confirm', confirm);
-    await enter();
+    await enter('en', true);
     typeManualDraft();
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
       { target: { value: 'Make a bicycle repair site' } });
@@ -1620,7 +1682,7 @@ describe('workspace flow', () => {
   });
 
   it('never retains a submitted credential in the visible input', async () => {
-    await enter();
+    await enter('en', true);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     const key = await screen.findByLabelText('OpenAI key');
     await userEvent.type(key, 'test-secret');
@@ -1880,7 +1942,7 @@ describe('workspace flow', () => {
 
   it('applies paid text assistance only after explicit review', async () => {
     mocks.generateText.mockResolvedValue({ job_id: id, status: 'completed', result: { response_id: 'r', model: 'm', output_text: 'Suggested copy' }, failure: null });
-    await enter();
+    await enter('en', true);
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     await screen.findByText('CONTENT BLOCKS');
     fireEvent.change(screen.getByLabelText('What should change in the selected block?'), { target: { value: 'Rewrite' } });
@@ -1914,7 +1976,7 @@ describe('workspace flow', () => {
 
 describe('one-prompt project draft', () => {
   it('reopens an idle guided plan from a saved editor; skipped slots remain available next session', async () => {
-    await enter();
+    await enter('en', true);
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     await screen.findByText('CONTENT BLOCKS');
     fireEvent.click(screen.getByRole('button', { name: 'Complete project images' }));
@@ -1936,7 +1998,7 @@ describe('one-prompt project draft', () => {
   it('requires per-attempt confirmation, reviews unsaved text, then accepts with the source timestamp', async () => {
     const confirm = vi.fn(() => false);
     vi.stubGlobal('confirm', confirm);
-    await enter();
+    await enter('en', true);
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
       { target: { value: '  Make a studio site  ' } });
@@ -1965,7 +2027,7 @@ describe('one-prompt project draft', () => {
   it('keeps the created empty project on generation error and offers deliberate retry', async () => {
     vi.stubGlobal('confirm', vi.fn(() => true));
     mocks.generateProjectDraft.mockRejectedValue(new ApiError(503));
-    await enter();
+    await enter('en', true);
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'), { target: { value: 'A studio' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
@@ -1982,7 +2044,7 @@ describe('one-prompt project draft', () => {
     mocks.generateProjectDraft.mockResolvedValueOnce({ job_id: id, status: 'failed',
       source_updated_at: metadata.updated_at, editor: null,
       failure: { category: 'rate_limited', message: 'Safe message', retryable: true } });
-    await enter();
+    await enter('en', true);
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'), { target: { value: 'A studio' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
@@ -1995,7 +2057,7 @@ describe('one-prompt project draft', () => {
   it('retains the candidate after a 409 and never rebases its acceptance timestamp', async () => {
     vi.stubGlobal('confirm', vi.fn(() => true));
     mocks.saveEditor.mockRejectedValue(new ApiError(409));
-    await enter();
+    await enter('en', true);
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'), { target: { value: 'A studio' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
@@ -2012,7 +2074,7 @@ describe('one-prompt project draft', () => {
   it('generates from an existing empty project without creating another', async () => {
     vi.stubGlobal('confirm', vi.fn(() => true));
     mocks.openProject.mockResolvedValue(empty);
-    await enter();
+    await enter('en', true);
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     await screen.findByText('NEW WORKSPACE');
     const generate = screen.getByRole('button', { name: 'Generate from prompt' });
@@ -2030,7 +2092,7 @@ describe('one-prompt project draft', () => {
     mocks.generateProjectDraft.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
     const confirm = vi.fn(() => true);
     vi.stubGlobal('confirm', confirm);
-    await enter();
+    await enter('en', true);
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Studio' } });
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'), { target: { value: 'A studio' } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate from prompt' }));
@@ -2063,7 +2125,7 @@ describe('one-prompt project draft', () => {
     mocks.generateProjectDraft.mockResolvedValue({ job_id: id, status: 'completed',
       source_updated_at: metadata.updated_at, editor: blankEditor('Студия', 'ru'), failure: null });
     vi.stubGlobal('confirm', vi.fn(() => true));
-    await enter('ru');
+    await enter('ru', true);
     fireEvent.change(screen.getByLabelText('Название проекта'), { target: { value: 'Студия' } });
     fireEvent.change(screen.getByLabelText('Опишите бизнес одним запросом'), { target: { value: 'Сайт студии' } });
     fireEvent.click(screen.getByRole('button', { name: 'Создать из запроса' }));
@@ -2077,7 +2139,7 @@ describe('one-prompt project draft', () => {
     let finish: ((result: unknown) => void) | undefined;
     mocks.generateImage.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
     vi.stubGlobal('confirm', vi.fn(() => true));
-    await enter();
+    await enter('en', true);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     const model = await screen.findByLabelText('OpenAI image model');
     expect(model).toHaveValue('gpt-image-2');
@@ -2174,6 +2236,8 @@ describe('persistent preferences composition', () => {
       onboarding_completed: true,
     }, revision: 'a'.repeat(64), projects_directory: 'C:\\Projects' });
     render(<App />);
+    await screen.findByRole('heading', { name: 'Projects' });
+    await enableApi();
     fireEvent.change(await screen.findByLabelText('Project name'), { target: { value: 'Studio' } });
     fireEvent.change(screen.getByLabelText('Describe your business in one prompt'),
       { target: { value: 'A studio' } });

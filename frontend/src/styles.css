@@ -93,7 +93,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 .topbar {
-  height: 76px;
+  height: auto;
+  min-height: 76px;
   gap: 2.2rem;
   background: radial-gradient(circle at 75% -120%, #225e66 0, transparent 38%),
     linear-gradient(110deg, #112b38, #162735 70%);
@@ -156,7 +157,7 @@ input:focus, select:focus, textarea:focus {
 }
 .new-project {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-areas: "eyebrow eyebrow" "name name" "ai import" "manual import";
+  grid-template-areas: "eyebrow eyebrow" "name name" "import import" "manual manual";
   gap: 1rem;
   align-items: start;
   padding: 1.5rem;
@@ -164,9 +165,13 @@ input:focus, select:focus, textarea:focus {
 .new-project > .eyebrow { grid-area: eyebrow; }
 .new-project > label { grid-area: name; }
 .new-project > label { max-width: 34rem; }
-.new-project > .project-path:nth-of-type(1) { grid-area: ai; }
-.new-project > .project-path:nth-of-type(2) { grid-area: manual; }
-.new-project > .project-path:nth-of-type(3) { grid-area: import; }
+.new-project.api-enabled { grid-template-areas: "eyebrow eyebrow" "name name" "import import" "manual ai"; }
+.new-project > [aria-labelledby="project-ai-path"] { grid-area: ai; }
+.new-project > [aria-labelledby="project-blank-path"] { grid-area: manual; }
+.new-project > [aria-labelledby="project-import-path"] { grid-area: import; }
+.project-path > h3 { margin: 1.5rem 0 .75rem; }
+.api-mode-choice { display: flex; align-items: center; gap: .75rem; }
+.api-mode-choice input { width: auto; }
 .project-path {
   min-width: 0;
   height: 100%;
@@ -248,7 +253,7 @@ summary { cursor: pointer; color: #0c6570; font-weight: 650; }
 
 @media (max-width: 900px) {
   .topbar { height: auto; min-height: 76px; padding: .8rem 1rem; flex-wrap: wrap; gap: .5rem; }
-  .topbar nav { order: 3; width: 100%; overflow: auto; }
+  .topbar nav { order: 3; flex: 1 0 100%; min-width: 0; overflow: auto; }
   .topbar nav button { white-space: nowrap; }
 }
 
@@ -263,9 +268,10 @@ summary { cursor: pointer; color: #0c6570; font-weight: 650; }
   .hero::after { right: -90px; opacity: .35; }
   .new-project {
     grid-template-columns: 1fr;
-    grid-template-areas: "eyebrow" "name" "ai" "manual" "import";
+    grid-template-areas: "eyebrow" "name" "import" "manual";
     padding: 1rem;
   }
+  .new-project.api-enabled { grid-template-areas: "eyebrow" "name" "import" "manual" "ai"; }
   .project-path { padding: 1rem; }
   .project-card { align-items: flex-start; }
   .workspace, .workspace.left-collapsed, .workspace.right-collapsed,
