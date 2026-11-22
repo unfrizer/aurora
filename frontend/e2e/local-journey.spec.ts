@@ -76,6 +76,7 @@ test('one-prompt, image and editor browser journey uses only isolated fake servi
   await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Настройки' }).click();
+  await page.getByRole('checkbox', { name: 'Включить прямые AI-запросы через API (оплачиваются отдельно)' }).check();
   const openAI = page.locator('.setting-secret').filter({ hasText: 'Ключ OpenAI' });
   await openAI.getByLabel('Ключ OpenAI').fill('qa-only-fake-key');
   await openAI.getByRole('button', { name: 'Сохранить ключ' }).click();

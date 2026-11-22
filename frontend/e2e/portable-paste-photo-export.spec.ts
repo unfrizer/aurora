@@ -61,9 +61,11 @@ test('packaged UI pastes a site, attaches a photo and exports matching folder an
       await expect(page.getByRole('dialog', { name: 'AURORA onboarding' })).toHaveCount(0);
     }
     await expect(projectsHeading).toBeVisible();
+    await expect(page.getByText('Без API-доплат', { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Создать с OpenAI' })).toHaveCount(0);
     await page.getByRole('textbox', { name: 'Название проекта' }).fill(projectName);
     await page.getByRole('textbox', { name: 'Вставьте JSON подготовленного сайта' })
-      .fill(JSON.stringify(imported));
+      .fill(`\`\`\`json\n${JSON.stringify(imported)}\n\`\`\``);
     await page.getByRole('button', { name: 'Импортировать вставленный сайт' }).click();
     await expect(page.getByRole('heading', { name: projectName })).toBeVisible();
     const projects = await listProjects();

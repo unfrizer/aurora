@@ -5,6 +5,34 @@ Python Runtime Engine. The browser UI uses React, TypeScript and Vite; the
 loopback backend uses Python 3.13 and FastAPI. Architecture Freeze v1.0 and
 the approved contracts in `docs/architecture/` define ownership.
 
+## Use without additional API payments
+
+Paid AI API features are **off on every launch and page reload**, including when
+an OpenAI key was previously saved. No API key is needed for the main workflow:
+
+1. In Projects, enter a project name and paste the customer's brief under
+   **1. Paste the customer brief**.
+2. Choose **Copy prompt with brief**, open ChatGPT and send the copied prompt
+   there using your existing access. Your ChatGPT plan limits still apply.
+3. Copy the JSON response back into **Paste prepared site JSON**, then choose
+   **Import pasted site**. A single JSON code block is also accepted.
+4. Edit the brand, pages, text and SEO, attach your local photographs, preview,
+   save and reopen the project, and export a website folder or ZIP.
+
+This is a manual transfer, not an automatic connection to a ChatGPT subscription.
+The import, local editor, photo attachment, preview, saving and export make no
+OpenAI API requests. Images are supplied by you; this path does not generate
+images inside AURORA. You can also build a site entirely from your own text.
+If clipboard copying is unavailable, AURORA opens the full prompt with your brief
+for manual selection and copying.
+
+Direct AI generation remains optional: Settings has **Enable direct AI API
+requests (billed separately)**. It enables the key field and paid generation
+controls only for the current tab; it is not saved and resets on reload. Each
+generation still requires its existing confirmation. ChatGPT Plus does not pay
+for API requests. Netlify publishing is an optional, separate connection;
+exporting a local website does not require it.
+
 ## Run on Windows from source
 
 Install Python 3.13, uv, Node 24 and pnpm 11. From the repository root:
@@ -121,9 +149,9 @@ the new project is never automatically deleted.
 
 ## Import a text-only site prepared in ChatGPT
 
-This is an optional no-API-key path. In ChatGPT, describe the business and
-ask for JSON using the prompt below. In AURORA's Projects screen, enter a new
-project name. Either paste the **raw JSON only** (no Markdown or code fences)
+This is the main no-API-key path. Use the three steps on the Projects screen,
+or ask ChatGPT for JSON using the prompt below. Enter a new
+project name. Either paste **JSON or a single JSON code block**, without surrounding explanations,
 into **Paste prepared site JSON** and choose **Import pasted site**, or save
 it as UTF-8 (`site.json`) and choose **Import prepared site** after selecting
 the file. Both inputs accept at most 1 MiB of UTF-8 JSON and are separate

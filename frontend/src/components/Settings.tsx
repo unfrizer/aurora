@@ -7,6 +7,8 @@ type SecretName = 'openai_api_key' | 'netlify_token';
 
 interface Props {
   language: Language;
+  apiEnabled: boolean;
+  onApiEnabled: (enabled: boolean) => void;
   model: string;
   imageModel: string;
   projectsDirectory: string;
@@ -42,11 +44,12 @@ function Secret({ name, label, language, onError }: { name: SecretName; label: s
   </div>;
 }
 
-export function Settings({ language, model, imageModel, projectsDirectory, busy, onSave, onReload, onError }: Props) {
+export function Settings({ language, apiEnabled, onApiEnabled, model, imageModel, projectsDirectory, busy, onSave, onReload, onError }: Props) {
   const [draftLanguage, setDraftLanguage] = useState(language);
   const [draftModel, setDraftModel] = useState(model);
   const [draftImageModel, setDraftImageModel] = useState(imageModel);
   const [status, setStatus] = useState<'none' | 'saved' | 'failed' | 'conflict'>('none');
+  const [deployConnectionOpen, setDeployConnectionOpen] = useState(false);
   useEffect(() => {
     setDraftLanguage(language); setDraftModel(model); setDraftImageModel(imageModel);
   }, [language, model, imageModel]);
@@ -69,6 +72,11 @@ export function Settings({ language, model, imageModel, projectsDirectory, busy,
   return <main className="settings-page">
     <span className="eyebrow">PREFERENCES / 02</span><h1>{t(language, 'settings')}</h1>
     <p className="muted">{t(language, 'settingsNote')}</p>
+    <section className="card settings-card">
+      <label className="api-mode-choice"><input type="checkbox" checked={apiEnabled} disabled={busy}
+        onChange={(event) => onApiEnabled(event.target.checked)} />{t(language, 'apiModeEnable')}</label>
+      <p>{t(language, 'apiModeNote')}</p>
+    </section>
     <div className="card settings-card">
       <label>{t(language, 'chooseLanguage')}
         <select value={draftLanguage} onChange={(event) => { setDraftLanguage(event.target.value as Language); if (status !== 'conflict') setStatus('none'); }}>
@@ -86,8 +94,10 @@ export function Settings({ language, model, imageModel, projectsDirectory, busy,
       {status === 'saved' && <p role="status">{t(language, 'saved')}</p>}
       {status === 'failed' && <p role="alert">{t(language, 'preferencesSaveFailed')}</p>}
       {status === 'conflict' && <p role="alert">{t(language, 'preferencesConflict')}</p>}
-      <Secret name="openai_api_key" label={t(language, 'openai')} language={language} onError={onError} />
-      <Secret name="netlify_token" label={t(language, 'netlify')} language={language} onError={onError} />
+      {apiEnabled && <Secret name="openai_api_key" label={t(language, 'openai')} language={language} onError={onError} />}
+      <details onToggle={(event) => setDeployConnectionOpen(event.currentTarget.open)}><summary>{t(language, 'optionalDeployConnection')}</summary>
+        {deployConnectionOpen && <Secret name="netlify_token" label={t(language, 'netlify')} language={language} onError={onError} />}
+      </details>
     </div>
   </main>;
 }

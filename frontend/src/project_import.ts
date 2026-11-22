@@ -24,7 +24,10 @@ export async function readPreparedEditor(file: File): Promise<EditorDocument> {
   catch { throw new ImportValidationError('encoding'); }
 
   let value: unknown;
-  try { value = JSON.parse(text) as unknown; }
+  // Accept a single JSON code block copied from a chat, without extracting
+  // arbitrary prose or changing the document's strict schema.
+  const fenced = /^\s*```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```\s*$/i.exec(text);
+  try { value = JSON.parse(fenced?.[1] ?? text) as unknown; }
   catch { throw new ImportValidationError('json'); }
 
   let editor: EditorDocument;

@@ -41,6 +41,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('projects');
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
+  const [apiEnabled, setApiEnabled] = useState(false);
   const [imageLocked, setImageLocked] = useState(false);
   const [projects, setProjects] = useState<ProjectMetadata[]>([]);
   const [active, setActive] = useState<ProjectDocument | null>(null);
@@ -279,6 +280,7 @@ export default function App() {
   }
 
   async function runDraft(document: ProjectDocument, prompt: string) {
+    if (!apiEnabled) return;
     if (!language || !validDraftInputs(document.metadata.name, prompt, model)) return;
     setGenerationPrompt(prompt); setCandidate(null); setGenerationFailure(null);
     setGenerationConflict(false); setError(''); setScreen('generation'); setGenerating(true);
@@ -293,6 +295,7 @@ export default function App() {
   }
 
   async function generateNew(name: string, prompt: string) {
+    if (!apiEnabled) return;
     if (!language || !validDraftInputs(name, prompt, model)) { setError(t(lang, 'error400')); return; }
     if (!window.confirm(t(lang, manualDraftPresentRef.current
       ? 'generationConfirmWithManual' : 'generationConfirm'))) return;
@@ -307,6 +310,7 @@ export default function App() {
   }
 
   async function generateExisting() {
+    if (!apiEnabled) return;
     const document = docRef.current;
     if (!document || editorRef.current || editorError ||
         !validDraftInputs(document.metadata.name, generationPrompt, model)) return;
@@ -413,6 +417,7 @@ export default function App() {
   }
 
   async function startGuidedImages() {
+    if (!apiEnabled) return;
     if (imageLockRef.current || !editorRef.current || !(await flush())) return;
     setScreen('guided-images');
   }
@@ -466,10 +471,11 @@ export default function App() {
         {active && editor && <button disabled={busy || generating || accepting || imageLocked} className={screen === 'export' ? 'active' : ''} onClick={() => void navigate('export')}>{t(lang, 'export')}</button>}
         <button disabled={busy || generating || accepting || imageLocked} className={screen === 'settings' ? 'active' : ''} onClick={() => void navigate('settings')}>{t(lang, 'settings')}</button>
       </nav>
+      <span className={apiEnabled ? 'badge' : 'badge good'}>{t(lang, apiEnabled ? 'apiModeOn' : 'apiModeOff')}</span>
       <button className="guide-link" disabled={busy || generating || accepting || imageLocked} onClick={() => setGuide(true)}>{t(lang, 'onboarding')}</button>
     </header>
     {error && !guide && <div className="error-banner" role="alert">{error}<button aria-label={t(lang, 'close')} onClick={() => setError('')}>×</button></div>}
-    {screen === 'projects' && <Projects language={lang} projects={projects} busy={busy} model={model} onCreate={create} onOffline={createWithBrief} onManual={createWithManualSite} onManualDraftChange={(present) => { manualDraftPresentRef.current = present; }} onGenerate={generateNew} onImport={importPrepared} onOpen={open} onDelete={remove} />}
+    {screen === 'projects' && <Projects language={lang} apiEnabled={apiEnabled} projects={projects} busy={busy} model={model} onCreate={create} onOffline={createWithBrief} onManual={createWithManualSite} onManualDraftChange={(present) => { manualDraftPresentRef.current = present; }} onGenerate={generateNew} onImport={importPrepared} onOpen={open} onDelete={remove} />}
     {screen === 'generation' && active && <ProjectGeneration language={lang} projectName={active.metadata.name}
       model={model} prompt={generationPrompt} candidate={candidate} failure={generationFailure}
       pending={generating} accepting={accepting} conflict={generationConflict}
@@ -478,14 +484,14 @@ export default function App() {
     {screen === 'workspace' && active && (editorError
       ? <main className="empty-workspace"><h1>{active.metadata.name}</h1><p role="alert">{t(lang, 'badEditor')}</p><button onClick={() => void reload()}>{t(lang, 'reload')}</button></main>
       : editor
-        ? <Workspace language={lang} projectId={active.metadata.project_id} projectName={active.metadata.name} editor={editor}
+        ? <Workspace language={lang} apiEnabled={apiEnabled} projectId={active.metadata.project_id} projectName={active.metadata.name} editor={editor}
             model={model} imageModel={imageModel} dirty={dirty} saving={saving} onCommit={commit} onFlush={flush}
             onImageSnapshot={imageSnapshot} onImageDocument={imageDocument} onImageLock={imageLock}
             onRename={rename} onReload={reload} onGuidedImages={startGuidedImages} onError={onError} />
         : <main className="empty-workspace"><span className="eyebrow">NEW WORKSPACE</span><h1>{active.metadata.name}</h1>
-            <p>{t(lang, 'noGeneration')}</p><div className="actions"><button className="primary" disabled={busy} onClick={() => { setGenerationPrompt(''); setScreen('generation'); }}>{t(lang, 'generateDraft')}</button>
+            <p>{t(lang, 'noGeneration')}</p><div className="actions">{apiEnabled && <button className="primary" disabled={busy} onClick={() => { setGenerationPrompt(''); setScreen('generation'); }}>{t(lang, 'generateDraft')}</button>}
               <button disabled={busy} onClick={() => void startBlank()}>{t(lang, 'blank')}</button></div></main>)}
-    {screen === 'settings' && <Settings language={lang} model={model} imageModel={imageModel}
+    {screen === 'settings' && <Settings language={lang} apiEnabled={apiEnabled} onApiEnabled={setApiEnabled} model={model} imageModel={imageModel}
       projectsDirectory={preferences.projects_directory} busy={preferencesBusy} onSave={saveSettings}
       onReload={() => reloadPreferences()} onError={onError} />}
     {screen === 'guided-images' && active && editor && <GuidedImageCompletion language={lang}
